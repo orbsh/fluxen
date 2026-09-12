@@ -78,19 +78,19 @@ fn dispatch(
             }
             Content::Create(mut x) => {
                 let env = TMPL.read().expect("read TMPL failed");
-                x.data.render(&env);
+                x.data.expand(&env);
                 layout.set(x.data)
             }
             Content::Set(x) => {
                 let e = x.event;
                 let mut d = x.data;
                 let env = TMPL.read().expect("read TMPL failed");
-                d.render(&env);
+                d.expand(&env);
                 data.write().insert(e, d);
             }
             Content::Join(mut x) => {
                 let env = TMPL.read().expect("read TMPL failed");
-                x.data.render(&env);
+                x.data.expand(&env);
                 let e = x.event;
                 let d = &mut x.data;
                 let vs: &dyn BrickOp = match x.method {

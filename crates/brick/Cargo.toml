@@ -20,7 +20,7 @@ schema = ["dep:schemars"]
 classify = ["dep:regex", "dep:brick_macro"]
 ops = ["dep:brick_macro"]
 merge = ["ops"]
-render = ["ops"]
+template = ["ops"]
 scratch = ["dep:maplit"]
 
 [[example]]

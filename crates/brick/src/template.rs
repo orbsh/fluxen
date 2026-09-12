@@ -3,8 +3,8 @@ use crate::BrickOps;
 use minijinja::Environment;
 
 impl Brick {
-    pub fn render(&mut self, env: &Environment) {
-        if let Brick::render(r) = self {
+    pub fn expand(&mut self, env: &Environment) {
+        if let Brick::template(r) = self {
             let n = &r.name;
             let cx = &r.data;
             let n = env
@@ -30,7 +30,7 @@ impl Brick {
         }
         if let Some(cs) = self.borrow_sub_mut() {
             for c in cs {
-                c.render(env);
+                c.expand(env);
             }
         }
     }

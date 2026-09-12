@@ -36,7 +36,7 @@ fn test_struct_hello() {
         #[serde(tag = "type")]
         pub enum Brick {
             case(Case),
-            #[render_brick(has_id = true)]
+            #[ui_brick(has_id = true)]
             placeholder(Placeholder),
         }
     };
