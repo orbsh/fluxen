@@ -1,57 +1,83 @@
 use crate::render::dispatch;
-use crate::ws::WebSocketHandle;
 use brick::{
     Brick, BrickOps,
     merge::{BrickOp, Concat, Delete, Replace},
 };
-use content::{Content, Message, Method, Outflow};
+use content::{Content, Message, Method};
 use leptos::prelude::*;
-use message::codec::ActiveCodec;
+use content::codec::ActiveCodec;
 use minijinja::Environment;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{LazyLock, RwLock};
+use transport::Transport;
 
 static TMPL: LazyLock<RwLock<Environment>> = LazyLock::new(|| {
     let env = Environment::new();
     RwLock::new(env)
 });
 
-/// 全局共享状态容器：掌管布局、数据、列表与 WS 发送。
+/// 全局共享状态容器：掌管布局、数据、列表与传输收发。
 #[derive(Clone)]
 pub struct Ctx {
-    pub ws: WebSocketHandle,
+    pub transport: LeptosTransport,
     pub codec: ActiveCodec,
     pub layout: RwSignal<Brick>,
     pub data: RwSignal<HashMap<String, Brick>>,
     pub list: RwSignal<HashMap<String, Vec<Brick>>>,
 }
 
+/// UI 侧持有传输 + 下行帧信号。wasm 单线程，Rc 共享。
+#[derive(Clone)]
+pub struct LeptosTransport {
+    /// wasm 单线程，用 SendWrapper 让 Rc 满足 leptos 组件闭包的 Send 约束
+    /// （与原 WebSocketHandle 的做法一致）。
+    pub inner: send_wrapper::SendWrapper<std::rc::Rc<dyn Transport>>,
+    /// 最近一帧下行字节；桥接自 transport.on() 读循环。
+    pub frame: RwSignal<Vec<u8>>,
+}
+
 impl Ctx {
-    pub fn new(url: &str, codec: ActiveCodec) -> Self {
-        let ws = WebSocketHandle::new(url);
+    /// 装配：传入已连接的 transport（由 lib.rs 按 feature 选择实现）。
+    /// 框架桥接：`spawn_local` 读流写 `frame` 信号，Effect 消费解码分发。
+    pub fn new(transport: std::rc::Rc<dyn Transport>, codec: ActiveCodec) -> Self {
+        let frame = RwSignal::new(Vec::new());
         let layout = RwSignal::new(Brick::text(Default::default()));
         let data = RwSignal::new(HashMap::new());
         let list = RwSignal::new(HashMap::new());
 
+        // 读循环：transport.on() -> frame 信号
+        {
+            let mut stream = transport.on();
+            let frame_writer = frame;
+            leptos::task::spawn_local(async move {
+                use futures::StreamExt;
+                while let Some(bytes) = stream.next().await {
+                    frame_writer.set(bytes);
+                }
+            });
+        }
+
         let ctx = Ctx {
-            ws,
+            transport: LeptosTransport {
+                inner: send_wrapper::SendWrapper::new(transport),
+                frame,
+            },
             codec,
             layout,
             data,
             list,
         };
 
-        // 订阅 WS 消息并分发
-        let bytes = ctx.ws.message_bytes();
+        // 消费下行帧并分发
         let ctx_clone = ctx.clone();
         Effect::new(move |_| {
-            let b = bytes.get();
+            let b = ctx_clone.transport.frame.get();
             if !b.is_empty() {
                 match ctx_clone.codec.decode::<Message<Brick>>(&b) {
                     Ok(act) => dispatch_msg(&act, &ctx_clone),
                     // decode 失败若静默丢弃，症状就是"ws 正常但界面空白"——必须留痕
-                    Err(e) => tracing::error!("ws message decode failed: {e}"),
+                    Err(e) => tracing::error!("ws frame decode failed: {e}"),
                 }
             }
         });
@@ -60,20 +86,14 @@ impl Ctx {
     }
 
     pub async fn send(&self, event: impl AsRef<str>, id: Option<String>, content: Value) {
-        let x = Outflow {
-            event: event.as_ref().to_string(),
-            id,
-            data: content,
-        };
-        if let Ok(buf) = self.codec.encode(&x) {
-            let msg = match &self.codec {
-                ActiveCodec::Json => gloo_net::websocket::Message::Text(
-                    String::from_utf8(buf).unwrap_or_default(),
-                ),
-                ActiveCodec::Cbor => gloo_net::websocket::Message::Bytes(buf),
-            };
-            let _ = self.ws.send(msg).await;
-        }
+        self.transport
+            .inner
+            .emit(transport::Event {
+                name: event.as_ref().to_string(),
+                id,
+                data: content,
+            })
+            .await;
     }
 
     pub fn set(&self, name: impl AsRef<str>, brick: Brick) {

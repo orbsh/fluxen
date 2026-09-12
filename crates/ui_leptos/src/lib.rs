@@ -2,7 +2,6 @@ pub mod ctx;
 pub mod render;
 pub mod hooks;
 pub mod dom;
-pub mod ws;
 
 pub mod components;
 pub mod widgets;
@@ -10,7 +9,7 @@ pub mod widgets;
 pub use ctx::Ctx;
 use leptos::prelude::Get;
 
-use message::codec::{ActiveCodec, CodecType};
+use content::codec::{ActiveCodec, CodecType};
 use wasm_bindgen::JsCast;
 
 /// 入口：解析 `#main` 的 host/token/codec，建立 WS，挂载响应式根。
@@ -54,6 +53,7 @@ pub fn mount() {
         format!("?codec={}", codec_str)
     };
     let url = format!("ws://{}/channel{}", host, query);
+    let codec = ActiveCodec::new(codec_type);
 
     let parent = doc
         .query_selector("#main")
@@ -65,7 +65,9 @@ pub fn mount() {
     // mount_to 返回的 UnmountHandle 被 Drop 时会卸载视图——`let _ =` 会让界面挂上即被拆掉
     // （症状正是"ws 正常但界面空白"）。必须 forget 持有整个应用生命周期。
     leptos::mount::mount_to(parent, move || {
-        let ctx = Ctx::new(&url, ActiveCodec::new(codec_type));
+        let transport: std::rc::Rc<dyn transport::Transport> =
+            std::rc::Rc::new(transport_ws::WsTransport::new(&url, codec.clone()));
+        let ctx = Ctx::new(transport, codec);
         let ctx = ctx.clone();
         // 响应式根：仅当 layout 变化时重建
         move || {

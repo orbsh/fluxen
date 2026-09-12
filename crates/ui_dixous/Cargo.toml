@@ -9,7 +9,6 @@ anyhow.workspace = true
 brick = { workspace = true, features = ["classify", "dioxus", "merge", "ops", "template"] } #unified
 chrono.workspace = true
 content.workspace = true
-message.workspace = true
 ciborium.workspace = true
 dioxus.features = ["macro", "web"]
 dioxus.workspace = true
@@ -24,6 +23,9 @@ minijinja.workspace = true
 serde.features = ["derive", "serde_derive"]
 serde.workspace = true
 serde_json.workspace = true
+send_wrapper.workspace = true
+transport.workspace = true
+transport-ws.workspace = true
 tracing-wasm.workspace = true
 ui_dixous_macro = { path = "../ui_dixous_macro" }
 web-sys.workspace = true

@@ -14,7 +14,7 @@ pub enum CodecError {
 
 /// Parsed from config files (e.g. `config.toml` with `codec = "cbor"`).
 ///
-/// Bincode was removed — see `docs/decisions/001-reject-bincode-for-cbor.md`:
+/// Bincode was removed — see `../fluxora/docs/decisions/001-reject-bincode-for-cbor.md`:
 /// - serde 2.x incompatible (v1.x broken, v2.x API unstable)
 /// - No type self-description; Gateway cannot partially parse routing metadata
 /// - CBOR (`ciborium`) covers all advantages and adds cross-language support
