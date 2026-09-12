@@ -17,11 +17,12 @@ itertools.workspace = true
 js-sys.workspace = true
 leptos.workspace = true
 markdown.workspace = true
-message.workspace = true
 minijinja.workspace = true
 send_wrapper.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+transport.workspace = true
+transport-ws.workspace = true
 tracing.workspace = true
 tracing-wasm.workspace = true
 ui_leptos_macro = { path = "../ui_leptos_macro" }

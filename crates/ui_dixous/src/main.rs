@@ -2,7 +2,7 @@ mod libs;
 use dioxus::prelude::*;
 use libs::components::*;
 use libs::store::{Status, use_status};
-use message::codec::{ActiveCodec, CodecType};
+use content::codec::{ActiveCodec, CodecType};
 use tracing_wasm::WASMLayerConfigBuilder;
 
 #[allow(unused_macros)]
@@ -51,7 +51,10 @@ static STATUS: GlobalSignal<Status> = Global::new(|| {
         format!("?codec={}", codec_str)
     };
     let url = format!("ws://{}/channel{}", host, query);
-    use_status(&url, ActiveCodec::new(codec_type)).expect("connecting failed")
+    let transport: std::rc::Rc<dyn transport::Transport> = std::rc::Rc::new(
+        transport_ws::WsTransport::new(&url, ActiveCodec::new(codec_type)),
+    );
+    use_status(transport, ActiveCodec::new(codec_type)).expect("connecting failed")
 });
 
 fn main() {

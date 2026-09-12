@@ -1,19 +1,18 @@
-use super::ws::{WebSocketHandle, use_web_socket};
-use anyhow::Result;
 use brick::{
     Brick, BrickOps,
     merge::{BrickOp, Concat, Delete, Replace},
 };
-use content::{Content, Message, Method, Outflow};
+use content::{Content, Message, Method};
 #[allow(unused_imports)]
 use dioxus::prelude::*;
 use js_sys::wasm_bindgen::JsError;
-use message::codec::ActiveCodec;
+use content::codec::ActiveCodec;
 use minijinja::Environment;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::str;
 use std::sync::{LazyLock, RwLock};
+use transport::Transport;
 
 static TMPL: LazyLock<RwLock<Environment>> = LazyLock::new(|| {
     let env = Environment::new();
@@ -23,31 +22,31 @@ static TMPL: LazyLock<RwLock<Environment>> = LazyLock::new(|| {
 
 #[derive(Clone)]
 pub struct Status {
-    pub ws: WebSocketHandle,
+    pub transport: DxTransport,
     pub codec: ActiveCodec,
     pub layout: Signal<Brick>,
     pub data: Signal<HashMap<String, Brick>>,
     pub list: Signal<HashMap<String, Vec<Brick>>>,
 }
 
+/// UI 侧持有传输 + 下行帧信号。wasm 单线程，Rc 共享。
+#[derive(Clone)]
+pub struct DxTransport {
+    pub inner: send_wrapper::SendWrapper<std::rc::Rc<dyn Transport>>,
+    /// 最近一帧下行字节；桥接自 transport.on() 读循环。
+    pub frame: Signal<Vec<u8>>,
+}
+
 impl Status {
     pub async fn send(&mut self, event: impl AsRef<str>, id: Option<String>, content: Value) {
-        let x = Outflow {
-            event: event.as_ref().to_string(),
-            id,
-            data: content,
-        };
-
-        if let Ok(buf) = self.codec.encode(&x) {
-            let msg = match &self.codec {
-                ActiveCodec::Json => {
-                    let s = String::from_utf8(buf).unwrap_or_default();
-                    gloo_net::websocket::Message::Text(s)
-                }
-                ActiveCodec::Cbor => gloo_net::websocket::Message::Bytes(buf),
-            };
-            let _ = self.ws.send(msg).await;
-        }
+        self.transport
+            .inner
+            .emit(transport::Event {
+                name: event.as_ref().to_string(),
+                id,
+                data: content,
+            })
+            .await;
     }
 
     pub fn set(&mut self, name: impl AsRef<str>, brick: Brick) {
@@ -120,21 +119,28 @@ fn dispatch(
     }
 }
 
-pub fn use_status(url: &str, codec: ActiveCodec) -> Result<Status, JsError> {
-    let ws = use_web_socket(url)?;
-    let bytes_signal = ws.message_bytes();
-    let recv_codec = codec.clone();
+pub fn use_status(transport: std::rc::Rc<dyn Transport>, codec: ActiveCodec) -> Result<Status, JsError> {
+    let frame = use_signal(Vec::new);
 
-    let mut layout = use_signal::<Brick>(|| {
-        Brick::text(brick::Text {
-            ..Default::default()
-        })
-    });
+    // 读循环：transport.on() -> frame 信号
+    {
+        let mut stream = transport.on();
+        let mut frame_writer = frame;
+        spawn(async move {
+            use futures::StreamExt;
+            while let Some(bytes) = stream.next().await {
+                frame_writer.set(bytes);
+            }
+        });
+    }
+
+    let mut layout = use_signal::<Brick>(|| Brick::text(Default::default()));
     let mut data = use_signal::<HashMap<String, Brick>>(HashMap::new);
     let mut list = use_signal::<HashMap<String, Vec<Brick>>>(HashMap::new);
 
+    let recv_codec = codec.clone();
     use_memo(move || {
-        let b = &bytes_signal();
+        let b = &frame();
         if !b.is_empty() {
             match recv_codec.decode::<Message<Brick>>(b) {
                 Ok(act) => dispatch(act, &mut layout, &mut data, &mut list),
@@ -148,7 +154,10 @@ pub fn use_status(url: &str, codec: ActiveCodec) -> Result<Status, JsError> {
     });
 
     Ok(Status {
-        ws,
+        transport: DxTransport {
+            inner: send_wrapper::SendWrapper::new(transport),
+            frame,
+        },
         codec,
         layout,
         data,
