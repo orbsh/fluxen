@@ -1,0 +1,13 @@
+[package]
+name = "fluxen"
+version = "0.1.0"
+edition = "2024"
+description = "Facade crate: pick a rendering backend via feature"
+
+[dependencies]
+ui_dixous = { path = "../ui_dixous", optional = true }
+ui_leptos = { path = "../ui_leptos", optional = true }
+
+[features]
+dioxus = ["dep:ui_dixous"]
+leptos = ["dep:ui_leptos"]
