@@ -1,2 +1,6 @@
 target/
-crates/ui_leptos/dist/
+dist/
+pkg/
+build/
+out/
+node_modules/
