@@ -97,14 +97,14 @@ fn dispatch_msg(act: &Message<Brick>, ctx: &Ctx) {
             Content::Create(x) => {
                 let mut d = x.data.clone();
                 let env = TMPL.read().expect("read TMPL failed");
-                d.render(&env);
+                d.expand(&env);
                 tracing::info!("create: layout set, root = {:.100?}", d);
                 ctx.layout.set(d);
             }
             Content::Set(x) => {
                 let mut d = x.data.clone();
                 let env = TMPL.read().expect("read TMPL failed");
-                d.render(&env);
+                d.expand(&env);
                 ctx.data
                     .update(|m| {
                         m.insert(x.event.clone(), d);
@@ -113,7 +113,7 @@ fn dispatch_msg(act: &Message<Brick>, ctx: &Ctx) {
             Content::Join(x) => {
                 let mut d = x.data.clone();
                 let env = TMPL.read().expect("read TMPL failed");
-                d.render(&env);
+                d.expand(&env);
                 let vs: &dyn BrickOp = match x.method {
                     Method::Replace => &Replace,
                     Method::Concat => &Concat,

@@ -51,9 +51,9 @@ fn walk(ast: &syn::File) -> HashMap<String, CompInfo> {
                                 }
                             })
                             .unwrap_or_default();
-                        // 解析 #[render_brick(has_id = "true")]
+                        // 解析 #[ui_brick(has_id = "true")]
                         let has_id = v.attrs.iter().any(|a| {
-                            a.path().is_ident("render_brick")
+                            a.path().is_ident("ui_brick")
                                 && a.parse_args_with(|input: syn::parse::ParseStream| {
                                     let mut has = false;
                                     while !input.is_empty() {

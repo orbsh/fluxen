@@ -17,7 +17,7 @@ pub use popup::popup_;
 pub mod rack;
 pub use rack::rack_;
 pub mod render;
-pub use render::render_;
+pub use render::template_;
 pub mod svg;
 pub use svg::{path_, group_, svg_};
 

@@ -27,7 +27,7 @@ pub fn brick_wrap(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(BrickOps, attributes(render_brick))]
+#[proc_macro_derive(BrickOps, attributes(ui_brick))]
 pub fn brick_props(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 

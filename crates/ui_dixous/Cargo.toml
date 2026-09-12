@@ -6,7 +6,7 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
-brick = { workspace = true } #unified
+brick = { workspace = true, features = ["classify", "dioxus", "merge", "ops", "template"] } #unified
 chrono.workspace = true
 content.workspace = true
 message.workspace = true

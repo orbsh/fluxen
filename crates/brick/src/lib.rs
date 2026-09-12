@@ -8,11 +8,11 @@ pub mod classify;
 use classify::Classify;
 #[cfg(feature = "merge")]
 pub mod merge;
-#[cfg(feature = "render")]
-pub mod render;
-#[cfg(feature = "ops")]
+#[cfg(feature = "template")]
+pub mod template;
+#[cfg(any(feature = "ops", feature = "classify"))]
 use brick_macro::BrickOps;
-#[cfg(feature = "classify")]
+#[cfg(any(feature = "ops", feature = "classify"))]
 use brick_macro::{ClassifyAttrs, ClassifyBrick, ClassifyVariant};
 
 use serde::{Deserialize, Serialize};
@@ -674,7 +674,7 @@ pub struct Case {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
-pub struct Render {
+pub struct Template {
     name: String,
     data: Map<String, Value>,
 }
@@ -687,21 +687,21 @@ pub struct Render {
 #[serde(tag = "type")]
 pub enum Brick {
     case(Case),
-    #[render_brick(has_id = "true")]
+    #[ui_brick(has_id = "true")]
     placeholder(Placeholder),
-    #[render_brick(has_id = "true")]
+    #[ui_brick(has_id = "true")]
     chart(Chart),
-    #[render_brick(has_id = "true")]
+    #[ui_brick(has_id = "true")]
     diagram(Diagram),
     float(Float),
-    #[render_brick(has_id = "true")]
+    #[ui_brick(has_id = "true")]
     fold(Fold),
     form(Form),
     popup(Popup),
     svg(Svg),
     group(Group),
     path(Path),
-    #[render_brick(has_id = "true")]
+    #[ui_brick(has_id = "true")]
     rack(Rack),
     button(Button),
     image(Image),
@@ -715,8 +715,8 @@ pub enum Brick {
     td(Td),
     text(Text),
     textarea(TextArea),
-    #[cfg(feature = "render")]
-    render(Render),
+    #[cfg(feature = "template")]
+    template(Template),
 }
 
 #[cfg(feature = "ops")]
