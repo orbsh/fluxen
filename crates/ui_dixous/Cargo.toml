@@ -27,6 +27,7 @@ send_wrapper.workspace = true
 transport.workspace = true
 transport-ws.workspace = true
 tracing-wasm.workspace = true
+ui-assets.workspace = true
 ui_dixous_macro = { path = "../ui_dixous_macro" }
 web-sys.workspace = true
 
