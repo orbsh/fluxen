@@ -72,8 +72,8 @@ fn App() -> Element {
     let layout = STATUS().layout;
 
     rsx! {
-        document::Style { href: asset!("/assets/main.css") }
-        document::Style { href: asset!("/assets/custom.css") }
+        document::Style { href: ui_assets::MAIN_CSS }
+        document::Style { href: ui_assets::CUSTOM_CSS }
         // document::Script { src: asset!("/assets/apexcharts.min.js") }
         // document::Script { src: asset!("/assets/mermaid.min.js") }
         Frame {

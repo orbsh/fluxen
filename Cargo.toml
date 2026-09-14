@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "crates/brick",
+  "crates/ui-assets",
   "crates/brick_macro",
   "crates/content",
   "crates/transport",
@@ -18,6 +19,7 @@ anyhow = "1.0.102"
 brick = { path = "crates/brick", version = "^0.1.0" }
 content = { path = "crates/content", version = "^0.1.0" }
 transport = { path = "crates/transport", version = "^0.1.0" }
+ui-assets = { path = "crates/ui-assets", version = "^0.1.0" }
 transport-ws = { path = "crates/transport-ws", version = "^0.1.0" }
 ciborium = "0.2"
 chrono = { version = "0.4.44", features = ["serde"] }
