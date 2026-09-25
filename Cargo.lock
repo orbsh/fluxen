@@ -255,6 +255,7 @@ dependencies = [
 name = "brick"
 version = "0.1.0"
 dependencies = [
+ "brick",
  "brick_macro",
  "itertools",
  "minijinja",
