@@ -1,5 +1,6 @@
 mod console;
 mod mirror;
+mod ui;
 
 use clap::{Parser, Subcommand};
 use stage::proto;
@@ -17,6 +18,12 @@ enum Cmd {
     Serve {
         #[arg(long, default_value = "3002")]
         port: u16,
+        /// trunk dev-server port; up -> reverse-proxy the UI from it
+        #[arg(long, default_value = "8281")]
+        trunk: u16,
+        /// dist dir served when trunk is down (relative to cwd)
+        #[arg(long, default_value = "crates/ui_leptos/dist")]
+        dist: String,
     },
     /// Offline: parse KDL and print the Brick JSON tree
     Tojson { file: String },
@@ -25,13 +32,18 @@ enum Cmd {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    match cli.cmd.unwrap_or(Cmd::Serve { port: 3002 }) {
-        Cmd::Serve { port } => {
+    let default_serve = || Cmd::Serve {
+        port: 3002,
+        trunk: 8281,
+        dist: "crates/ui_leptos/dist".into(),
+    };
+    match cli.cmd.unwrap_or_else(default_serve) {
+        Cmd::Serve { port, trunk, dist } => {
             // mirror + console in one process: spawn the server, then run the
             // REPL on the main task. Ctrl-C / /quit exits the console; the
             // mirror dies with the process.
             let server = tokio::spawn(async move {
-                if let Err(e) = mirror::serve(port).await {
+                if let Err(e) = mirror::serve(port, trunk, std::path::PathBuf::from(dist)).await {
                     eprintln!("mirror error: {e}");
                 }
             });

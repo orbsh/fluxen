@@ -14,9 +14,11 @@ anyhow = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "fs"] }
 tokio-tungstenite = "0.24"
 rustyline = "14"
 clap = { version = "4", features = ["derive"] }
 axum = { version = "0.8", features = ["ws"] }
 kdl = "2.0.0"
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+http-body-util = "0.1"
