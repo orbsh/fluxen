@@ -1,14 +1,30 @@
 # Fluxen Plan
 
-## Known defects
+## Resolved
 
-### Whole-map notification fan-out
+### Notification fan-out (per-key slots) — done 2026-09
 
-`data` / `list` are single signals holding a whole HashMap. With `Arc`-wrapped
-entries the clone cost is gone (a read copies the map shell plus refcounts),
-but any `Set`/`Join` frame still notifies every widget bound to any key, and
-each notified re-run re-clones the shell.
+`data` / `list` were single whole-map signals: any `Set`/`Join` frame notified
+every bound widget across all keys. Now the outer maps store lazily-created
+per-key slots (`DataSlot` / `ListSlot`) and values publish through the inner
+signal, so a write notifies only that key's subscribers. Row-level isolation
+within one key comes from rack's per-row Owner + `Memo<Brick>` (untouched rows
+recompute to an equal value and never re-render).
 
-Fix (deferred until scale demands it): per-key signals — the outer map holds
-`Arc<RwSignal<...>>` per source name (key set nearly static), so an update
-notifies only its own readers.
+Residual tail, not a defect: a frame touching key K still runs every row's
+Memo for K's racks — O(rows) cheap recomputes (Arc clone + linear id find),
+no DOM work. If row counts reach the thousands, add a per-rack row index
+(`HashMap<id, position>` maintained alongside the list) to make the lookup
+O(1). Deferred until scale demands it.
+
+## Conventions (not code)
+
+### Streaming rows should carry `id`
+
+Rack keys rows by `Brick::id`, falling back to position (`#{idx}`) for
+id-less rows. Id-less rows render correctly but lose DOM identity whenever a
+row is inserted before them (keys shift). Producers that stream (chat, logs)
+must set `id`; composite identity is the producer's job (e.g.
+`id "alice:m42"`) — the renderer deliberately has no key-template config,
+since the Join merge contract (`cmp_id`) is pinned to `id` and a second key
+axis would split row identity.
