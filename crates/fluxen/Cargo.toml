@@ -2,7 +2,7 @@
 name = "fluxen"
 version = "0.1.0"
 edition = "2024"
-description = "Facade crate: pick a rendering backend via feature"
+description = "Facade crate: the Leptos rendering backend"
 
 [dependencies]
 ui_leptos = { path = "../ui_leptos", optional = true }
