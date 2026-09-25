@@ -45,43 +45,35 @@ pub fn use_source_id(brick: &impl BrickOps) -> Option<&String> {
     }
 }
 
-/// 从 `ctx.list[source]` 取列表（无则返回空 vec）。
+/// 订阅 `ctx.list[source]` 的 per-key 槽（无 Source 绑定则 None）。
+/// 其他键的更新不会触发本槽订阅者。
 pub fn use_source_list(ctx: &Ctx, brick: &impl BrickOps, key: &str) -> Option<std::sync::Arc<Vec<Brick>>> {
-    let list = ctx.list.get();
-    if let Some(Bind {
+    source_of(brick, key).map(|src| ctx.slot_for_list(src).get())
+}
+
+/// `bind[key]` 为 Source 时取其 source 名。
+pub fn source_of<'a>(brick: &'a impl BrickOps, key: &str) -> Option<&'a String> {
+    if let Bind {
         variant: BindVariant::Source { source },
-        default: _,
-        r#type: _kind,
-    }) = brick.get_bind().and_then(|x| x.get(key))
+        ..
+    } = brick.get_bind().and_then(|x| x.get(key))?
     {
-        list.get(source).cloned()
+        Some(source)
     } else {
         None
     }
 }
 
-/// 取 `bind[key]` 对应的值：Source 则从 `ctx.data[source]` 取，否则取 brick 自身。
-pub fn use_source<'a>(ctx: &Ctx, brick: &'a impl BrickOps, key: &'a str) -> Option<Value> {
-    let data = ctx.data.get();
-    let value = if let Some(Bind {
-        variant: BindVariant::Source { source },
-        default: _,
-        r#type: _kind,
-    }) = brick.get_bind().and_then(|x| x.get(key))
-        && let Some(d) = data.get(source)
-    {
-        Some(&**d as &dyn BrickOps)
-    } else {
-        Some(brick as &dyn BrickOps)
+/// 取 `bind[key]` 对应的值：Source 则从 `ctx.data[source]` 槽订阅取值，
+/// 否则取 brick 自身。
+pub fn use_source(ctx: &Ctx, brick: &impl BrickOps, key: &str) -> Option<Value> {
+    let from_source: Option<std::sync::Arc<Brick>> =
+        source_of(brick, key).and_then(|src| ctx.slot_for_data(src).get());
+    let comp: &dyn BrickOps = match &from_source {
+        Some(d) => &**d,
+        None => brick,
     };
-    if let Some(comp) = value
-        && let Some(bind) = &comp.get_bind()
-        && let Some(value) = bind.get(key)
-    {
-        value.default.clone()
-    } else {
-        None
-    }
+    comp.get_bind().and_then(|b| b.get(key))?.default.clone()
 }
 
 /// `use_source(ctx, brick, "value")`。
