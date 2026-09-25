@@ -1,5 +1,3 @@
-#[cfg(feature = "dioxus")]
-use dioxus::prelude::*;
 #[cfg(feature = "schema")]
 use schemars::JsonSchema;
 #[cfg(feature = "classify")]
@@ -96,17 +94,8 @@ pub enum BindVariant {
         field: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         payload: Option<Value>,
-        #[cfg(feature = "dioxus")]
-        #[allow(dead_code)]
-        #[serde(skip)]
-        signal: Option<Signal<Value>>,
     },
-    Submit {
-        #[cfg(feature = "dioxus")]
-        #[allow(dead_code)]
-        #[serde(skip)]
-        signal: Option<Signal<Value>>,
-    },
+    Submit {},
     Default {},
 }
 
@@ -128,7 +117,6 @@ pub struct Bind {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct ClassAttr {
@@ -139,7 +127,6 @@ pub struct ClassAttr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct SizeAttr {
@@ -172,7 +159,6 @@ pub enum PosV {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct PositionAttr {
@@ -196,7 +182,6 @@ pub enum Direction {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct DirectionAttr {
@@ -209,7 +194,6 @@ pub struct DirectionAttr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct StyleAttr {
@@ -222,7 +206,6 @@ pub struct StyleAttr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -238,7 +221,6 @@ pub struct Placeholder {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -252,7 +234,6 @@ pub struct Chart {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -266,7 +247,6 @@ pub struct Diagram {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -282,7 +262,6 @@ pub struct Float {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct FoldAttr {
@@ -297,7 +276,6 @@ pub struct FoldAttr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -315,7 +293,6 @@ pub struct Fold {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct FormAttr {
@@ -328,7 +305,6 @@ pub struct FormAttr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -344,7 +320,6 @@ pub struct Form {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -360,7 +335,6 @@ pub struct Popup {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -376,7 +350,6 @@ pub struct Svg {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -391,7 +364,6 @@ pub struct Group {
     pub children: Option<Vec<Brick>>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -405,7 +377,6 @@ pub struct Path {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct RackAttr {
@@ -418,7 +389,6 @@ pub struct RackAttr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -436,7 +406,6 @@ pub struct Rack {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct ButtonAttr {
@@ -449,7 +418,6 @@ pub struct ButtonAttr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -462,7 +430,6 @@ pub struct Button {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct ImageAttr {
@@ -481,7 +448,6 @@ pub struct ImageAttr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -495,7 +461,6 @@ pub struct Image {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -508,7 +473,6 @@ pub struct Input {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -524,7 +488,6 @@ pub struct Select {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -536,7 +499,6 @@ pub struct Table {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -548,7 +510,6 @@ pub struct Thead {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -560,7 +521,6 @@ pub struct Tbody {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -572,7 +532,6 @@ pub struct Tr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -584,7 +543,6 @@ pub struct Th {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -596,7 +554,6 @@ pub struct Td {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct TextAttr {
@@ -609,7 +566,6 @@ pub struct TextAttr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -623,7 +579,6 @@ pub struct Text {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -637,7 +592,6 @@ pub struct TextArea {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct CaseAttr {
@@ -653,7 +607,6 @@ pub struct CaseAttr {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
@@ -669,7 +622,6 @@ pub struct Case {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "dioxus", derive(Props))]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(BrickOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyBrick))]
