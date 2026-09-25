@@ -1,65 +1,94 @@
-//! Mirror server. Routes:
-//!   /ui  — UI clients (renderers) receive everything sent by CLI clients
-//!   /cli — CLI clients send brick frames and receive UI replies
+//! Mirror server: axum app with WS routes + HTTP POST /send.
 //!
-//! The mirror is dumb: it does not parse brick/content, only routes whole
-//! binary messages. A peer declares its route with the first text message
-//! ("hello:ui" / "hello:cli").
+//! Routes:
+//!   GET  /ui | /channel — UI clients (renderers); receive brick frames
+//!   GET  /cli           — CLI/peer clients; send frames, receive UI replies
+//!   POST /send          — batch: body is KDL; converted and broadcast to all
+//!                         peers. No dedicated client needed — curl works.
+//!
+//! The mirror does not parse brick/content for routing; POST /send is the one
+//! place that converts (KDL → Message<Brick>) since its input is a file, not
+//! a peer.
 
+use axum::extract::ws::{WebSocket, WebSocketUpgrade};
+use axum::extract::State;
+use axum::response::IntoResponse;
+use axum::routing::{get, post};
+use axum::Router;
 use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
-use tokio_tungstenite::tungstenite::Message;
+use axum::extract::ws::Message;
 
 type Peer = mpsc::UnboundedSender<Message>;
 type Peers = Arc<Mutex<Vec<Peer>>>;
 
+#[derive(Clone)]
+struct Ctx {
+    ui: Peers,
+    cli: Peers,
+}
+
 pub async fn serve(port: u16) -> anyhow::Result<()> {
-    let ui: Peers = Arc::new(Mutex::new(Vec::new()));
-    let cli: Peers = Arc::new(Mutex::new(Vec::new()));
+    let ctx = Ctx {
+        ui: Arc::new(Mutex::new(Vec::new())),
+        cli: Arc::new(Mutex::new(Vec::new())),
+    };
+    let app = Router::new()
+        .route("/ui", get(ws_ui))
+        .route("/channel", get(ws_ui)) // UI's WsTransport path
+        .route("/cli", get(ws_cli))
+        .route("/send", post(http_send))
+        .with_state(ctx);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
-    println!("stage mirror listening on 0.0.0.0:{port} (routes: /ui, /cli)");
-    loop {
-        let (stream, _) = listener.accept().await?;
-        let ui = ui.clone();
-        let cli = cli.clone();
-        tokio::spawn(async move {
-            let ws = match tokio_tungstenite::accept_async(stream).await {
-                Ok(ws) => ws,
-                Err(_) => return,
-            };
-            // First message from a peer declares its route.
-            let (ws, first) = match ws.into_future().await {
-                (Some(Ok(Message::Text(t))), rest) => (rest, t.to_string()),
-                _ => return,
-            };
-            match first.as_str() {
-                "hello:ui" => run_peer(ws, ui, cli).await,
-                "hello:cli" => run_peer(ws, ui, cli).await,
-                _ => {}
+    println!("stage listening on 0.0.0.0:{port}");
+    println!("  ws   /channel (ui)  /cli (peers)");
+    println!("  http POST /send    (body: KDL)");
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+async fn ws_ui(ws: WebSocketUpgrade, State(ctx): State<Ctx>) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| run_peer(socket, ctx, true))
+}
+
+async fn ws_cli(ws: WebSocketUpgrade, State(ctx): State<Ctx>) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| run_peer(socket, ctx, false))
+}
+
+/// POST /send: body is KDL, converted to a Message<Brick> frame and broadcast.
+/// Returns the wire JSON so `curl -fsS` output is inspectable.
+async fn http_send(State(ctx): State<Ctx>, body: String) -> impl IntoResponse {
+    match crate::proto::parse_kdl_to_frame(&body) {
+        Ok(frame) => {
+            let text = frame.to_string();
+            let mut ui = ctx.ui.lock().await;
+            let mut cli = ctx.cli.lock().await;
+            let all = ui.iter_mut().chain(cli.iter_mut());
+            let mut sent = 0;
+            for p in all {
+                if p.send(Message::text(text.clone())).is_ok() {
+                    sent += 1;
+                }
             }
-        });
+            format!("ok, delivered to {sent} peer(s)\n").into_response()
+        }
+        Err(e) => (axum::http::StatusCode::BAD_REQUEST, format!("error: {e}\n")).into_response(),
     }
 }
 
-async fn run_peer<S>(ws: S, ui: Peers, cli: Peers)
-where
-    S: futures::Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
-        + futures::Sink<Message>
-        + Unpin,
-{
+async fn run_peer(socket: WebSocket, ctx: Ctx, is_ui: bool) {
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
     let tx_for_cleanup = tx.clone();
     let tx_for_broadcast = tx.clone();
     {
-        let mut list = cli.lock().await;
-        list.push(tx);
+        let list = if is_ui { &ctx.ui } else { &ctx.cli };
+        list.lock().await.push(tx);
     }
 
-    let (mut sink, mut stream) = ws.split();
+    let (mut sink, mut stream) = socket.split();
 
-    // outgoing: mirror queue -> this peer
     let out = async move {
         while let Some(msg) = rx.recv().await {
             if sink.send(msg).await.is_err() {
@@ -68,13 +97,11 @@ where
         }
     };
 
-    // incoming: this peer -> broadcast to all other CLI peers (no UI clients
-    // exist yet in stage; UI is reached via its own transport later).
-    let ui_b = ui.clone();
-    let cli_b = cli.clone();
+    let ui_b = ctx.ui.clone();
+    let cli_b = ctx.cli.clone();
     let inp = async move {
         while let Some(Ok(msg)) = stream.next().await {
-            if !msg.is_text() && !msg.is_binary() {
+            if !matches!(msg, Message::Text(_) | Message::Binary(_)) {
                 continue;
             }
             let mut ui_list = ui_b.lock().await;
@@ -90,6 +117,6 @@ where
 
     tokio::join!(out, inp);
 
-    cli.lock().await.retain(|p| !p.same_channel(&tx_for_cleanup));
-    ui.lock().await.retain(|p| !p.same_channel(&tx_for_cleanup));
+    ctx.cli.lock().await.retain(|p| !p.same_channel(&tx_for_cleanup));
+    ctx.ui.lock().await.retain(|p| !p.same_channel(&tx_for_cleanup));
 }

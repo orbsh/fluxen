@@ -1,15 +1,6 @@
-//! Wire frames between CLI and mirror. The mirror never inspects payloads,
-//! only routes frames between peers.
-
-/// A frame sent over the mirror.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "dir", rename_all = "lowercase")]
-pub enum Frame {
-    /// CLI -> UI: content protocol message (carries bricks or raw data)
-    Ui { payload: Value },
-    /// CLI -> CLI: raw text
-    Cli { text: String },
-}
+//! Wire payloads between CLI and mirror. The mirror never inspects payloads;
+//! it routes raw bytes between peers. So CLI sends a BARE Message<Brick> —
+//! exactly what the UI's decoder expects.
 
 use content::Content;
 use serde_json::Value;

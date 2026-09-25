@@ -11,7 +11,6 @@ serde.workspace = true
 serde_json.workspace = true
 schemars = { version = "1.2.1", optional = true, features = ["chrono04"] }
 regex = { workspace = true, optional = true }
-maplit = { workspace = true, optional = true }
 brick_macro = { path = "../brick_macro", optional = true }
 
 [features]
@@ -21,12 +20,3 @@ classify = ["dep:regex", "dep:brick_macro"]
 ops = ["dep:brick_macro"]
 merge = ["ops"]
 template = ["ops"]
-scratch = ["dep:maplit"]
-
-[[example]]
-name = "brickschema"
-required-features = ["schema", "props"]
-
-[[example]]
-name = "scratch"
-required-features = ["scratch"]
