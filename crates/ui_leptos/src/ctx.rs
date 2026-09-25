@@ -36,6 +36,10 @@ pub struct Ctx {
     pub layout: RwSignal<Brick>,
     pub data: RwSignal<HashMap<String, DataSlot>>,
     pub list: RwSignal<HashMap<String, ListSlot>>,
+    /// 槽位的永久 owner：Ctx::new 时捕获的 app 根作用域。
+    /// 槽若建在消费帧的 Effect 作用域里，Effect 重跑会 dispose 其存储，
+    /// 外层 map 里留下的就是死句柄（panic: already disposed）。
+    pub(crate) owner: Owner,
     pub form: Option<Arc<FormState>>,
 }
 
@@ -79,6 +83,7 @@ impl Ctx {
             layout,
             data,
             list,
+            owner: Owner::current().expect("Ctx::new requires a reactive owner"),
             form: None,
         };
 
@@ -120,7 +125,8 @@ impl Ctx {
         if let Some(s) = self.list.get_untracked().get(source).copied() {
             return s;
         }
-        let slot = RwSignal::new(std::sync::Arc::new(Vec::new()));
+        // 建在根 owner 下：存储与 Ctx 同寿，Effect/render 作用域轮换不会 dispose 它
+        let slot = self.owner.with(|| RwSignal::new(std::sync::Arc::new(Vec::new())));
         let name = source.to_string();
         self.list.update(|m| {
             m.entry(name).or_insert(slot);
@@ -133,7 +139,7 @@ impl Ctx {
         if let Some(s) = self.data.get_untracked().get(source).copied() {
             return s;
         }
-        let slot = RwSignal::new(None);
+        let slot = self.owner.with(|| RwSignal::new(None));
         let name = source.to_string();
         self.data.update(|m| {
             m.entry(name).or_insert(slot);
