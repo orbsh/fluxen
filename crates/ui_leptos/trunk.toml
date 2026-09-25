@@ -3,7 +3,7 @@ target = "index.html"
 
 [serve]
 address = "0.0.0.0"
-port = 8081
+port = 8281
 
 [[proxy]]
 backend = "http://localhost:3000/assets/apexcharts.min.js"

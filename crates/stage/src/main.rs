@@ -1,34 +1,22 @@
+mod console;
 mod mirror;
-mod repl;
-mod send;
 
 use clap::{Parser, Subcommand};
 use stage::proto;
 
 #[derive(Parser)]
-#[command(name = "stage", about = "Brick dev gateway: KDL preview & debugging")]
+#[command(name = "stage", about = "Brick dev gateway: mirror + console + KDL send")]
 struct Cli {
     #[command(subcommand)]
-    cmd: Cmd,
+    cmd: Option<Cmd>,
 }
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Run the mirror server (default port 3002)
+    /// Start the mirror and drop into the interactive console
     Serve {
         #[arg(long, default_value = "3002")]
         port: u16,
-    },
-    /// Parse a KDL file and send it as a brick frame
-    Send {
-        file: String,
-        #[arg(long, default_value = "ws://127.0.0.1:3002/cli")]
-        url: String,
-    },
-    /// Interactive REPL
-    Repl {
-        #[arg(long, default_value = "ws://127.0.0.1:3002/cli")]
-        url: String,
     },
     /// Offline: parse KDL and print the Brick JSON tree
     Tojson { file: String },
@@ -37,10 +25,21 @@ enum Cmd {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    match cli.cmd {
-        Cmd::Serve { port } => mirror::serve(port).await,
-        Cmd::Send { file, url } => send::send(&file, &url).await,
-        Cmd::Repl { url } => repl::run(&url).await,
+    match cli.cmd.unwrap_or(Cmd::Serve { port: 3002 }) {
+        Cmd::Serve { port } => {
+            // mirror + console in one process: spawn the server, then run the
+            // REPL on the main task. Ctrl-C / /quit exits the console; the
+            // mirror dies with the process.
+            let server = tokio::spawn(async move {
+                if let Err(e) = mirror::serve(port).await {
+                    eprintln!("mirror error: {e}");
+                }
+            });
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            console::run(port).await?;
+            server.abort();
+            Ok(())
+        }
         Cmd::Tojson { file } => {
             let src = std::fs::read_to_string(&file)?;
             let bricks = proto::parse_kdl_to_bricks(&src)?;

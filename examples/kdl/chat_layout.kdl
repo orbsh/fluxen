@@ -1,0 +1,101 @@
+case {
+    attrs {
+    class "maximize"
+    }
+    text {
+        attrs {
+        class "--header nogrow"
+        format "md"
+        }
+        bind "value" {
+            default "**chat**"
+            source "login"
+        }
+    }
+    case {
+        attrs {
+        horizontal true
+        class "--body shrink border round"
+        }
+        case {
+            attrs {
+            class "--leftside nogrow"
+            }
+            text {
+                attrs {
+                format "md"
+                class "box"
+                }
+                bind "value" {
+                    default "**channel**"
+                }
+            }
+            select {
+                attrs {
+                class "--channel ji-center nogrow"
+                }
+                bind "value" {
+                    event "channel::select"
+                    default "2"
+                }
+                bind "options" {
+                    source "channel::list"
+                }
+            }
+        }
+        case {
+            attrs {
+            class "main shrink"
+            }
+            case {
+                rack {
+                    attrs {
+                    class "--message box ac-start gap scrolly"
+                    scroll true
+                    }
+                    bind "value" {
+                        source "chat"
+                    }
+                    item {
+                        case {
+                            attrs {
+                            class "nogrow as-end accent box border round shadow"
+                            selector "ask"
+                            }
+                        }
+                    }
+                    item {
+                        case {
+                            attrs {
+                            class "nogrow as-stretch box border round shadow"
+                            }
+                        }
+                    }
+                }
+                float {
+                    attrs {
+                    class "--tooltip"
+                    bottom "0.2rem"
+                    left "1rem"
+                    }
+                    placeholder {
+                        bind "value" {
+                            source "float"
+                        }
+                    }
+                }
+            }
+            case {
+                attrs {
+                class "--input nogrow box --prompt"
+                horizontal true
+                }
+                input {
+                    bind "value" {
+                        event "message"
+                    }
+                }
+            }
+        }
+    }
+}

@@ -142,6 +142,29 @@ fn brick_value(node: &KdlNode) -> Result<Value, KdlError> {
                     item.push(brick_value(sub)?);
                 }
             }
+            // attrs block: entries are value-arg nodes `class "a b"` /
+            // `format "md"`. (Properties inside child blocks are rejected by
+            // the kdl 2.0 parser, and `key=value` at node position is invalid
+            // KDL — a node must start with a name.)
+            "attrs" => {
+                for e in &child.children {
+                    let key = e.name.as_str();
+                    let val = e.values.first().map(kdl_scalar).unwrap_or(Value::Null);
+                    if key == "class" {
+                        let list: Vec<Value> = match val {
+                            Value::String(s) => {
+                                s.split_whitespace().map(|c| json!(c)).collect()
+                            }
+                            other => vec![other],
+                        };
+                        attrs.insert("class".into(), Value::Array(list));
+                    } else if is_attr_field(key) {
+                        attrs.insert(key.to_string(), val);
+                    } else {
+                        return err(format!("unknown attr `{key}` on `{name}`"));
+                    }
+                }
+            }
             "style" | "grid" | "data" => {
                 // map block: each child node is one entry `key value`
                 // (`key=value` at node position is invalid KDL — a node must
@@ -187,19 +210,25 @@ fn brick_value(node: &KdlNode) -> Result<Value, KdlError> {
     Ok(node_obj(name, fields))
 }
 
-/// bind <key> { <kind> args... } default=... type=...
+/// bind <key> { <kind> "arg" ... default "..." }
 /// Bind serializes flattened: the variant fields sit directly on the bind object.
 fn bind_value(node: &KdlNode) -> Result<Value, KdlError> {
     let mut m = Map::new();
 
-    // exactly one kind child expected
+    // bind <key> { <kind> "arg" ... default "..." }
+    // kind node: name = kind (source/target/event/field/submit), value arg =
+    // its string; `default` child holds the default value.
     let mut kind_fields: Option<(String, Map<String, Value>)> = None;
+    let mut default: Option<Value> = None;
     for c in &node.children {
-        let cname = c.name.to_string();
+        let cname = c.name.as_str();
+        if cname == "default" {
+            default = c.values.first().map(kdl_scalar);
+            continue;
+        }
         let mut kf = Map::new();
-        // kind argument(s): source "x" / field "q" payload=..
         if let Some(v) = c.values.first() {
-            kf.insert(cname.clone(), kdl_scalar(v));
+            kf.insert(cname.to_string(), kdl_scalar(v));
         }
         for (k, v) in &c.properties {
             kf.insert(k.clone(), kdl_scalar(v));
@@ -207,7 +236,7 @@ fn bind_value(node: &KdlNode) -> Result<Value, KdlError> {
         if kind_fields.is_some() {
             return err("bind accepts exactly one kind node");
         }
-        kind_fields = Some((cname, kf));
+        kind_fields = Some((cname.to_string(), kf));
     }
 
     match kind_fields {
@@ -219,9 +248,8 @@ fn bind_value(node: &KdlNode) -> Result<Value, KdlError> {
             m.insert("kind".into(), json!("default"));
         }
     }
-
-    for (k, v) in &node.properties {
-        m.insert(k.clone(), kdl_scalar(v));
+    if let Some(d) = default {
+        m.insert("default".into(), d);
     }
     Ok(Value::Object(m))
 }
