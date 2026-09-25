@@ -12,7 +12,7 @@ pub fn popup_(brick: Popup, ctx: &Ctx) -> AnyView {
     let css = css.join(" ");
     let style = brick.attrs.as_ref().map(|x| x.into_style()).unwrap_or_default();
 
-    if let Some(subs) = brick.sub.as_deref()
+    if let Some(subs) = brick.children.as_deref()
         && let Some(placeholder) = subs.first()
         && let Some(modal) = subs.get(1)
     {

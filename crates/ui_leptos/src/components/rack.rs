@@ -64,7 +64,7 @@ pub fn rack_(brick: Rack, ctx: &Ctx, id: String) -> AnyView {
             match item.select(child) {
                 Some(mut template) => {
                     // 模板外壳 + child 作为其 children
-                    template.set_sub(vec![child.clone()]);
+                    template.set_children(vec![child.clone()]);
                     let ctx = ctx.clone();
                     render_brick(&ctx, &template)
                 }

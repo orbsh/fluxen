@@ -32,7 +32,7 @@ pub fn case_(brick: Case, ctx: &Ctx) -> AnyView {
     let css = css.join(" ");
 
     let children = brick
-        .sub
+        .children
         .as_deref()
         .map(|s| render_children(ctx, s))
         .unwrap_or_default();
@@ -79,7 +79,7 @@ pub fn placeholder_(brick: Placeholder, ctx: &Ctx, id: String) -> AnyView {
                 .into_any()
         } else {
             let children = brick
-                .sub
+                .children
                 .as_deref()
                 .map(|s| render_children(&ctx, s))
                 .unwrap_or_default();

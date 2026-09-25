@@ -23,9 +23,9 @@ use std::fmt::Debug;
 #[cfg(feature = "ops")]
 pub trait BrickOps {
     fn get_type(&self) -> &str;
-    fn borrow_sub(&self) -> Option<&Vec<Brick>>;
-    fn borrow_sub_mut(&mut self) -> Option<&mut Vec<Brick>>;
-    fn set_sub(&mut self, brick: Vec<Brick>);
+    fn borrow_children(&self) -> Option<&Vec<Brick>>;
+    fn borrow_children_mut(&mut self) -> Option<&mut Vec<Brick>>;
+    fn set_children(&mut self, brick: Vec<Brick>);
     fn borrow_attrs(&self) -> Option<&dyn Classify>;
     fn borrow_attrs_mut(&mut self) -> Option<&mut dyn Classify>;
     fn get_bind(&self) -> Option<&HashMap<String, Bind>>;
@@ -81,7 +81,7 @@ impl JsType {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(untagged)]
+#[serde(tag = "kind", rename_all = "lowercase")]
 pub enum BindVariant {
     Source {
         source: String,
@@ -102,7 +102,6 @@ pub enum BindVariant {
         signal: Option<Signal<Value>>,
     },
     Submit {
-        submit: bool,
         #[cfg(feature = "dioxus")]
         #[allow(dead_code)]
         #[serde(skip)]
@@ -235,7 +234,7 @@ pub struct Placeholder {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -279,7 +278,7 @@ pub struct Float {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -310,7 +309,7 @@ pub struct Fold {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub item: Option<Vec<Brick>>,
 }
@@ -341,7 +340,7 @@ pub struct Form {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -357,7 +356,7 @@ pub struct Popup {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -373,7 +372,7 @@ pub struct Svg {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -389,7 +388,7 @@ pub struct Group {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "dioxus", derive(Props))]
@@ -431,7 +430,7 @@ pub struct Rack {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub item: Option<Vec<Brick>>,
 }
@@ -521,7 +520,7 @@ pub struct Select {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -533,7 +532,7 @@ pub struct Table {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -545,7 +544,7 @@ pub struct Thead {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -557,7 +556,7 @@ pub struct Tbody {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -569,7 +568,7 @@ pub struct Tr {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -581,7 +580,7 @@ pub struct Th {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -593,7 +592,7 @@ pub struct Td {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -666,7 +665,7 @@ pub struct Case {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<Vec<Brick>>,
+    pub children: Option<Vec<Brick>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

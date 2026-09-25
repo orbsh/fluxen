@@ -69,7 +69,6 @@ fn walk(brick: &mut Brick, scope: &mut FormScope, confirm: Signal<Value>) {
             brick.set_bind(Some(hashmap! {
                 "value".to_owned() => Bind {
                     variant: BindVariant::Submit {
-                        submit: true,
                         signal: Some(confirm),
                     },
                     ..Default::default()
@@ -78,7 +77,7 @@ fn walk(brick: &mut Brick, scope: &mut FormScope, confirm: Signal<Value>) {
         }
         _ => {}
     };
-    if let Some(children) = &mut brick.borrow_sub_mut() {
+    if let Some(children) = &mut brick.borrow_children_mut() {
         for c in children.iter_mut() {
             walk(c, scope, confirm);
         }
@@ -103,7 +102,7 @@ pub fn form_(id: Option<String>, brick: Form, children: Element) -> Element {
     let mut brick = Brick::form(brick);
     walk(&mut brick, &mut data, confirm);
     let v = Vec::new();
-    let children = brick.borrow_sub().unwrap_or(&v);
+    let children = brick.borrow_children().unwrap_or(&v);
     let children = children.iter().map(|c| {
         rsx! {
             Frame { brick: c.clone() }
@@ -144,7 +143,7 @@ pub fn form_(id: Option<String>, brick: Form, children: Element) -> Element {
     };
 
     if let Brick::form(Form {
-        id, attrs, sub: c, ..
+        id, attrs, children: c, ..
     }) = &brick
     {
         let brick = Brick::case(Case {
@@ -153,7 +152,7 @@ pub fn form_(id: Option<String>, brick: Form, children: Element) -> Element {
                 class: class.clone(),
                 ..Default::default()
             }),
-            sub: c.clone(),
+            children: c.clone(),
             ..Default::default()
         });
         rsx! {

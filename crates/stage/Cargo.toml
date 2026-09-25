@@ -1,0 +1,21 @@
+[package]
+name = "stage"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "stage"
+path = "src/main.rs"
+
+[dependencies]
+brick = { workspace = true, features = ["classify", "ops"] }
+content = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
+tokio-tungstenite = "0.24"
+rustyline = "14"
+clap = { version = "4", features = ["derive"] }
+kdl = "2.0.0"

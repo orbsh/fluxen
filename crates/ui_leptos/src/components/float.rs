@@ -16,7 +16,7 @@ pub fn float_(brick: Float, ctx: &Ctx) -> AnyView {
         .map(|x| x.into_style())
         .unwrap_or_default();
     let children = brick
-        .sub
+        .children
         .as_deref()
         .map(|s| render_children(ctx, s))
         .unwrap_or_default();

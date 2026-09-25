@@ -27,7 +27,7 @@ pub fn walk(ast: &syn::File) -> HashMap<String, CompInfo> {
     ast.items.iter().fold(HashMap::new(), |mut acc, x| {
         match x {
             syn::Item::Struct(x) => {
-                let has_sub = struct_has_field(x, "sub");
+                let has_sub = struct_has_field(x, "children");
                 let info = CompInfo::Struct {
                     name: x.ident.to_string(),
                     has_sub,
