@@ -18,45 +18,44 @@ AI 原生 UI 渲染库：Brick DSL + Leptos 渲染 + 流式合并 + CBOR 编码�
 
 ## 开发工作流（`stage`）
 
-`stage` 是开发网关：WS 镜像 + console REPL，不接任何上游生产者即可驱动 UI。它从不解析载荷——只在 peer 之间路由原始帧。
+`stage` 是开发网关：WS 镜像 + console REPL + UI 服务器，一条命令跑通整个闭环，不需要任何上游生产者。镜像从不解析载荷——只在 peer 之间路由原始帧。
 
 启动后的端点（默认端口 3002）：
 
 - `GET /channel` —— UI 渲染端连接此处（Fluxen 的 `WsTransport` 路径）
 - `GET /cli` —— 程序化 peer（console、curl-ws、你自己的工具）
 - `POST /send` —— 请求体为 KDL；解析成 `Content::Create` 帧后广播
+- 其余路径 —— UI 本体：启动时若 trunk 端口（默认 8281）可达则反向代理过去，
+  否则静态托管 trunk 产物目录（默认 `crates/ui_leptos/dist`）。探测仅看 TCP
+  且一次定终身（sticky）——先起 trunk 再起 stage；中途启动 trunk 需重启 stage。
 
-终端 1 —— 启动网关（mirror + 交互 console 单进程）：
+启动后直接打开 <http://localhost:3002/>：
 
 ```
-cargo run -p stage -- serve            # 监听 :3002
+cargo run -p stage -- serve            # 镜像 + UI + console，单进程
+cargo run -p stage -- serve --trunk 8281 --dist crates/ui_leptos/dist   # 显式指定
 ```
+
+UI 的 WS 地址默认取页面 origin，无需配置；`?codec=json` 把默认的 CBOR 换成
+可读 JSON，方便在 devtools 里看帧。
 
 console REPL 会把每一帧回显出来（`<- {...}`），包括 UI 上报的事件——既是发送端也是事件监视器。命令：`/send <file.kdl>`、`/raw <json>`（发送裸 `Message<Brick>`——发 Set/Join 帧必须走这条）、`/quit`。
 
-终端 2 —— 构建并托管 UI（默认值已对齐 :3002：`index.html` 携带 `data-host="localhost:3002"`）：
-
-```
-cargo install trunk       # 一次性
-cd crates/ui_leptos && trunk serve    # 监听 :8281
-```
-
-打开 <http://localhost:8281/> —— 页面经 `/channel` 连上镜像。查询参数：`?token=***（认证透传）、`?codec=json`（默认 CBOR；调试期用 `json` 可直接在 devtools 里读帧）。
-
-终端 3（或 console）—— 推送内容：
+从任意位置推送内容（KDL 一律包装成 Create——替换整个根布局）：
 
 ```
 curl -X POST --data-binary @examples/kdl/chat_layout.kdl http://localhost:3002/send
-curl -X POST --data-binary @examples/kdl/login_set.kdl  http://localhost:3002/send
 ```
 
-`/send` 一律包装成 Create（替换整个根布局）。要在不重建布局的前提下流式推 Set/Join 帧，经 console 的 `/raw` 发裸消息，例如一次聊天 token 追加：
+要在不重建布局的前提下流式推 Set/Join 帧，经 console 的 `/raw` 发裸消息，例如一次聊天 token 追加：
 
 ```
 /raw {"sender":"demo","content":[{"action":"join","event":"chat","method":"concat","data":{"type":"text","id":"m1","bind":{"value":{"kind":"default","default":"hello "}}}}]}
 ```
 
 流入 rack 的行应携带 `id`——合并与 DOM 身份都以它为键（见 docs/PLAN.md 约定）。
+
+UI 开发要热重建时，在 `stage serve` **之前**起 `trunk serve`（:8281）——网关会代理到它而不是读盘。trunk 是可选开发工具，不是运行时依赖。
 
 离线助手（不需要起服务）：
 

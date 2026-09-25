@@ -29,25 +29,46 @@ struct Ctx {
     cli: Peers,
 }
 
-pub async fn serve(port: u16) -> anyhow::Result<()> {
+pub async fn serve(
+    port: u16,
+    trunk_port: u16,
+    dist: std::path::PathBuf,
+) -> anyhow::Result<()> {
     let ctx = Ctx {
         ui: Arc::new(Mutex::new(Vec::new())),
         cli: Arc::new(Mutex::new(Vec::new())),
+    };
+    // startup probe (sticky): trunk up -> reverse-proxy the UI, else serve dist
+    let taddr = std::net::SocketAddr::from(([127, 0, 0, 1], trunk_port));
+    let proxy = crate::ui::port_up(taddr).await.then_some(taddr);
+    let ui = crate::ui::UiState {
+        proxy,
+        dist: Arc::new(dist.clone()),
     };
     let app = Router::new()
         .route("/ui", get(ws_ui))
         .route("/channel", get(ws_ui)) // UI's WsTransport path
         .route("/cli", get(ws_cli))
         .route("/send", post(http_send))
+        .fallback(get(crate::ui::ui_fallback))
+        .layer(axum::Extension(ui.clone()))
         .with_state(ctx);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
     println!("stage listening on 0.0.0.0:{port}");
     println!("  ws   /channel (ui)  /cli (peers)");
     println!("  http POST /send    (body: KDL)");
+    match ui.proxy {
+        Some(t) => println!("  http *          -> proxy to trunk at {t}"),
+        None => println!(
+            "  http *          -> static {} (trunk port {trunk_port} down)",
+            ui.dist.display()
+        ),
+    }
     axum::serve(listener, app).await?;
     Ok(())
 }
+
 
 async fn ws_ui(ws: WebSocketUpgrade, State(ctx): State<Ctx>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| run_peer(socket, ctx, true))
