@@ -22,10 +22,7 @@ impl Brick {
                 Ok(x) => {
                     *self = x;
                 }
-                Err(x) => {
-                    #[cfg(feature = "dioxus")]
-                    dioxus::logger::tracing::info!("{x:?}");
-                }
+                Err(_) => {}
             }
         }
         if let Some(cs) = self.borrow_children_mut() {

@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-dioxus = { workspace = true, optional = true }
 itertools.workspace = true
 minijinja = { workspace = true, features = ["loader"] }
 serde.workspace = true
@@ -14,7 +13,6 @@ regex = { workspace = true, optional = true }
 brick_macro = { path = "../brick_macro", optional = true }
 
 [features]
-dioxus = ["dep:dioxus"]
 schema = ["dep:schemars"]
 classify = ["dep:regex", "dep:brick_macro"]
 ops = ["dep:brick_macro"]

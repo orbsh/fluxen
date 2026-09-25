@@ -7,7 +7,6 @@ use syn::parse2;
 fn test_struct_hello() {
     let input = quote! {
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-        #[cfg_attr(feature = "dioxus", derive(Props))]
         #[cfg_attr(feature = "schema", derive(JsonSchema))]
         pub struct Placeholder {
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -21,7 +20,6 @@ fn test_struct_hello() {
 
     let _input = quote! {
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-        #[cfg_attr(feature = "dioxus", derive(Props))]
         #[cfg_attr(feature = "schema", derive(JsonSchema))]
         pub struct ClassAttr {
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,10 +57,6 @@ fn test_struct_hello() {
                 field: String,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 payload: Option<Value>,
-                #[cfg(feature = "dioxus")]
-                #[allow(dead_code)]
-                #[serde(skip)]
-                signal: Option<Signal<Value>>,
             },
             Submit {},
             Default {},

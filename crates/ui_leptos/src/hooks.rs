@@ -120,8 +120,8 @@ pub fn use_target_value(ctx: Ctx, brick: &impl BrickOps) -> Option<impl Fn(Value
     use_target(ctx, brick, "value")
 }
 /// 表单信号共享：`form_` 构建 `FormState` 并压栈，`input_`/`button_`
-/// 在渲染期间从栈顶取字段/确认信号。因 `BindVariant` 的 `signal` 字段
-/// 在非 dioxus 构建下被 cfg 掉，改用线程栈传递信号句柄。
+/// 在渲染期间从栈顶取字段/确认信号。`BindVariant::Field` 不携带
+/// 信号句柄，改用线程栈传递。见 docs/PLAN.md。
 #[derive(Clone)]
 pub struct FormState {
     pub fields: std::collections::HashMap<String, RwSignal<Value>>,
