@@ -61,7 +61,7 @@ pub fn placeholder_(brick: Placeholder, ctx: &Ctx, id: String) -> AnyView {
 
     move || -> AnyView {
         if let Some(source) = &source
-            && let Some(data) = ctx.data.get().get(source).cloned()
+            && let Some(data) = ctx.slot_for_data(source).get()
         {
             crate::dom::eval(&format!(
                 r#"

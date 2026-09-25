@@ -59,8 +59,10 @@ pub fn rack_(brick: Rack, ctx: &Ctx, id: String) -> AnyView {
         .map(|RackAttr { scroll, .. }| *scroll)
         .unwrap_or(false);
 
+    let slot = ctx.slot_for_list(&source);
     move || -> AnyView {
-        let c = ctx.list.get().get(&source).cloned().unwrap_or_default();
+        // 只订阅本 source 的槽：其他键的更新不触发本闭包
+        let c = slot.get();
         // keyed list：行身份 = Brick id（无 id 行按位置 "#{idx}" 兜底）。
         // 外层键集 diff：追帧只给新键建行，旧行节点存活；行内容做成
         // 反应式闭包再订阅 ctx.list，同 id 行的 merge 更新原地刷新，
@@ -93,17 +95,15 @@ pub fn rack_(brick: Rack, ctx: &Ctx, id: String) -> AnyView {
                     let k2 = key.clone();
                     // 按行 memo：list 变更只重算本行 Brick；输出相等则下游不动。
                     let memo = Memo::new(move |_| {
-                        let snap = ctx.list.get();
-                        snap.get(&src).and_then(|l| {
-                            if let Some(pos) = k2.strip_prefix('#') {
-                                let i: usize = pos.parse().ok()?;
-                                l.get(i).cloned()
-                            } else {
-                                l.iter()
-                                    .find(|b| b.get_id().as_deref() == Some(k2.as_str()))
-                                    .cloned()
-                            }
-                        })
+                        let l = ctx.slot_for_list(&src).get();
+                        if let Some(pos) = k2.strip_prefix('#') {
+                            let i: usize = pos.parse().ok()?;
+                            l.get(i).cloned()
+                        } else {
+                            l.iter()
+                                .find(|b| b.get_id().as_deref() == Some(k2.as_str()))
+                                .cloned()
+                        }
                     });
                     // 惰性闭包订阅 memo：本行 merge 时原地重渲染。
                     let rctx = lcx.clone();

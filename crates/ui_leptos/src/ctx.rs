@@ -24,13 +24,18 @@ static TMPL: LazyLock<RwLock<Environment>> = LazyLock::new(|| {
 /// `form` 是渲染期动态环境：`form_` 注入自己的 `FormState` 后克隆本结构
 /// 渲染子树，归属沿克隆链传播；兄弟分支各持自己的克隆，互不污染。
 /// 嵌套表单靠遮蔽生效（内层覆盖外层）。
+/// per-key 信号槽：外层 map 只存句柄（键集变化时才写外层），
+/// 值经内层信号发布——某个键的更新不通知其他键的订阅者。
+pub type ListSlot = RwSignal<std::sync::Arc<Vec<Brick>>>;
+pub type DataSlot = RwSignal<Option<std::sync::Arc<Brick>>>;
+
 #[derive(Clone)]
 pub struct Ctx {
     pub transport: LeptosTransport,
     pub codec: ActiveCodec,
     pub layout: RwSignal<Brick>,
-    pub data: RwSignal<HashMap<String, Arc<Brick>>>,
-    pub list: RwSignal<HashMap<String, Arc<Vec<Brick>>>>,
+    pub data: RwSignal<HashMap<String, DataSlot>>,
+    pub list: RwSignal<HashMap<String, ListSlot>>,
     pub form: Option<Arc<FormState>>,
 }
 
@@ -105,9 +110,34 @@ impl Ctx {
     }
 
     pub fn set(&self, name: impl AsRef<str>, brick: Brick) {
-        self.data.update(|d| {
-            d.insert(name.as_ref().to_string(), Arc::new(brick));
+        self.slot_for_data(name.as_ref()).set(Some(Arc::new(brick)));
+    }
+
+    /// 取（或首次时建）某 source 的列表槽。外层 map 用 untracked 读：
+    /// 订阅本槽即可，键集变化不该惊动 reader。
+    pub fn slot_for_list(&self, source: &str) -> ListSlot {
+        if let Some(s) = self.list.get_untracked().get(source).copied() {
+            return s;
+        }
+        let slot = RwSignal::new(std::sync::Arc::new(Vec::new()));
+        let name = source.to_string();
+        self.list.update(|m| {
+            m.entry(name).or_insert(slot);
         });
+        self.list.get_untracked().get(source).copied().unwrap_or(slot)
+    }
+
+    /// 取（或首次时建）某 source 的数据槽（语义同 slot_for_list）。
+    pub fn slot_for_data(&self, source: &str) -> DataSlot {
+        if let Some(s) = self.data.get_untracked().get(source).copied() {
+            return s;
+        }
+        let slot = RwSignal::new(None);
+        let name = source.to_string();
+        self.data.update(|m| {
+            m.entry(name).or_insert(slot);
+        });
+        self.data.get_untracked().get(source).copied().unwrap_or(slot)
     }
 }
 
@@ -127,16 +157,14 @@ fn dispatch_msg(act: &Message<Brick>, ctx: &Ctx) {
                 let env = TMPL.read().expect("read TMPL failed");
                 d.expand(&env);
                 tracing::info!("create: layout set, root = {:.100?}", d);
+                // Effect 内写信号一律 set/untracked；tracked 读见上注释
                 ctx.layout.set(d);
             }
             Content::Set(x) => {
                 let mut d = x.data.clone();
                 let env = TMPL.read().expect("read TMPL failed");
                 d.expand(&env);
-                ctx.data
-                    .update(|m| {
-                        m.insert(x.event.clone(), Arc::new(d));
-                    });
+                ctx.slot_for_data(&x.event).set(Some(Arc::new(d)));
             }
             Content::Join(x) => {
                 let mut d = x.data.clone();
@@ -147,26 +175,29 @@ fn dispatch_msg(act: &Message<Brick>, ctx: &Ctx) {
                     Method::Concat => &Concat,
                     Method::Delete => &Delete,
                 };
-                // 克隆 map 只复制 Rc 壳；改动的那一条经 make_mut 独占重建，
-                // 其余条目的 Rc 原样带给所有订阅者。
-                ctx.list.update(|m| {
-                    let list = Arc::make_mut(m.entry(x.event.clone()).or_default());
-                    if d.get_id().is_some() {
-                        let mut is_merge = false;
-                        for i in list.iter_mut() {
-                            if i.cmp_id(&d) {
-                                is_merge = true;
-                                let mut rhs = d.clone();
-                                i.merge(vs, &mut rhs);
-                            }
+                // 只写该键的内层槽：clone 壳 + make_mut 独占重建该条目，
+                // 其他键的槽与其他行的 Arc 原样带给各自订阅者。
+                // untracked 读：dispatch_msg 运行在消费 frame 的 Effect 里，
+                // tracked 读会让 Effect 订阅自己写入的槽 → 自激循环。
+                let slot = ctx.slot_for_list(&x.event);
+                let cur = slot.get_untracked();
+                let mut list = std::sync::Arc::unwrap_or_clone(cur);
+                if d.get_id().is_some() {
+                    let mut is_merge = false;
+                    for i in list.iter_mut() {
+                        if i.cmp_id(&d) {
+                            is_merge = true;
+                            let mut rhs = d.clone();
+                            i.merge(vs, &mut rhs);
                         }
-                        if !is_merge {
-                            list.push(d.clone());
-                        }
-                    } else {
+                    }
+                    if !is_merge {
                         list.push(d.clone());
                     }
-                });
+                } else {
+                    list.push(d.clone());
+                }
+                slot.set(Arc::new(list));
             }
             Content::Empty => {}
         }
