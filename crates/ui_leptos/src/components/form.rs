@@ -43,7 +43,7 @@ fn collect_fields(
             .or_insert_with(|| RwSignal::new(v));
         payloads.insert(field.clone(), payload.clone());
     }
-    if let Some(subs) = b.borrow_sub() {
+    if let Some(subs) = b.borrow_children() {
         for c in subs {
             collect_fields(c, fields, payloads);
         }
@@ -63,7 +63,7 @@ pub fn form_(brick: Form, ctx: &Ctx) -> AnyView {
     let confirm = RwSignal::new(Value::Bool(false));
     let mut fields: HashMap<String, RwSignal<Value>> = HashMap::new();
     let mut payloads: HashMap<String, Option<Value>> = HashMap::new();
-    if let Some(subs) = brick.sub.as_deref() {
+    if let Some(subs) = brick.children.as_deref() {
         for c in subs {
             collect_fields(c, &mut fields, &mut payloads);
         }
@@ -83,7 +83,7 @@ pub fn form_(brick: Form, ctx: &Ctx) -> AnyView {
         confirm,
     });
     let children = brick
-        .sub
+        .children
         .as_deref()
         .map(|s| render_children(&ctx, s))
         .unwrap_or_default();

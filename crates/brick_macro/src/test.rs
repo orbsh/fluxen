@@ -64,13 +64,7 @@ fn test_struct_hello() {
                 #[serde(skip)]
                 signal: Option<Signal<Value>>,
             },
-            Submit {
-                submit: bool,
-                #[cfg(feature = "dioxus")]
-                #[allow(dead_code)]
-                #[serde(skip)]
-                signal: Option<Signal<Value>>,
-            },
+            Submit {},
             Default {},
         }
     };

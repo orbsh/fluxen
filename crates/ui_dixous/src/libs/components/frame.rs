@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn Frame(brick: Brick) -> Element {
-    let sub = brick.borrow_sub();
+    let sub = brick.borrow_children();
     if let Some(sub) = sub {
         let sub = sub.iter().map(|c| {
             rsx! {

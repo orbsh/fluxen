@@ -17,7 +17,7 @@ pub fn svg_(brick: Svg, ctx: &Ctx) -> AnyView {
         .map(|x| x.size_style())
         .unwrap_or_default();
     let children = brick
-        .sub
+        .children
         .as_deref()
         .map(|s| render_children(ctx, s))
         .unwrap_or_default();
@@ -44,7 +44,7 @@ pub fn group_(brick: Group, ctx: &Ctx) -> AnyView {
             .join("\n");
     }
     let children = brick
-        .sub
+        .children
         .as_deref()
         .map(|s| render_children(ctx, s))
         .unwrap_or_default();

@@ -49,7 +49,7 @@ pub fn fold_(brick: Fold, ctx: &Ctx, id: String) -> AnyView {
 
         let b: AnyView = if s {
             let children = brick
-                .sub
+                .children
                 .as_deref()
                 .map(|x| render_children(&ctx, x))
                 .unwrap_or_default();

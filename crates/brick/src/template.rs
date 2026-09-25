@@ -28,7 +28,7 @@ impl Brick {
                 }
             }
         }
-        if let Some(cs) = self.borrow_sub_mut() {
+        if let Some(cs) = self.borrow_children_mut() {
             for c in cs {
                 c.expand(env);
             }

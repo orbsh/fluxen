@@ -12,9 +12,9 @@ use std::fmt::Debug;
 impl Brick {
     pub fn merge(&mut self, op: &(impl BrickOp + ?Sized), rhs: &mut Self) {
         op.merge(self, rhs);
-        if let Some(rsub) = rhs.borrow_sub_mut() {
-            if let Some(sub) = &mut self.borrow_sub_mut() {
-                let sub: Vec<_> = sub
+        if let Some(rsub) = rhs.borrow_children_mut() {
+            if let Some(sub) = &mut self.borrow_children_mut() {
+                let children: Vec<_> = sub
                     .iter_mut()
                     .zip_longest(rsub)
                     .map(|x| match x {
@@ -26,9 +26,9 @@ impl Brick {
                         Right(r) => r.clone(),
                     })
                     .collect();
-                self.set_sub(sub);
+                self.set_children(children);
             } else {
-                self.set_sub(rsub.clone());
+                self.set_children(rsub.clone());
             }
         }
     }

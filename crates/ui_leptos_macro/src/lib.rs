@@ -29,7 +29,7 @@ fn walk(ast: &syn::File) -> HashMap<String, CompInfo> {
                 let has_sub = s
                     .fields
                     .iter()
-                    .any(|f| f.ident.as_ref().is_some_and(|i| i == "sub"));
+                    .any(|f| f.ident.as_ref().is_some_and(|i| i == "children"));
                 map.insert(s.ident.to_string(), CompInfo::Struct { has_sub });
             }
             syn::Item::Enum(e) => {

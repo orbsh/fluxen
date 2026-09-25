@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "crates/brick",
+  "crates/stage",
   "crates/ui-assets",
   "crates/brick_macro",
   "crates/content",

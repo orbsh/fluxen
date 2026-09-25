@@ -16,10 +16,10 @@ pub fn impl_brick_ops(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     let mut child_mut = quote! { None };
     let mut set_child = quote! {};
 
-    if struct_has_field(ast, "sub") {
-        child_ref = quote! { self.sub.as_ref() };
-        child_mut = quote! { self.sub.as_mut() };
-        set_child = quote! { self.sub = Some(brick); };
+    if struct_has_field(ast, "children") {
+        child_ref = quote! { self.children.as_ref() };
+        child_mut = quote! { self.children.as_mut() };
+        set_child = quote! { self.children = Some(brick); };
     };
 
     let mut attrs_ref = quote! { None };
@@ -44,13 +44,13 @@ pub fn impl_brick_ops(ast: &DeriveInput) -> syn::Result<TokenStream2> {
             fn get_type(&self) -> &str {
                 stringify!(#name)
             }
-            fn borrow_sub(&self) -> Option<&Vec<Brick>> {
+            fn borrow_children(&self) -> Option<&Vec<Brick>> {
                 #child_ref
             }
-            fn borrow_sub_mut(&mut self) -> Option<&mut Vec<Brick>> {
+            fn borrow_children_mut(&mut self) -> Option<&mut Vec<Brick>> {
                 #child_mut
             }
-            fn set_sub(&mut self, brick: Vec<Brick>) {
+            fn set_children(&mut self, brick: Vec<Brick>) {
                 #set_child
             }
             fn borrow_attrs(&self) -> Option<&dyn Classify> {
@@ -85,21 +85,21 @@ pub fn impl_brick_ops_variant(ast: &DeriveInput) -> syn::Result<TokenStream2> {
                 }
             }
 
-            fn borrow_sub(&self) -> Option<&Vec<Brick>> {
+            fn borrow_children(&self) -> Option<&Vec<Brick>> {
                 match self {
-                    #(#name::#r(c) => c.borrow_sub()),*
+                    #(#name::#r(c) => c.borrow_children()),*
                 }
             }
 
-            fn borrow_sub_mut(&mut self) -> Option<&mut Vec<Brick>> {
+            fn borrow_children_mut(&mut self) -> Option<&mut Vec<Brick>> {
                 match self {
-                    #(#name::#r(c) => c.borrow_sub_mut()),*
+                    #(#name::#r(c) => c.borrow_children_mut()),*
                 }
             }
 
-            fn set_sub(&mut self, brick: Vec<Brick>) {
+            fn set_children(&mut self, brick: Vec<Brick>) {
                 match self {
-                    #(#name::#r(c) => { c.set_sub(brick) }),*
+                    #(#name::#r(c) => { c.set_children(brick) }),*
                 }
             }
 
