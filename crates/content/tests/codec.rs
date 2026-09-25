@@ -94,11 +94,38 @@ fn content_tagged_by_action_and_accepts_single_or_array() {
 }
 
 #[test]
-fn cross_codec_interoperates_json_encoded_decoded_by_cbor_is_error() {
-    // wrong-codec decode must fail loudly, not silently misparse
+fn cross_codec_strict_decode_still_errors() {
+    // explicit decode() stays strict: wrong codec must fail loudly
     let bytes = codec(CodecType::Json).encode(&sample()).unwrap();
     let r = codec(CodecType::Cbor).decode::<Message<Payload>>(&bytes);
     assert!(r.is_err());
+}
+
+#[test]
+fn decode_auto_accepts_json_and_cbor_regardless_of_self() {
+    // receiver-side auto-detect: frame shape decides, not the pinned codec
+    let json_bytes = codec(CodecType::Json).encode(&sample()).unwrap();
+    let cbor_bytes = codec(CodecType::Cbor).encode(&sample()).unwrap();
+    for self_variant in [CodecType::Json, CodecType::Cbor] {
+        let c = codec(self_variant);
+        let a: Message<Payload> = c.decode_auto(&json_bytes).expect("json auto");
+        let b: Message<Payload> = c.decode_auto(&cbor_bytes).expect("cbor auto");
+        assert_eq!(
+            serde_json::to_value(&a).unwrap(),
+            serde_json::to_value(&sample()).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&b).unwrap(),
+            serde_json::to_value(&sample()).unwrap()
+        );
+    }
+}
+
+#[test]
+fn decode_auto_rejects_garbage() {
+    let c = codec(CodecType::Cbor);
+    assert!(c.decode_auto::<Message<Payload>>(b"not a frame").is_err());
+    assert!(c.decode_auto::<Message<Payload>>(b"{\"nope\":1}").is_err());
 }
 
 #[test]

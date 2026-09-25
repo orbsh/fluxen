@@ -36,8 +36,9 @@ cargo run -p stage -- serve            # 镜像 + UI + console，单进程
 cargo run -p stage -- serve --trunk 8281 --dist crates/ui_leptos/dist   # 显式指定
 ```
 
-UI 的 WS 地址默认取页面 origin，无需配置；`?codec=json` 把默认的 CBOR 换成
-可读 JSON，方便在 devtools 里看帧。
+UI 的 WS 地址默认取页面 origin，无需配置。接收侧逐帧自适应识别编码（首字节
+`{` = JSON，CBOR map 主类型 = CBOR），网关可混发两种格式；`?codec=json` 只
+决定 UI 自身*发送*（用户事件）的格式——方便在 devtools 里读。发送默认为 CBOR。
 
 console REPL 会把每一帧回显出来（`<- {...}`），包括 UI 上报的事件——既是发送端也是事件监视器。命令：`/send <file.kdl>`、`/raw <json>`（发送裸 `Message<Brick>`——发 Set/Join 帧必须走这条）、`/quit`。
 

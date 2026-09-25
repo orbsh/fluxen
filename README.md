@@ -40,7 +40,10 @@ cargo run -p stage -- serve --trunk 8281 --dist crates/ui_leptos/dist   # overri
 ```
 
 The UI's WS host defaults to the page origin, so no `?token`-style config is
-needed; `?codec=json` switches from CBOR to readable JSON frames in devtools.
+needed. Receivers auto-detect per frame (first byte: `{` = JSON, CBOR map
+major type = CBOR), so the gateway can mix encodings freely; `?codec=json`
+only pins what the UI itself *sends* (user events) — handy for reading them
+in devtools. Default send format is CBOR.
 
 The console REPL streams every frame back (`<- {...}`), including events the
 UI emits — both sender and event monitor. Commands: `/send <file.kdl>`,
