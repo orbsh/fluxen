@@ -46,18 +46,17 @@ pub fn use_source_id(brick: &impl BrickOps) -> Option<&String> {
 }
 
 /// 从 `ctx.list[source]` 取列表（无则返回空 vec）。
-pub fn use_source_list(ctx: &Ctx, brick: &impl BrickOps, key: &str) -> Option<Vec<Brick>> {
+pub fn use_source_list(ctx: &Ctx, brick: &impl BrickOps, key: &str) -> Option<std::sync::Arc<Vec<Brick>>> {
     let list = ctx.list.get();
     if let Some(Bind {
         variant: BindVariant::Source { source },
         default: _,
         r#type: _kind,
     }) = brick.get_bind().and_then(|x| x.get(key))
-        && let Some(l) = list.get(source)
     {
-        Some(l.clone())
+        list.get(source).cloned()
     } else {
-        Some(Vec::new())
+        None
     }
 }
 
@@ -71,7 +70,7 @@ pub fn use_source<'a>(ctx: &Ctx, brick: &'a impl BrickOps, key: &'a str) -> Opti
     }) = brick.get_bind().and_then(|x| x.get(key))
         && let Some(d) = data.get(source)
     {
-        Some(d as &dyn BrickOps)
+        Some(&**d as &dyn BrickOps)
     } else {
         Some(brick as &dyn BrickOps)
     };
@@ -119,30 +118,11 @@ pub fn use_target<'a>(
 pub fn use_target_value(ctx: Ctx, brick: &impl BrickOps) -> Option<impl Fn(Value)> {
     use_target(ctx, brick, "value")
 }
-/// 表单信号共享：`form_` 构建 `FormState` 并压栈，`input_`/`button_`
-/// 在渲染期间从栈顶取字段/确认信号。`BindVariant::Field` 不携带
-/// 信号句柄，改用线程栈传递。见 docs/PLAN.md。
+/// 表单信号共享：`form_` 构建本结构后注入 `Ctx.form` 并克隆下传，
+/// `input_`/`button_` 从自己拿到的 ctx 读取——归属沿克隆链传播，
+/// 不依赖渲染时序。
 #[derive(Clone)]
 pub struct FormState {
     pub fields: std::collections::HashMap<String, RwSignal<Value>>,
     pub confirm: RwSignal<Value>,
-}
-
-thread_local! {
-    static FORM_STACK: std::cell::RefCell<Vec<std::rc::Rc<FormState>>> =
-        std::cell::RefCell::new(Vec::new());
-}
-
-pub fn push_form(fs: FormState) {
-    FORM_STACK.with(|s| s.borrow_mut().push(std::rc::Rc::new(fs)));
-}
-
-pub fn pop_form() {
-    FORM_STACK.with(|s| {
-        s.borrow_mut().pop();
-    });
-}
-
-pub fn peek_form() -> Option<std::rc::Rc<FormState>> {
-    FORM_STACK.with(|s| s.borrow().last().cloned())
 }

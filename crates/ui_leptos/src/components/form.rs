@@ -1,6 +1,6 @@
 use crate::Ctx;
 use crate::ctx::render_children;
-use crate::hooks::{push_form, pop_form, use_common_css, FormState};
+use crate::hooks::{use_common_css, FormState};
 use brick::{Bind, BindVariant, Brick, BrickOps, Form, JsType};
 use leptos::prelude::*;
 use leptos::html::*;
@@ -77,17 +77,19 @@ pub fn form_(brick: Form, ctx: &Ctx) -> AnyView {
             _ => None,
         });
 
-    // 渲染子组件（input_/button_ 会从栈顶取信号）
-    push_form(FormState {
-        fields: fields.clone(),
-        confirm,
-    });
+    // 注入表单状态并克隆下传：子树内的 input_/button_ 拿到的 ctx 自带归属
+    let ctx = Ctx {
+        form: Some(std::sync::Arc::new(FormState {
+            fields: fields.clone(),
+            confirm,
+        })),
+        ..ctx.clone()
+    };
     let children = brick
         .children
         .as_deref()
         .map(|s| render_children(&ctx, s))
         .unwrap_or_default();
-    pop_form();
 
     // confirm 为真时发送
     if let Some(event) = event {
