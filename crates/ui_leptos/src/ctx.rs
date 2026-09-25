@@ -87,7 +87,8 @@ impl Ctx {
         Effect::new(move |_| {
             let b = ctx_clone.transport.frame.get();
             if !b.is_empty() {
-                match ctx_clone.codec.decode::<Message<Brick>>(&b) {
+                // 收侧双格式自适应：帧首字节定格式，与 ?codec= 钉定的发送格式无关
+                match ctx_clone.codec.decode_auto::<Message<Brick>>(&b) {
                     Ok(act) => dispatch_msg(&act, &ctx_clone),
                     // decode 失败若静默丢弃，症状就是"ws 正常但界面空白"——必须留痕
                     Err(e) => tracing::error!("ws frame decode failed: {e}"),

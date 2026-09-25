@@ -84,4 +84,25 @@ impl ActiveCodec {
             }
         }
     }
+
+    /// Receive-side auto-detect: the frame's first byte decides the wire
+    /// format, independent of this codec's pinned send format. JSON messages
+    /// are objects ('{'); CBOR top-level maps start in the 0xA0-0xBF major
+    /// type 5 range. Anything else (or a shape mismatch) fails.
+    pub fn decode_auto<T: DeserializeOwned>(&self, bytes: &[u8]) -> Result<T, CodecError> {
+        match bytes.first() {
+            Some(b'{') => Self::decode_json(bytes),
+            Some(b) if (0xA0..=0xBF).contains(b) => Self::decode_cbor(bytes),
+            _ => Err(CodecError::Decode("frame not json/cbor".into())),
+        }
+    }
+
+    fn decode_json<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, CodecError> {
+        serde_json::from_slice(bytes).map_err(|e| CodecError::Decode(e.to_string()))
+    }
+
+    fn decode_cbor<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, CodecError> {
+        let mut cursor = std::io::Cursor::new(bytes);
+        ciborium::de::from_reader(&mut cursor).map_err(|e| CodecError::Decode(e.to_string()))
+    }
 }
