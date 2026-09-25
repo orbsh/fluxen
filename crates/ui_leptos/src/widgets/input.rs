@@ -1,5 +1,5 @@
 use crate::Ctx;
-use crate::hooks::{peek_form, use_common_css};
+use crate::hooks::use_common_css;
 use brick::{Bind, BindVariant, BrickOps, Input, JsType};
 use leptos::ev;
 use leptos::prelude::*;
@@ -40,7 +40,9 @@ pub fn input_(brick: Input, ctx: &Ctx) -> AnyView {
         .unwrap_or(("", "".to_string(), Default::default()));
 
     let field_sig = if bind_type == "field" {
-        peek_form().and_then(|fs| fs.fields.get(&key).copied())
+        ctx.form
+            .as_ref()
+            .and_then(|fs| fs.fields.get(&key).copied())
     } else {
         None
     };

@@ -8,7 +8,9 @@ use leptos::prelude::*;
 use content::codec::ActiveCodec;
 use minijinja::Environment;
 use serde_json::Value;
+use crate::hooks::FormState;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::{LazyLock, RwLock};
 use transport::Transport;
 
@@ -18,13 +20,18 @@ static TMPL: LazyLock<RwLock<Environment>> = LazyLock::new(|| {
 });
 
 /// 全局共享状态容器：掌管布局、数据、列表与传输收发。
+///
+/// `form` 是渲染期动态环境：`form_` 注入自己的 `FormState` 后克隆本结构
+/// 渲染子树，归属沿克隆链传播；兄弟分支各持自己的克隆，互不污染。
+/// 嵌套表单靠遮蔽生效（内层覆盖外层）。
 #[derive(Clone)]
 pub struct Ctx {
     pub transport: LeptosTransport,
     pub codec: ActiveCodec,
     pub layout: RwSignal<Brick>,
-    pub data: RwSignal<HashMap<String, Brick>>,
-    pub list: RwSignal<HashMap<String, Vec<Brick>>>,
+    pub data: RwSignal<HashMap<String, Arc<Brick>>>,
+    pub list: RwSignal<HashMap<String, Arc<Vec<Brick>>>>,
+    pub form: Option<Arc<FormState>>,
 }
 
 /// UI 侧持有传输 + 下行帧信号。wasm 单线程，Rc 共享。
@@ -67,6 +74,7 @@ impl Ctx {
             layout,
             data,
             list,
+            form: None,
         };
 
         // 消费下行帧并分发
@@ -98,7 +106,7 @@ impl Ctx {
 
     pub fn set(&self, name: impl AsRef<str>, brick: Brick) {
         self.data.update(|d| {
-            d.insert(name.as_ref().to_string(), brick);
+            d.insert(name.as_ref().to_string(), Arc::new(brick));
         });
     }
 }
@@ -127,7 +135,7 @@ fn dispatch_msg(act: &Message<Brick>, ctx: &Ctx) {
                 d.expand(&env);
                 ctx.data
                     .update(|m| {
-                        m.insert(x.event.clone(), d);
+                        m.insert(x.event.clone(), Arc::new(d));
                     });
             }
             Content::Join(x) => {
@@ -139,26 +147,26 @@ fn dispatch_msg(act: &Message<Brick>, ctx: &Ctx) {
                     Method::Concat => &Concat,
                     Method::Delete => &Delete,
                 };
-                if d.get_id().is_some() {
-                    let mut l = ctx.list.get();
-                    let list = l.entry(x.event.clone()).or_default();
-                    let mut is_merge = false;
-                    for i in list.iter_mut() {
-                        if i.cmp_id(&d) {
-                            is_merge = true;
-                            let mut rhs = d.clone();
-                            i.merge(vs, &mut rhs);
+                // 克隆 map 只复制 Rc 壳；改动的那一条经 make_mut 独占重建，
+                // 其余条目的 Rc 原样带给所有订阅者。
+                ctx.list.update(|m| {
+                    let list = Arc::make_mut(m.entry(x.event.clone()).or_default());
+                    if d.get_id().is_some() {
+                        let mut is_merge = false;
+                        for i in list.iter_mut() {
+                            if i.cmp_id(&d) {
+                                is_merge = true;
+                                let mut rhs = d.clone();
+                                i.merge(vs, &mut rhs);
+                            }
                         }
-                    }
-                    if !is_merge {
+                        if !is_merge {
+                            list.push(d.clone());
+                        }
+                    } else {
                         list.push(d.clone());
                     }
-                    ctx.list.set(l);
-                } else {
-                    ctx.list.update(|m| {
-                        m.entry(x.event.clone()).or_default().push(d.clone());
-                    });
-                }
+                });
             }
             Content::Empty => {}
         }

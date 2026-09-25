@@ -1,5 +1,5 @@
 use crate::Ctx;
-use crate::hooks::{peek_form, use_default};
+use crate::hooks::use_default;
 use brick::{Bind, BindVariant, BrickOps, Button, ButtonAttr};
 use leptos::ev::click;
 use leptos::prelude::*;
@@ -7,7 +7,7 @@ use leptos::html::*;
 use serde_json::{Value, to_value};
 
 /// 按钮：默认文本取 `bind["value"].default`；`Submit` 变体切换 form 的确认信号。
-pub fn button_(brick: Button, _ctx: &Ctx) -> AnyView {
+pub fn button_(brick: Button, ctx: &Ctx) -> AnyView {
     let t = use_default(&brick)
         .unwrap_or(to_value("Ok").unwrap())
         .as_str()
@@ -28,7 +28,7 @@ pub fn button_(brick: Button, _ctx: &Ctx) -> AnyView {
         return div().into_any();
     };
 
-    let Some(confirm) = peek_form().map(|fs| fs.confirm) else {
+    let Some(confirm) = ctx.form.as_ref().map(|fs| fs.confirm) else {
         return div().into_any();
     };
 
