@@ -76,7 +76,6 @@ fn test_struct_hello() {
 #[test]
 fn test_attribute_rename() {
     use syn::ItemFn;
-    let input_args = quote! { value=1 };
 
     let input_item = quote! {
         #[xxx]
