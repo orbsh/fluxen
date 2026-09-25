@@ -2,18 +2,6 @@
 
 ## Known defects
 
-### Keyed list rendering in `rack_`
-
-`ui_leptos/src/components/rack.rs` computes a `key` per child and discards it
-(`let _ = key;`). Every frame appended to `ctx.list[source]` rebuilds the whole
-`Vec<AnyView>`, so DOM nodes are destroyed and recreated:
-
-- input focus is lost when a chat stream pushes a new frame
-- scroll position resets (the `scroll` hack only compensates partially)
-
-Fix: render the list with `For` + stable key (`Brick::get_id()`), so each item
-is a separately-tracked keyed view and appending only mounts new nodes.
-
 ### Whole-map notification fan-out
 
 `data` / `list` are single signals holding a whole HashMap. With `Arc`-wrapped
