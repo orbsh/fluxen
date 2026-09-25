@@ -49,11 +49,9 @@ pub fn input_(brick: Input, ctx: &Ctx) -> AnyView {
 
     let slot = field_sig.unwrap_or_else(|| RwSignal::new(default_option_jskind(&kind)));
 
-    move || -> AnyView {
-        // 每次闭包重跑时重建事件回调（回调捕获 Copy 信号与 owned ctx）
-        let ctx = ctx.clone();
+    let oninput = {
         let k1 = kind.clone();
-        let oninput = move |event: web_sys::Event| {
+        move |event: web_sys::Event| {
             let event_value: String = event
                 .target()
                 .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
@@ -66,58 +64,83 @@ pub fn input_(brick: Input, ctx: &Ctx) -> AnyView {
             }
             .unwrap();
             slot.set(parsed);
-        };
+        }
+    };
 
+    let onkeydown = {
+        let ctx = ctx.clone();
         let k2 = kind.clone();
         let k3 = key.clone();
-        let onkeydown = move |ev: web_sys::KeyboardEvent| {
+        move |ev: web_sys::KeyboardEvent| {
             if ev.key() == "Enter" {
                 match bind_type {
                     "field" => {
                         if let Some(sig) = field_sig {
-                            sig.set(slot.get());
+                            sig.set(slot.get_untracked());
                         }
                     }
                     "event" => {
                         let ctx = ctx.clone();
                         let key = k3.clone();
                         let kk = k2.clone();
-                        let val = slot.get();
+                        let val = slot.get_untracked();
+                        // 空值回车不触发事件
+                        if val.as_str().is_some_and(|s| s.trim().is_empty()) {
+                            return;
+                        }
+                        slot.set(default_option_jskind(&kk));
+                        // 命令式清空 DOM（浏览器 value-attribute 脏值语义）：
+                        // 用户键入会脏化 defaultValue，此后 attribute 更新
+                        // 不再重置显示值；且本节点全程存活，信号写入无法
+                        // 经任何属性路径触达（dioxus 虚拟 DOM 整体重建无此问题）。
+                        if let Some(el) = ev
+                            .target()
+                            .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+                        {
+                            el.set_value("");
+                        }
                         leptos::task::spawn_local(async move {
                             ctx.send(key, None, val).await;
-                            slot.set(default_option_jskind(&kk));
                         });
                     }
                     _ => {}
                 }
             }
-        };
+        }
+    };
 
+    // 反应性下沉到属性闭包：value 包在闭包里走 tachys 的 DynProperty，
+    // slot 一变即直写 DOM 的 value property。若把整棵元素树包在顶层
+    // `move || -> AnyView` 闭包里，其 rebuild 对普通字符串 attribute 是
+    // 脏值保护下的 no-op——症状即"信号已清空但输入框内容还在"
+    // （dioxus 虚拟 DOM 全量 diff 无此问题，移植时须注意）。
+    let value = move || {
         let v = slot.get();
-        let val: String = match &v {
+        match &v {
             Value::Number(n) => n.to_string(),
             Value::Bool(b) => b.to_string(),
             _ => v.as_str().unwrap_or("").to_string(),
-        };
-        let ty = match &kind {
-            Some(JsType::number) => "number",
-            Some(JsType::bool) => "checkbox",
-            Some(x) => x.input_type(),
-            None => "text",
-        };
-        let base = input().class(css.as_str()).r#type(ty);
-        match &kind {
-            Some(JsType::bool) => base
-                .checked(v.as_bool().unwrap_or(false))
-                .on(ev::input, oninput)
-                .on(ev::keydown, onkeydown)
-                .into_any(),
-            _ => base
-                .value(val.as_str())
-                .on(ev::input, oninput)
-                .on(ev::keydown, onkeydown)
-                .into_any(),
         }
+    };
+    let checked = move || slot.get().as_bool().unwrap_or(false);
+
+    let ty = match &kind {
+        Some(JsType::number) => "number",
+        Some(JsType::bool) => "checkbox",
+        Some(x) => x.input_type(),
+        None => "text",
+    };
+    let base = input().class(css.as_str()).r#type(ty);
+    match &kind {
+        Some(JsType::bool) => base
+            .checked(checked)
+            .on(ev::input, oninput)
+            .on(ev::keydown, onkeydown)
+            .into_any(),
+        _ => base
+            .value(value)
+            .on(ev::input, oninput)
+            .on(ev::keydown, onkeydown)
+            .into_any(),
     }
-    .into_any()
 }

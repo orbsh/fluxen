@@ -2,6 +2,18 @@
 
 ## Resolved
 
+### Input clear-on-Enter (dioxus-port defect) — done 2026-09
+
+Ported from dioxus with the clear logic intact (`slot.set(default)` after
+`ctx.send`) yet Enter no longer emptied the box: the leptos closure re-ran
+(logged the cleared value) but the DOM input kept showing the typed text.
+Root cause is browser value-attribute semantics: once the user types, the
+`defaultValue` is dirty and attribute-level updates never reset the shown
+value; a persistent node needs an imperative `set_value("")`. Dioxus's
+whole-tree vDOM rebuild hid this. `textarea_` still has the same shape
+(`slot.set(Value::Null)` with attribute-only binding) and will show the
+same symptom — fix only if a consumer needs it.
+
 ### Notification fan-out (per-key slots) — done 2026-09
 
 `data` / `list` were single whole-map signals: any `Set`/`Join` frame notified
