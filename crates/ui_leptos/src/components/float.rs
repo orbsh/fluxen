@@ -2,8 +2,8 @@ use crate::Ctx;
 use crate::ctx::render_children;
 use crate::hooks::use_common_css;
 use brick::Float;
-use leptos::prelude::*;
 use leptos::html::*;
+use leptos::prelude::*;
 
 /// 浮动容器：`PositionAttr::into_style()` 定位样式 + 公共 CSS。
 pub fn float_(brick: Float, ctx: &Ctx) -> AnyView {
@@ -20,5 +20,9 @@ pub fn float_(brick: Float, ctx: &Ctx) -> AnyView {
         .as_deref()
         .map(|s| render_children(ctx, s))
         .unwrap_or_default();
-    div().class(css.as_str()).style(style).child(children).into_any()
+    div()
+        .class(css.as_str())
+        .style(style)
+        .child(children)
+        .into_any()
 }

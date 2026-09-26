@@ -4,7 +4,7 @@ use quote::quote;
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::path::PathBuf;
-use syn::{parse_macro_input, parse_file};
+use syn::{parse_file, parse_macro_input};
 
 mod attrs;
 use attrs::Attrs;
@@ -88,10 +88,7 @@ fn walk(ast: &syn::File) -> HashMap<String, CompInfo> {
 pub fn gen_dispatch(input: TokenStream) -> TokenStream {
     // 解析: file = "..", entry = "Brick", object = "brick"
     let cfg = parse_macro_input!(input as Attrs);
-    let file = cfg
-        .get("file")
-        .expect("must provide file")
-        .to_owned();
+    let file = cfg.get("file").expect("must provide file").to_owned();
     let entry = cfg.get("entry").expect("must provide entry").to_owned();
     let object = cfg.get("object").expect("must provide object").to_owned();
 
@@ -122,10 +119,7 @@ pub fn gen_dispatch(input: TokenStream) -> TokenStream {
 
         let call = if f.has_id {
             // 有 id 的组件：生成回退 id 计数器，传给组件
-            let counter = Ident::new(
-                &format!("ID_{}", f.name.to_uppercase()),
-                Span::call_site(),
-            );
+            let counter = Ident::new(&format!("ID_{}", f.name.to_uppercase()), Span::call_site());
             let tag = format!("{}-{{}}", f.name);
             quote! {
                 {

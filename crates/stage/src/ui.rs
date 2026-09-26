@@ -146,10 +146,7 @@ async fn serve_static(st: &UiState, req: Request) -> Response<Body> {
     match tokio::fs::read(st.dist.join(&rel)).await {
         Ok(bytes) => Response::builder()
             .status(StatusCode::OK)
-            .header(
-                axum::http::header::CONTENT_TYPE,
-                content_type_for(&rel),
-            )
+            .header(axum::http::header::CONTENT_TYPE, content_type_for(&rel))
             .body(Body::from(bytes))
             .unwrap(),
         Err(_) => not_found(format!("not in dist: /{rel}")),
@@ -197,10 +194,7 @@ mod tests {
 
     #[test]
     fn query_strings_stripped_before_matching() {
-        assert_eq!(
-            normalize_asset_path("/app.js?v=3"),
-            Some("app.js".into())
-        );
+        assert_eq!(normalize_asset_path("/app.js?v=3"), Some("app.js".into()));
     }
 
     #[test]

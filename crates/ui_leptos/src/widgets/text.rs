@@ -1,8 +1,8 @@
 use crate::Ctx;
 use crate::hooks::{use_common_css, use_source_value};
 use brick::{Text, TextAttr};
-use leptos::prelude::*;
 use leptos::html::*;
+use leptos::prelude::*;
 use markdown::{Options, to_html_with_options};
 use std::sync::LazyLock;
 
@@ -30,7 +30,9 @@ pub fn text_(brick: Text, ctx: &Ctx) -> AnyView {
             None => "".to_string(),
         };
 
-        if let Some(TextAttr { format: Some(fmt), .. }) = &brick.attrs
+        if let Some(TextAttr {
+            format: Some(fmt), ..
+        }) = &brick.attrs
             && MDFMT.contains(fmt)
             && let Ok(md_html) = to_html_with_options(&text_content, &Options::gfm())
         {
@@ -40,7 +42,10 @@ pub fn text_(brick: Text, ctx: &Ctx) -> AnyView {
                 .inner_html(md_html)
                 .into_any()
         } else {
-            div().class(base_css.as_str()).child(text_content).into_any()
+            div()
+                .class(base_css.as_str())
+                .child(text_content)
+                .into_any()
         }
     }
     .into_any()

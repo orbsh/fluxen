@@ -19,6 +19,6 @@ pub use rack::rack_;
 pub mod render;
 pub use render::template_;
 pub mod svg;
-pub use svg::{path_, group_, svg_};
+pub use svg::{group_, path_, svg_};
 
 pub use crate::widgets::*;

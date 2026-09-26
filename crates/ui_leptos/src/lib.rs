@@ -1,7 +1,7 @@
 pub mod ctx;
-pub mod render;
-pub mod hooks;
 pub mod dom;
+pub mod hooks;
+pub mod render;
 
 pub mod components;
 pub mod widgets;

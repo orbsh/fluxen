@@ -2,8 +2,8 @@ use crate::Ctx;
 use crate::hooks::{use_common_css, use_source, use_source_value, use_target_value};
 use brick::TextArea;
 use leptos::ev;
-use leptos::prelude::*;
 use leptos::html::*;
+use leptos::prelude::*;
 use serde_json::{Value, to_value};
 use wasm_bindgen::JsCast;
 
@@ -14,11 +14,10 @@ pub fn textarea_(brick: TextArea, ctx: &Ctx) -> AnyView {
     use_common_css(&mut css, &brick);
     let css = css.join(" ");
 
-    let slot = RwSignal::new(
-        use_source_value(&ctx, &brick).unwrap_or_else(|| to_value("").unwrap()),
-    );
-    let placeholder = use_source(&ctx, &brick, "placeholder")
-        .and_then(|d| d.as_str().map(String::from));
+    let slot =
+        RwSignal::new(use_source_value(&ctx, &brick).unwrap_or_else(|| to_value("").unwrap()));
+    let placeholder =
+        use_source(&ctx, &brick, "placeholder").and_then(|d| d.as_str().map(String::from));
 
     move || -> AnyView {
         let ctx = ctx.clone();

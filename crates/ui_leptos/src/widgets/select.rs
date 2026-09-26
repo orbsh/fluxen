@@ -2,8 +2,8 @@ use crate::Ctx;
 use crate::ctx::render_brick;
 use crate::hooks::{use_common_css, use_source_list, use_source_value, use_target_value};
 use brick::{BrickOps, Select, classify::Classify};
-use leptos::prelude::*;
 use leptos::html::*;
+use leptos::prelude::*;
 use serde_json::to_value;
 
 /// 下拉选择：`options` 从 `ctx.list[source]` 取，`current` 取 `bind["value"].default`。
@@ -47,7 +47,10 @@ pub fn select_(brick: Select, ctx: &Ctx) -> AnyView {
                     .into_any()
             }
         });
-        div().class(css.as_str()).child(Vec::from_iter(children)).into_any()
+        div()
+            .class(css.as_str())
+            .child(Vec::from_iter(children))
+            .into_any()
     }
     .into_any()
 }

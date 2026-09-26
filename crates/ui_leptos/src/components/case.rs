@@ -3,8 +3,8 @@ use crate::ctx::render_brick;
 use crate::ctx::render_children;
 use crate::hooks::use_common_css;
 use brick::{BindVariant, BrickOps, Case, CaseAttr, Placeholder};
-use leptos::prelude::*;
 use leptos::html::*;
+use leptos::prelude::*;
 
 /// 容器：`case` class + grid 样式 + 公共 CSS。
 pub fn case_(brick: Case, ctx: &Ctx) -> AnyView {

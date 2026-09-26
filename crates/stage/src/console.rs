@@ -5,9 +5,9 @@
 //! mirror as a /cli peer, so /send frames go through the same routing as
 //! external CLI clients.
 
-use stage::proto::parse_kdl_to_frame;
 use futures::{SinkExt, StreamExt};
 use rustyline::DefaultEditor;
+use stage::proto::parse_kdl_to_frame;
 use tokio_tungstenite::tungstenite::Message;
 
 pub async fn run(port: u16) -> anyhow::Result<()> {
