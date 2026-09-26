@@ -2,8 +2,8 @@ use crate::Ctx;
 use crate::hooks::{use_common_css, use_default};
 use brick::Diagram;
 use leptos::html::Div;
-use leptos::prelude::*;
 use leptos::html::*;
+use leptos::prelude::*;
 
 /// Mermaid 图表：数据取 `bind["value"].default`，挂载后 `mermaid.init`。
 pub fn diagram_(brick: Diagram, _ctx: &Ctx, id: String) -> AnyView {
@@ -18,7 +18,10 @@ pub fn diagram_(brick: Diagram, _ctx: &Ctx, id: String) -> AnyView {
         let id_ = id.clone();
         let nr = NodeRef::<Div>::new();
         nr.on_load(move |_el| {
-            crate::dom::eval(&format!("mermaid.init({{}}, '#{id_extra}')", id_extra = id_));
+            crate::dom::eval(&format!(
+                "mermaid.init({{}}, '#{id_extra}')",
+                id_extra = id_
+            ));
         });
         div()
             .id(id.as_str())

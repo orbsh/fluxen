@@ -3,8 +3,8 @@ use crate::ctx::{render_brick, render_children};
 use crate::hooks::{use_common_css, use_default};
 use brick::{Fold, FoldAttr};
 use leptos::ev::click;
-use leptos::prelude::*;
 use leptos::html::*;
+use leptos::prelude::*;
 
 /// 折叠容器：`item[0]` 作头部，`show` 信号控制展开/收起。
 pub fn fold_(brick: Fold, ctx: &Ctx, id: String) -> AnyView {
@@ -64,7 +64,11 @@ pub fn fold_(brick: Fold, ctx: &Ctx, id: String) -> AnyView {
             .class(css.as_str())
             .style("grid-template-columns: auto 1fr;".to_string())
             .on(click, onclick)
-            .child(div().class(icon_class).style("height: 100%; aspect-ratio: 1 / 1;".to_string()))
+            .child(
+                div()
+                    .class(icon_class)
+                    .style("height: 100%; aspect-ratio: 1 / 1;".to_string()),
+            )
             .child(h)
             .child(div())
             .child(b)

@@ -3,15 +3,15 @@
 //! 框架绑定的部分（连接状态信号、字节流桥接到框架 signal）留在各 UI crate；
 //! 本 crate 只提供纯粹的 `Transport` 实现：连接、emit 编码上行、on 吐下行帧。
 
-use content::codec::ActiveCodec;
 use content::Outflow;
-use std::future::Future;
-use futures::stream::{LocalBoxStream, SplitSink};
+use content::codec::ActiveCodec;
 use futures::StreamExt;
+use futures::stream::{LocalBoxStream, SplitSink};
 use futures::{SinkExt, Stream};
-use gloo_net::websocket::futures::WebSocket;
 use gloo_net::websocket::Message;
+use gloo_net::websocket::futures::WebSocket;
 use std::cell::RefCell;
+use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll};

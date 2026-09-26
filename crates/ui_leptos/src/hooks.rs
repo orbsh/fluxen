@@ -47,7 +47,11 @@ pub fn use_source_id(brick: &impl BrickOps) -> Option<&String> {
 
 /// 订阅 `ctx.list[source]` 的 per-key 槽（无 Source 绑定则 None）。
 /// 其他键的更新不会触发本槽订阅者。
-pub fn use_source_list(ctx: &Ctx, brick: &impl BrickOps, key: &str) -> Option<std::sync::Arc<Vec<Brick>>> {
+pub fn use_source_list(
+    ctx: &Ctx,
+    brick: &impl BrickOps,
+    key: &str,
+) -> Option<std::sync::Arc<Vec<Brick>>> {
     source_of(brick, key).map(|src| ctx.slot_for_list(src).get())
 }
 
@@ -82,11 +86,7 @@ pub fn use_source_value(ctx: &Ctx, brick: &impl BrickOps) -> Option<Value> {
 }
 
 /// `bind[key]` 为 Event 时，返回一个发送该事件的闭包。
-pub fn use_target<'a>(
-    ctx: Ctx,
-    brick: &'a impl BrickOps,
-    key: &'a str,
-) -> Option<impl Fn(Value)> {
+pub fn use_target<'a>(ctx: Ctx, brick: &'a impl BrickOps, key: &'a str) -> Option<impl Fn(Value)> {
     if let Some(Bind {
         variant: BindVariant::Event { event },
         default: _,

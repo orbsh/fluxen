@@ -154,7 +154,11 @@ fn bind_keys_missing_on_one_side_are_inserted_whole() {
     lhs.merge(&Concat, &mut rhs);
     let bind = lhs.get_bind().unwrap();
     assert!(bind.contains_key("extra"), "rhs-only key inserted");
-    assert_eq!(default_of(&lhs), json!("v"), "lhs-only key default preserved");
+    assert_eq!(
+        default_of(&lhs),
+        json!("v"),
+        "lhs-only key default preserved"
+    );
 }
 
 #[test]

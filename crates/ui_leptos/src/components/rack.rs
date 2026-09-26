@@ -3,8 +3,8 @@ use crate::ctx::render_brick;
 use crate::hooks::{use_common_css, use_source_id};
 use brick::classify::Classify;
 use brick::{Brick, BrickOps, Rack, RackAttr};
-use leptos::prelude::*;
 use leptos::html::*;
+use leptos::prelude::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
