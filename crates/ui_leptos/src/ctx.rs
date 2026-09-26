@@ -1,14 +1,14 @@
+use crate::hooks::FormState;
 use crate::render::dispatch;
 use brick::{
     Brick, BrickOps,
     merge::{BrickOp, Concat, Delete, Replace},
 };
+use content::codec::ActiveCodec;
 use content::{Content, Message, Method};
 use leptos::prelude::*;
-use content::codec::ActiveCodec;
 use minijinja::Environment;
 use serde_json::Value;
-use crate::hooks::FormState;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::{LazyLock, RwLock};
@@ -126,12 +126,18 @@ impl Ctx {
             return s;
         }
         // 建在根 owner 下：存储与 Ctx 同寿，Effect/render 作用域轮换不会 dispose 它
-        let slot = self.owner.with(|| RwSignal::new(std::sync::Arc::new(Vec::new())));
+        let slot = self
+            .owner
+            .with(|| RwSignal::new(std::sync::Arc::new(Vec::new())));
         let name = source.to_string();
         self.list.update(|m| {
             m.entry(name).or_insert(slot);
         });
-        self.list.get_untracked().get(source).copied().unwrap_or(slot)
+        self.list
+            .get_untracked()
+            .get(source)
+            .copied()
+            .unwrap_or(slot)
     }
 
     /// 取（或首次时建）某 source 的数据槽（语义同 slot_for_list）。
@@ -144,11 +150,21 @@ impl Ctx {
         self.data.update(|m| {
             m.entry(name).or_insert(slot);
         });
-        self.data.get_untracked().get(source).copied().unwrap_or(slot)
+        self.data
+            .get_untracked()
+            .get(source)
+            .copied()
+            .unwrap_or(slot)
     }
 }
 
 fn dispatch_msg(act: &Message<Brick>, ctx: &Ctx) {
+    // 操作通道过滤：非渲染类帧不触碰 layout/data/list（ADR 0003）。
+    // Influx.event 是数据槽名，属渲染内部寻址，与此处消息级 ev 平面不同。
+    if act.ev != content::EV_DRAW {
+        tracing::debug!("frame ev = {:?} (not draw), skipped", act.ev);
+        return;
+    }
     for c in &act.content {
         match c {
             Content::Tmpl(x) => {

@@ -1,8 +1,8 @@
 //! Codec wire-format contract: Json/CBOR round-trips of Message/Content,
 //! plus the `OneOrMany` shape the gateway wire relies on.
 
-use content::{Content, Influx, Message, Method};
 use content::codec::{ActiveCodec, CodecType};
+use content::{Content, Influx, Message, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -14,11 +14,15 @@ struct Payload {
 
 fn sample() -> Message<Payload> {
     Message {
+        ev: "draw".into(),
         sender: "stage".into(),
         created: None,
         content: vec![Content::Join(Influx {
             event: "chat".into(),
-            data: Payload { n: 7, s: "hi".into() },
+            data: Payload {
+                n: 7,
+                s: "hi".into(),
+            },
             method: Method::Concat,
             channel: None,
         })],
@@ -67,7 +71,10 @@ fn method_wire_names_are_lowercase() {
         serde_json::to_value(Method::Delete).unwrap(),
         json!("delete")
     );
-    assert_eq!(serde_json::from_value::<Method>(json!("concat")).unwrap(), Method::Concat);
+    assert_eq!(
+        serde_json::from_value::<Method>(json!("concat")).unwrap(),
+        Method::Concat
+    );
 }
 
 #[test]
@@ -82,15 +89,29 @@ fn content_tagged_by_action_and_accepts_single_or_array() {
     let m = sample();
     let v = serde_json::to_value(&m).unwrap();
     // OneOrMany: single element serializes as a bare object
-    assert!(v["content"].is_object(), "single content collapses to object");
+    assert!(
+        v["content"].is_object(),
+        "single content collapses to object"
+    );
     assert_eq!(v["content"]["action"], json!("join"));
     // and the bare-object form deserializes back into a one-item vec
     let back: Message<Payload> = serde_json::from_value(v).unwrap();
     assert_eq!(back.content.len(), 1);
     // array form also accepted (stage emits arrays)
-    let arr = json!({ "sender": "s", "content": [ { "action": "empty" } ] });
+    let arr = json!({ "ev": "draw", "sender": "s", "content": [ { "action": "empty" } ] });
     let m2: Message<Value> = serde_json::from_value(arr).unwrap();
     assert!(matches!(m2.content[0], Content::Empty));
+}
+
+#[test]
+fn ev_is_required_on_the_wire() {
+    // ADR 0003: ev is a mandatory top-level field — a pre-ev frame must fail
+    // to decode loudly, not be silently treated as draw.
+    let no_ev = json!({ "sender": "s", "content": [{ "action": "empty" }] });
+    assert!(serde_json::from_value::<Message<Value>>(no_ev).is_err());
+    let with_ev = json!({ "ev": "draw", "sender": "s", "content": [{ "action": "empty" }] });
+    let m: Message<Value> = serde_json::from_value(with_ev).unwrap();
+    assert_eq!(m.ev, content::EV_DRAW);
 }
 
 #[test]

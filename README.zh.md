@@ -51,7 +51,7 @@ curl -X POST --data-binary @examples/kdl/chat_layout.kdl http://localhost:3002/s
 要在不重建布局的前提下流式推 Set/Join 帧，经 console 的 `/raw` 发裸消息，例如一次聊天 token 追加：
 
 ```
-/raw {"sender":"demo","content":[{"action":"join","event":"chat","method":"concat","data":{"type":"text","id":"m1","bind":{"value":{"kind":"default","default":"hello "}}}}]}
+/raw {"ev":"draw","sender":"demo","content":[{"action":"join","event":"chat","method":"concat","data":{"type":"text","id":"m1","bind":{"value":{"kind":"default","default":"hello "}}}}]}
 ```
 
 流入 rack 的行应携带 `id`——合并与 DOM 身份都以它为键（见 docs/PLAN.md 约定）。

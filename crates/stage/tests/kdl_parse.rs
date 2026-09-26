@@ -129,6 +129,7 @@ fn content_frame_shape() {
     // parse_kdl_to_frame wraps bricks in the Content::Create envelope the UI speaks
     let frame = stage::proto::parse_kdl_to_frame(SAMPLE).unwrap();
     let obj = frame.as_object().unwrap();
+    assert_eq!(obj.get("ev").and_then(|v| v.as_str()), Some("draw"));
     assert_eq!(obj.get("sender").and_then(|v| v.as_str()), Some("stage"));
     // content is OneOrMany; a single Content serializes as one object
     let create = obj.get("content").unwrap();

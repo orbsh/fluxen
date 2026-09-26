@@ -16,12 +16,17 @@ impl Default for Created {
 
 type Session = String;
 
+/// 操作通道（ev）的渲染类取值：生产端一律填这个，其余值渲染器忽略。
+pub const EV_DRAW: &str = "draw";
+
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Message<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,
 {
+    /// 消息级操作类别。"draw" = 渲染类（见 EV_DRAW）；必填，旧帧缺字段直接解码报错。
+    pub ev: String,
     pub sender: Session,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created: Option<Created>,
@@ -35,6 +40,7 @@ where
 {
     fn from(value: (Session, Content<T>)) -> Self {
         Message {
+            ev: EV_DRAW.into(),
             sender: value.0,
             created: Some(Created::default()),
             content: vec![value.1],

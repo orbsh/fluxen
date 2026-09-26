@@ -15,6 +15,7 @@ pub fn parse_kdl_to_frame(src: &str) -> Result<Value, crate::error::KdlError> {
         serde_json::to_value(&bricks)?
     };
     let msg = content::Message {
+        ev: content::EV_DRAW.into(),
         sender: "stage".into(),
         created: None,
         content: vec![Content::Create(content::Influx {
