@@ -1,0 +1,25 @@
+- action: join
+  event: chat
+  data:
+    type: text
+    bind:
+      value:
+        kind: default
+        default: alex
+- action: join
+  event: chat
+  data:
+    type: text
+    bind:
+      value:
+        kind: default
+        default: bill
+- action: join
+  event: chat
+  data:
+    type: text
+    bind:
+      value:
+        kind: default
+        default: chris
+

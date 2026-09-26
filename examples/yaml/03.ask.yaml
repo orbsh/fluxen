@@ -1,0 +1,9 @@
+action: join
+event: chat
+data:
+  type: text
+  bind:
+    value:
+      kind: default
+      default: who are you?
+

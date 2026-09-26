@@ -1,0 +1,9 @@
+action: join
+event: channel
+data:
+  type: text
+  bind:
+    value:
+      kind: default
+      default: "***"
+

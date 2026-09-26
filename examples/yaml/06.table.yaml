@@ -1,0 +1,201 @@
+action: join
+data:
+  attrs:
+    class:
+    - gap
+    - md
+  children:
+  - type: text
+    bind:
+      value:
+        kind: default
+        default: confirm order
+  - attrs:
+      class:
+      - gap
+      - md
+    children:
+    - children:
+      - type: thead
+        children:
+        - type: tr
+          children:
+          - type: th
+            children:
+            - type: image
+              attrs:
+                desc: ccacc
+                height: 1em
+              bind:
+                value:
+                  kind: default
+                  default: >-
+                    https://github.com/luser/keep-calm-and-call-clone/blob/master/keep-calm-and-call-clone.png?raw=true
+          - type: th
+            children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: b
+          - type: th
+            children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: c
+          - type: th
+            children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: d
+          - type: th
+            children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: e
+      - type: tbody
+        children:
+        - children:
+          - children:
+            - bind:
+                value:
+                  kind: field
+                  default: "853736"
+                  field: s
+                  type: text
+                  payload:
+                    a: 1
+                    b:
+                      c: 2
+              type: input
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: a1
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: 2.25
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: a2
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: a3
+            type: td
+          type: tr
+        - children:
+          - children:
+            - bind:
+                value:
+                  kind: field
+                  default: false
+                  field: b
+                  type: bool
+              type: input
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: b1
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: 0.31
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: b2
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: b3
+            type: td
+          type: tr
+        - children:
+          - children:
+            - bind:
+                value:
+                  kind: field
+                  default: 9
+                  field: n
+                  type: number
+              type: input
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: c1
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: 33.83
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: c2
+            type: td
+          - children:
+            - type: text
+              bind:
+                value:
+                  kind: default
+                  default: c3
+            type: td
+          type: tr
+      type: table
+    type: case
+  - attrs:
+      oneshot: false
+    bind:
+      value:
+        kind: submit
+        default: confirm
+    type: button
+  bind:
+    value:
+      kind: event
+      event: confirm
+  id: null
+  type: form
+event: chat
+

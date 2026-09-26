@@ -1,0 +1,37 @@
+action: set
+event: float
+data:
+  type: popup
+  attrs:
+    class:
+    - --cart
+    - box
+    - border
+    - primary
+    direction: U
+  bind:
+    value:
+      kind: source
+      source: cart
+  children:
+  - type: template
+    name: cart
+    data: {}
+  - type: case
+    children:
+    - type: text
+      bind:
+        value:
+          kind: default
+          default: a
+    - type: text
+      bind:
+        value:
+          kind: default
+          default: b
+    - type: text
+      bind:
+        value:
+          kind: default
+          default: c
+

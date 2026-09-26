@@ -1,0 +1,82 @@
+action: join
+event: chat
+data:
+  type: form
+  bind:
+    value:
+      kind: event
+      event: confirm
+  attrs:
+    class:
+    - gap
+    - md
+  children:
+  - type: text
+    attrs:
+      class:
+      - ai-center
+    bind:
+      value:
+        kind: default
+        default: confirm order
+  - type: text
+    bind:
+      value:
+        kind: event
+        event: test
+  - type: case
+    attrs:
+      class:
+      - gap
+      - md
+    children:
+    - type: case
+      attrs:
+        horizontal: true
+      children:
+      - type: input
+        bind:
+          value:
+            kind: field
+            default: name
+            field: name
+      - type: input
+        bind:
+          value:
+            kind: field
+            default: age
+            field: age
+    - type: case
+      attrs:
+        horizontal: true
+      children:
+      - type: input
+        name: gender
+        bind:
+          value:
+            kind: field
+            field: gender
+      - type: input
+        name: phone
+        bind:
+          value:
+            kind: field
+            field: phone
+    - type: case
+      attrs:
+        horizontal: true
+      children:
+      - type: input
+        name: var
+        bind:
+          value:
+            kind: default
+            variable: test
+  - type: button
+    attrs:
+      oneshot: false
+    bind:
+      value:
+        kind: submit
+        default: confirm
+

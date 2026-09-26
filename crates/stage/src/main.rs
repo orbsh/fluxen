@@ -6,7 +6,10 @@ use clap::{Parser, Subcommand};
 use stage::proto;
 
 #[derive(Parser)]
-#[command(name = "stage", about = "Brick dev gateway: mirror + console + KDL send")]
+#[command(
+    name = "stage",
+    about = "Brick dev gateway: mirror + console + KDL send"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Option<Cmd>,
@@ -54,10 +57,21 @@ async fn main() -> anyhow::Result<()> {
         }
         Cmd::Tojson { file } => {
             let src = std::fs::read_to_string(&file)?;
-            let bricks = proto::parse_kdl_to_bricks(&src)?;
-            for b in &bricks {
-                println!("{}", serde_json::to_string_pretty(b)?);
-            }
+            // format is an explicit choice by extension — same rule as /send?fmt=
+            let is_yaml = matches!(
+                std::path::Path::new(&file)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or(""),
+                "yaml" | "yml"
+            );
+            let value = if is_yaml {
+                serde_json::to_value(proto::parse_yaml_to_frame(&src)?)?
+            } else {
+                let bricks = proto::parse_kdl_to_bricks(&src)?;
+                serde_json::to_value(&bricks)?
+            };
+            println!("{}", serde_json::to_string_pretty(&value)?);
             Ok(())
         }
     }

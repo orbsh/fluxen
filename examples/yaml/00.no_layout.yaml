@@ -1,0 +1,17 @@
+action: create
+event: ""
+data:
+  type: case
+  children:
+  - type: case
+    attrs:
+      class:
+      - box
+      - border
+      - shadow
+    bind:
+      value:
+        kind: source
+        default: 123
+        source: test-data
+

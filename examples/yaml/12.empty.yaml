@@ -1,0 +1,5 @@
+action: set
+event: float
+data:
+  type: case
+
