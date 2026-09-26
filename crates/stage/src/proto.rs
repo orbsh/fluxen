@@ -1,19 +1,19 @@
 //! Wire payloads between CLI and mirror. The mirror never inspects payloads;
-//! it routes raw bytes between peers. So CLI sends a BARE Message<Brick> —
+//! it routes raw bytes between peers. So CLI sends a BARE Message<Accrete> —
 //! exactly what the UI's decoder expects.
 
 use content::Content;
 use serde::Deserialize;
 use serde_json::Value;
 
-/// Parse KDL and wrap the resulting bricks in a Content::Create message —
+/// Parse KDL and wrap the resulting accretes in a Content::Create message —
 /// the same frame shape the UI already consumes on the fluxora gateway.
 pub fn parse_kdl_to_frame(src: &str) -> Result<Value, crate::error::KdlError> {
-    let bricks = crate::kdl_parse::parse(src)?;
-    let payload = if bricks.len() == 1 {
-        serde_json::to_value(&bricks[0])?
+    let accretes = crate::kdl_parse::parse(src)?;
+    let payload = if accretes.len() == 1 {
+        serde_json::to_value(&accretes[0])?
     } else {
-        serde_json::to_value(&bricks)?
+        serde_json::to_value(&accretes)?
     };
     let msg = content::Message {
         ev: content::EV_DRAW.into(),
@@ -29,8 +29,8 @@ pub fn parse_kdl_to_frame(src: &str) -> Result<Value, crate::error::KdlError> {
     Ok(serde_json::to_value(&msg)?)
 }
 
-/// Offline KDL -> brick JSON trees (no content envelope).
-pub fn parse_kdl_to_bricks(src: &str) -> Result<Vec<brick::Brick>, crate::error::KdlError> {
+/// Offline KDL -> accrete JSON trees (no content envelope).
+pub fn parse_kdl_to_accretes(src: &str) -> Result<Vec<accrete::Accrete>, crate::error::KdlError> {
     crate::kdl_parse::parse(src)
 }
 
@@ -39,14 +39,14 @@ pub fn parse_kdl_to_bricks(src: &str) -> Result<Vec<brick::Brick>, crate::error:
 /// in a draw frame. Unlike KDL (layout-only, forced into Content::Create),
 /// the action survives: set/join/tmpl files are first-class.
 pub fn parse_yaml_to_frame(src: &str) -> Result<Value, crate::error::KdlError> {
-    // serde_yaml deserializes straight into the typed Content<Brick> — the
-    // current brick shape (children + tagged bind), NOT fluxora's retired
+    // serde_yaml deserializes straight into the typed Content<Accrete> — the
+    // current accrete shape (children + tagged bind), NOT fluxora's retired
     // `sub:` form. One item or an array, mirroring the wire's OneOrMany.
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum ContentItems {
-        One(content::Content<brick::Brick>),
-        Many(Vec<content::Content<brick::Brick>>),
+        One(content::Content<accrete::Accrete>),
+        Many(Vec<content::Content<accrete::Accrete>>),
     }
     let items: ContentItems =
         serde_yaml::from_str(src).map_err(|e| crate::error::KdlError { msg: e.to_string() })?;

@@ -1,14 +1,14 @@
 use crate::Ctx;
 use crate::hooks::use_default;
-use brick::{Image, ImageAttr};
+use accrete::{Image, ImageAttr};
 use leptos::html::*;
 use leptos::prelude::*;
 
 /// 图片：`src` 取 `bind["value"].default`，尺寸/描述取 `ImageAttr`。
-pub fn image_(brick: Image, _ctx: &Ctx) -> AnyView {
-    if let Some(src) = use_default(&brick)
+pub fn image_(accrete: Image, _ctx: &Ctx) -> AnyView {
+    if let Some(src) = use_default(&accrete)
         && let Some(src) = src.as_str()
-        && let Some(x) = brick.attrs
+        && let Some(x) = accrete.attrs
     {
         let ImageAttr { desc, .. } = &x;
         let style = x.size_style();

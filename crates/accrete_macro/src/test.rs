@@ -14,7 +14,7 @@ fn test_struct_hello() {
             #[serde(skip_serializing_if = "Option::is_none")]
             pub attrs: Option<ClassAttr>,
             #[serde(skip_serializing_if = "Option::is_none")]
-            pub children: Option<Vec<Brick>>,
+            pub children: Option<Vec<Accrete>>,
         }
     };
 
@@ -32,9 +32,9 @@ fn test_struct_hello() {
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
         #[cfg_attr(feature = "schema", derive(JsonSchema))]
         #[serde(tag = "type")]
-        pub enum Brick {
+        pub enum Accrete {
             case(Case),
-            #[ui_brick(has_id = true)]
+            #[ui_acrete(has_id = true)]
             placeholder(Placeholder),
         }
     };
@@ -65,7 +65,7 @@ fn test_struct_hello() {
 
     //let output = impl_classify_attrs(input.clone()).unwrap();
     let ast = syn::parse2::<DeriveInput>(input).unwrap();
-    let output = impl_brick_ops(&ast).expect("Macro expansion failed");
+    let output = impl_accrete_ops(&ast).expect("Macro expansion failed");
 
     let _ = std::fs::write("../../data/out.ast", format!("{:#?}", ast));
     let _ = std::fs::write("../../data/out.rs", format!("{:#}", output.to_string()));

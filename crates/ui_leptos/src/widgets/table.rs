@@ -1,11 +1,11 @@
 use crate::Ctx;
 use crate::ctx::render_children;
-use brick::{Table, Tbody, Td, Th, Thead, Tr};
+use accrete::{Table, Tbody, Td, Th, Thead, Tr};
 use leptos::html::*;
 use leptos::prelude::*;
 
-pub fn table_(brick: Table, ctx: &Ctx) -> AnyView {
-    let children = brick
+pub fn table_(accrete: Table, ctx: &Ctx) -> AnyView {
+    let children = accrete
         .children
         .as_deref()
         .map(|s| render_children(ctx, s))
@@ -13,8 +13,8 @@ pub fn table_(brick: Table, ctx: &Ctx) -> AnyView {
     table().child(children).into_any()
 }
 
-pub fn thead_(brick: Thead, ctx: &Ctx) -> AnyView {
-    let children = brick
+pub fn thead_(accrete: Thead, ctx: &Ctx) -> AnyView {
+    let children = accrete
         .children
         .as_deref()
         .map(|s| render_children(ctx, s))
@@ -22,8 +22,8 @@ pub fn thead_(brick: Thead, ctx: &Ctx) -> AnyView {
     thead().child(children).into_any()
 }
 
-pub fn tbody_(brick: Tbody, ctx: &Ctx) -> AnyView {
-    let children = brick
+pub fn tbody_(accrete: Tbody, ctx: &Ctx) -> AnyView {
+    let children = accrete
         .children
         .as_deref()
         .map(|s| render_children(ctx, s))
@@ -31,8 +31,8 @@ pub fn tbody_(brick: Tbody, ctx: &Ctx) -> AnyView {
     tbody().child(children).into_any()
 }
 
-pub fn tr_(brick: Tr, ctx: &Ctx) -> AnyView {
-    let children = brick
+pub fn tr_(accrete: Tr, ctx: &Ctx) -> AnyView {
+    let children = accrete
         .children
         .as_deref()
         .map(|s| render_children(ctx, s))
@@ -40,8 +40,8 @@ pub fn tr_(brick: Tr, ctx: &Ctx) -> AnyView {
     tr().child(children).into_any()
 }
 
-pub fn th_(brick: Th, ctx: &Ctx) -> AnyView {
-    let children = brick
+pub fn th_(accrete: Th, ctx: &Ctx) -> AnyView {
+    let children = accrete
         .children
         .as_deref()
         .map(|s| render_children(ctx, s))
@@ -49,8 +49,8 @@ pub fn th_(brick: Th, ctx: &Ctx) -> AnyView {
     th().child(children).into_any()
 }
 
-pub fn td_(brick: Td, ctx: &Ctx) -> AnyView {
-    let children = brick
+pub fn td_(accrete: Td, ctx: &Ctx) -> AnyView {
+    let children = accrete
         .children
         .as_deref()
         .map(|s| render_children(ctx, s))

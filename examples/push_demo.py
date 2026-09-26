@@ -26,8 +26,8 @@ def send_text(payload):
     hdr += mask
     s.sendall(bytes(hdr) + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
 
-def set_ev(event, brick):
-    return {"ev": "draw", "sender": "demo", "content": [{"action": "set", "event": event, "data": brick}]}
+def set_ev(event, accrete):
+    return {"ev": "draw", "sender": "demo", "content": [{"action": "set", "event": event, "data": accrete}]}
 
 def join(ev, id, v, sel=None):
     data = {"type": "text", "id": id, "bind": {"value": {"kind": "default", "default": v}}}
@@ -36,11 +36,11 @@ def join(ev, id, v, sel=None):
         data["attrs"] = {"selector": sel}
     return {"ev": "draw", "sender": "demo", "content": [{"action": "join", "event": ev, "method": "concat", "data": data}]}
 
-text_brick = lambda v: {"type": "text", "bind": {"value": {"kind": "default", "default": v}}}
+text_accrete = lambda v: {"type": "text", "bind": {"value": {"kind": "default", "default": v}}}
 
 frames = [
-    set_ev("login", text_brick("chat with **AI** (user: alice)")),
-    set_ev("float", text_brick("keyed rack demo")),
+    set_ev("login", text_accrete("chat with **AI** (user: alice)")),
+    set_ev("float", text_accrete("keyed rack demo")),
     join("channel::list", "1", "general"),
     join("channel::list", "2", "rust-dev"),
     join("chat", "u1", "keyed rack 修好了？给我看看", sel="ask"),

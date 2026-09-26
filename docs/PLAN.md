@@ -2,6 +2,12 @@
 
 ## Active plan（2026-09，已确认执行中）
 
+### 0. brick → accrete 更名（ADR 0004，done 2026-09-26）
+
+- 全仓机械改名 48 文件：crate 目录、Accrete/AccreteOps/ClassifyAccrete、
+  #[ui_acrete]、render_accrete/parse_kdl_to_accretes；firebrick 保护。
+  wire 格式零变化（type 值不含 crate 名，非破坏性）。三门槛 + e2e 复验全绿。
+
 ### 1. ev 操作通道（ADR 0003，先行）— done 2026-09-26
 
 - `content::Message<T>` 顶层加 `ev: String`（必填，破坏性；与 sender/content 平级，
@@ -24,7 +30,7 @@
   子块 + 裸值参数）。实测该 crate 连默认与 v2_parser 都拒子块内单行/多行
   `key=value`（nushell 同拒），"子块条目=值参数节点"的约定维持不变。补两处旧限制：
   - `template` 节点：`template { name "x"  data { ... } }` → 现有 data 子块
-    映射（`data_*`）是错的，改为产 `{name, data:{}}`，对齐 brick::Template。
+    映射（`data_*`）是错的，改为产 `{name, data:{}}`，对齐 accrete::Template。
   - bind kind 节点支持子节点 `payload { ... }` → `{kind:"field", field:"s",
     payload:{...}}`（serde flatten 后 payload 平铺，字段名改 `ev` 与否无关，
     bind 里的 `event` 键不动）。
@@ -39,7 +45,7 @@
   头，同 fluxora 文件形状）；stage 包成 `{ev:"draw", sender:"stage", content:[...]}`，
   action 不再被强制成 create（/send 现状问题）。retired `sub:` 键在原始树上递归
   拒绝（serde 会静默丢弃未知字段——空子树无报错不可接受）。
-- Brick 用现行形状（children/tagged bind），不是 fluxora 的 sub 形状。
+- Accrete 用现行形状（children/tagged bind），不是 fluxora 的 sub 形状。
 - `tojson` 子命令同样 sniff 扩展名支持 .yaml。
 
 ### 4. 示例迁移：fluxora/data/message/*.yaml → fluxen/examples/yaml/ — done 2026-09-26
@@ -87,7 +93,7 @@ same symptom — fix only if a consumer needs it.
 every bound widget across all keys. Now the outer maps store lazily-created
 per-key slots (`DataSlot` / `ListSlot`) and values publish through the inner
 signal, so a write notifies only that key's subscribers. Row-level isolation
-within one key comes from rack's per-row Owner + `Memo<Brick>` (untouched rows
+within one key comes from rack's per-row Owner + `Memo<Accrete>` (untouched rows
 recompute to an equal value and never re-render).
 
 Residual tail, not a defect: a frame touching key K still runs every row's
@@ -100,7 +106,7 @@ O(1). Deferred until scale demands it.
 
 ### Streaming rows should carry `id`
 
-Rack keys rows by `Brick::id`, falling back to position (`#{idx}`) for
+Rack keys rows by `Accrete::id`, falling back to position (`#{idx}`) for
 id-less rows. Id-less rows render correctly but lose DOM identity whenever a
 row is inserted before them (keys shift). Producers that stream (chat, logs)
 must set `id`; composite identity is the producer's job (e.g.

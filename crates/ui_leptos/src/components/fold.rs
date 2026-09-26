@@ -1,20 +1,20 @@
 use crate::Ctx;
-use crate::ctx::{render_brick, render_children};
+use crate::ctx::{render_accrete, render_children};
 use crate::hooks::{use_common_css, use_default};
-use brick::{Fold, FoldAttr};
+use accrete::{Fold, FoldAttr};
 use leptos::ev::click;
 use leptos::html::*;
 use leptos::prelude::*;
 
 /// 折叠容器：`item[0]` 作头部，`show` 信号控制展开/收起。
-pub fn fold_(brick: Fold, ctx: &Ctx, id: String) -> AnyView {
+pub fn fold_(accrete: Fold, ctx: &Ctx, id: String) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["g"];
     css.push(id.as_str());
-    use_common_css(&mut css, &brick);
+    use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
-    let (replace_header, _float_body) = brick
+    let (replace_header, _float_body) = accrete
         .attrs
         .as_ref()
         .map(
@@ -26,9 +26,9 @@ pub fn fold_(brick: Fold, ctx: &Ctx, id: String) -> AnyView {
         )
         .unwrap_or((false, false));
 
-    let item = brick.item.as_ref().and_then(|i| i.first()).cloned();
+    let item = accrete.item.as_ref().and_then(|i| i.first()).cloned();
     let show = RwSignal::new(
-        use_default(&brick)
+        use_default(&accrete)
             .and_then(|x| x.as_bool())
             .unwrap_or_default(),
     );
@@ -42,13 +42,13 @@ pub fn fold_(brick: Fold, ctx: &Ctx, id: String) -> AnyView {
         let h: AnyView = if replace_header && s {
             div().into_any()
         } else if let Some(item) = &item {
-            render_brick(&ctx, item)
+            render_accrete(&ctx, item)
         } else {
             div().into_any()
         };
 
         let b: AnyView = if s {
-            let children = brick
+            let children = accrete
                 .children
                 .as_deref()
                 .map(|x| render_children(&ctx, x))

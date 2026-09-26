@@ -1,20 +1,20 @@
 use crate::Ctx;
-use crate::ctx::render_brick;
+use crate::ctx::render_accrete;
 use crate::hooks::{use_common_css, use_source_id};
-use brick::classify::Classify;
-use brick::{Brick, BrickOps, Rack, RackAttr};
+use accrete::classify::Classify;
+use accrete::{Accrete, AccreteOps, Rack, RackAttr};
 use leptos::html::*;
 use leptos::prelude::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 struct ItemContainer {
-    default: Option<Brick>,
-    index: HashMap<String, Brick>,
+    default: Option<Accrete>,
+    index: HashMap<String, Accrete>,
 }
 
-impl From<Vec<Brick>> for ItemContainer {
-    fn from(data: Vec<Brick>) -> Self {
+impl From<Vec<Accrete>> for ItemContainer {
+    fn from(data: Vec<Accrete>) -> Self {
         let mut default = None;
         let mut index = HashMap::new();
         for l in &data {
@@ -29,7 +29,7 @@ impl From<Vec<Brick>> for ItemContainer {
 }
 
 impl ItemContainer {
-    fn select(&self, child: &Brick) -> Option<Brick> {
+    fn select(&self, child: &Accrete) -> Option<Accrete> {
         if let Some(s) = child.get_selector()
             && let Some(i) = self.index.get(s)
         {
@@ -40,20 +40,20 @@ impl ItemContainer {
 }
 
 /// 列表容器：按 selector 索引 `item` 模板，遍历 `ctx.list[source]` 渲染。
-pub fn rack_(brick: Rack, ctx: &Ctx, id: String) -> AnyView {
+pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
     let ctx = ctx.clone();
     // 行 owner 的挂载点：本函数执行时的 reactive owner（rack 自身的作用域），
     // 与外层 list 更新解耦——行订阅随 rack 消亡，不随外层重建丢失。
     let parent_owner = Owner::current().expect("rack_ requires a reactive owner");
     let mut css = vec!["rack", "f"];
-    use_common_css(&mut css, &brick);
+    use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
-    let item: ItemContainer = brick.item.clone().unwrap_or_default().into();
-    let Some(source) = use_source_id(&brick).cloned() else {
+    let item: ItemContainer = accrete.item.clone().unwrap_or_default().into();
+    let Some(source) = use_source_id(&accrete).cloned() else {
         return div().into_any();
     };
-    let scroll = brick
+    let scroll = accrete
         .attrs
         .as_ref()
         .map(|RackAttr { scroll, .. }| *scroll)
@@ -63,7 +63,7 @@ pub fn rack_(brick: Rack, ctx: &Ctx, id: String) -> AnyView {
     move || -> AnyView {
         // 只订阅本 source 的槽：其他键的更新不触发本闭包
         let c = slot.get();
-        // keyed list：行身份 = Brick id（无 id 行按位置 "#{idx}" 兜底）。
+        // keyed list：行身份 = Accrete id（无 id 行按位置 "#{idx}" 兜底）。
         // 外层键集 diff：追帧只给新键建行，旧行节点存活；行内容做成
         // 反应式闭包再订阅 ctx.list，同 id 行的 merge 更新原地刷新，
         // 不重建行节点。
@@ -93,7 +93,7 @@ pub fn rack_(brick: Rack, ctx: &Ctx, id: String) -> AnyView {
                     let src = source2.clone();
                     let item = item2.clone();
                     let k2 = key.clone();
-                    // 按行 memo：list 变更只重算本行 Brick；输出相等则下游不动。
+                    // 按行 memo：list 变更只重算本行 Accrete；输出相等则下游不动。
                     let memo = Memo::new(move |_| {
                         let l = ctx.slot_for_list(&src).get();
                         if let Some(pos) = k2.strip_prefix('#') {
@@ -115,9 +115,9 @@ pub fn rack_(brick: Rack, ctx: &Ctx, id: String) -> AnyView {
                             Some(mut template) => {
                                 // 模板外壳 + child 作为其 children
                                 template.set_children(vec![child]);
-                                render_brick(&rctx, &template)
+                                render_accrete(&rctx, &template)
                             }
-                            None => render_brick(&rctx, &child),
+                            None => render_accrete(&rctx, &child),
                         }
                     }
                     .into_any()

@@ -1,20 +1,20 @@
 use crate::Ctx;
 use crate::hooks::use_default;
-use brick::{Bind, BindVariant, BrickOps, Button, ButtonAttr};
+use accrete::{AccreteOps, Bind, BindVariant, Button, ButtonAttr};
 use leptos::ev::click;
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::{Value, to_value};
 
 /// 按钮：默认文本取 `bind["value"].default`；`Submit` 变体切换 form 的确认信号。
-pub fn button_(brick: Button, ctx: &Ctx) -> AnyView {
-    let t = use_default(&brick)
+pub fn button_(accrete: Button, ctx: &Ctx) -> AnyView {
+    let t = use_default(&accrete)
         .unwrap_or(to_value("Ok").unwrap())
         .as_str()
         .unwrap_or("Ok")
         .to_owned();
 
-    let oneshot = brick
+    let oneshot = accrete
         .attrs
         .as_ref()
         .map(|ButtonAttr { oneshot, .. }| *oneshot)
@@ -23,7 +23,7 @@ pub fn button_(brick: Button, ctx: &Ctx) -> AnyView {
     let Some(Bind {
         variant: BindVariant::Submit { .. },
         ..
-    }) = brick.get_bind().and_then(|x| x.get("value").cloned())
+    }) = accrete.get_bind().and_then(|x| x.get("value").cloned())
     else {
         return div().into_any();
     };

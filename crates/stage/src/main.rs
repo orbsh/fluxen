@@ -8,7 +8,7 @@ use stage::proto;
 #[derive(Parser)]
 #[command(
     name = "stage",
-    about = "Brick dev gateway: mirror + console + KDL send"
+    about = "Accrete dev gateway: mirror + console + KDL send"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -28,7 +28,7 @@ enum Cmd {
         #[arg(long, default_value = "crates/ui_leptos/dist")]
         dist: String,
     },
-    /// Offline: parse KDL and print the Brick JSON tree
+    /// Offline: parse KDL and print the Accrete JSON tree
     Tojson { file: String },
 }
 
@@ -68,8 +68,8 @@ async fn main() -> anyhow::Result<()> {
             let value = if is_yaml {
                 serde_json::to_value(proto::parse_yaml_to_frame(&src)?)?
             } else {
-                let bricks = proto::parse_kdl_to_bricks(&src)?;
-                serde_json::to_value(&bricks)?
+                let accretes = proto::parse_kdl_to_accretes(&src)?;
+                serde_json::to_value(&accretes)?
             };
             println!("{}", serde_json::to_string_pretty(&value)?);
             Ok(())

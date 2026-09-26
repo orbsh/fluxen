@@ -6,7 +6,7 @@
 
 ## 背景
 
-`Message<Brick>` 下行帧目前只有 `sender` / `content`。UI 的 `dispatch_msg`
+`Message<Accrete>` 下行帧目前只有 `sender` / `content`。UI 的 `dispatch_msg`
 对所有到达的帧一律执行渲染操作（create 重绘 layout、set/join 写数据槽），
 没有"这条消息是给渲染器的还是给别的消费者的"这一维度。
 

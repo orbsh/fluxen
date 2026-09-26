@@ -1,10 +1,10 @@
 [workspace]
 resolver = "3"
 members = [
-  "crates/brick",
+  "crates/accrete",
   "crates/stage",
   "crates/ui-assets",
-  "crates/brick_macro",
+  "crates/accrete_macro",
   "crates/content",
   "crates/transport",
   "crates/transport-ws",
@@ -15,7 +15,7 @@ members = [
 
 [workspace.dependencies]
 anyhow = "1.0.102"
-brick = { path = "crates/brick", version = "^0.1.0" }
+accrete = { path = "crates/accrete", version = "^0.1.0" }
 content = { path = "crates/content", version = "^0.1.0" }
 transport = { path = "crates/transport", version = "^0.1.0" }
 ui-assets = { path = "crates/ui-assets", version = "^0.1.0" }

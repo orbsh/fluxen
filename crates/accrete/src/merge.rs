@@ -1,5 +1,5 @@
-use super::{Bind, Brick};
-use crate::BrickOps;
+use super::{Accrete, Bind};
+use crate::AccreteOps;
 use itertools::{
     EitherOrBoth::{Both, Left, Right},
     Itertools,
@@ -9,8 +9,8 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-impl Brick {
-    pub fn merge(&mut self, op: &(impl BrickOp + ?Sized), rhs: &mut Self) {
+impl Accrete {
+    pub fn merge(&mut self, op: &(impl AccreteOp + ?Sized), rhs: &mut Self) {
         op.merge(self, rhs);
         if let Some(rsub) = rhs.borrow_children_mut() {
             if let Some(sub) = &mut self.borrow_children_mut() {
@@ -34,9 +34,9 @@ impl Brick {
     }
 }
 
-pub trait BrickOp: Debug {
+pub trait AccreteOp: Debug {
     fn merge_value(&self, l: &mut Value, r: &Value) -> Option<Value>;
-    fn merge(&self, lhs: &mut Brick, rhs: &mut Brick) {
+    fn merge(&self, lhs: &mut Accrete, rhs: &mut Accrete) {
         let bind = match (lhs.get_bind(), rhs.get_bind()) {
             (Some(l), Some(r)) => {
                 let nv = l.iter().chain(r).fold(HashMap::new(), |mut m, (k, v)| {
@@ -65,7 +65,7 @@ pub trait BrickOp: Debug {
 
 #[derive(Debug)]
 pub struct Concat;
-impl BrickOp for Concat {
+impl AccreteOp for Concat {
     fn merge_value(&self, x: &mut Value, y: &Value) -> Option<Value> {
         let n = match (x, y) {
             (Value::Number(x), Value::Number(r)) => {
@@ -97,7 +97,7 @@ impl BrickOp for Concat {
 
 #[derive(Debug)]
 pub struct Delete;
-impl BrickOp for Delete {
+impl AccreteOp for Delete {
     fn merge_value(&self, x: &mut Value, y: &Value) -> Option<Value> {
         let n = match (x, y) {
             (Value::Number(x), Value::Number(r)) => {
@@ -134,7 +134,7 @@ impl BrickOp for Delete {
 
 #[derive(Debug)]
 pub struct Replace;
-impl BrickOp for Replace {
+impl AccreteOp for Replace {
     fn merge_value(&self, x: &mut Value, r: &Value) -> Option<Value> {
         let y = match (x, r) {
             (Value::Number(_x), Value::Number(r)) => {

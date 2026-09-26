@@ -1,10 +1,10 @@
-use super::Brick;
-use crate::BrickOps;
+use super::Accrete;
+use crate::AccreteOps;
 use minijinja::Environment;
 
-impl Brick {
+impl Accrete {
     pub fn expand(&mut self, env: &Environment) {
-        if let Brick::template(r) = self {
+        if let Accrete::template(r) = self {
             let n = &r.name;
             let cx = &r.data;
             let n = env
@@ -15,7 +15,7 @@ impl Brick {
                         .map_err(|e| format!("render failed: {} => {:#?}", e, &cx))
                 })
                 .and_then(|t| {
-                    serde_json::from_str::<Brick>(&t)
+                    serde_json::from_str::<Accrete>(&t)
                         .map_err(|e| format!("deserialize failed: {} => {}", e, &t))
                 });
             match n {

@@ -1,5 +1,5 @@
 [package]
-name = "brick"
+name = "accrete"
 version = "0.1.0"
 edition = "2024"
 
@@ -10,16 +10,16 @@ serde.workspace = true
 serde_json.workspace = true
 schemars = { version = "1.2.1", optional = true, features = ["chrono04"] }
 regex = { workspace = true, optional = true }
-brick_macro = { path = "../brick_macro", optional = true }
+accrete_macro = { path = "../accrete_macro", optional = true }
 
 [dev-dependencies]
-brick = { path = ".", features = ["ops", "classify", "merge", "template"] }
+accrete = { path = ".", features = ["ops", "classify", "merge", "template"] }
 serde_json.workspace = true
 minijinja = { workspace = true, features = ["loader"] }
 
 [features]
 schema = ["dep:schemars"]
-classify = ["dep:regex", "dep:brick_macro"]
-ops = ["dep:brick_macro"]
+classify = ["dep:regex", "dep:accrete_macro"]
+ops = ["dep:accrete_macro"]
 merge = ["ops"]
 template = ["ops"]

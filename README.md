@@ -2,19 +2,19 @@
 
 [中文版](README.zh.md)
 
-AI-native UI rendering library: Brick DSL + Leptos rendering + streaming merge + CBOR codec. Carved out of Fluxora (the event-bus/Gateway half became [Prism](../prism/); Fluxora itself is migrating to Leptos and keeps its name).
+AI-native UI rendering library: Accrete DSL + Leptos rendering + streaming merge + CBOR codec. Carved out of Fluxora (the event-bus/Gateway half became [Prism](../prism/); Fluxora itself is migrating to Leptos and keeps its name).
 
-Design: [Fluxora 架构](../../.hermes/wiki/projects/fluxora-architecture.md) (wiki — Brick DSL, merge strategies, codec decisions all documented there).
+Design: [Fluxora 架构](../../.hermes/wiki/projects/fluxora-architecture.md) (wiki — Accrete DSL, merge strategies, codec decisions all documented there).
 
 ## What moved in
 
-- **Brick DSL** (`brick` / `brick_macro`): closed typed enum, `#[serde(tag = "type")]`, Bind system, JsonSchema validation for AI generation
+- **Accrete DSL** (`accrete` / `accrete_macro`): closed typed enum, `#[serde(tag = "type")]`, Bind system, JsonSchema validation for AI generation
 - **Streaming merge** (`merge`): Replace / Concat / Delete strategies, `Vec<String>` fragment buffering
 - **Codec** (`codec`): `ActiveCodec` enum dispatch (Json/CBOR), URL-param handshake pinning, `encode_ws()` helper
 
 ## Position
 
-Rendering layer only — no event bus, no gateway, no transport. Upstream (Prism / Aura realm / any producer) sends Brick operations; Fluxen renders and merges. The thick-shell principle stays: AI generates schema-validated structured JSON (content + structure), the framework owns styling and rendering determinism.
+Rendering layer only — no event bus, no gateway, no transport. Upstream (Prism / Aura realm / any producer) sends Accrete operations; Fluxen renders and merges. The thick-shell principle stays: AI generates schema-validated structured JSON (content + structure), the framework owns styling and rendering determinism.
 
 ## Dev workflow (`stage`)
 
@@ -47,7 +47,7 @@ in devtools. Default send format is CBOR.
 
 The console REPL streams every frame back (`<- {...}`), including events the
 UI emits — both sender and event monitor. Commands: `/send <file.kdl>`,
-`/raw <json>` (send a bare `Message<Brick>` — needed for Set/Join frames),
+`/raw <json>` (send a bare `Message<Accrete>` — needed for Set/Join frames),
 `/quit`.
 
 Push layout frames from a KDL file (wraps as Create — replaces the root layout):
@@ -94,7 +94,7 @@ from disk. `trunk` is an optional dev tool, not a runtime dependency.
 Offline helper (no server needed):
 
 ```
-cargo run -p stage -- tojson examples/kdl/chat_layout.kdl   # KDL -> Brick JSON
+cargo run -p stage -- tojson examples/kdl/chat_layout.kdl   # KDL -> Accrete JSON
 ```
 
 Streaming semantics, key behavior, and codec details: see the wiki doc linked
