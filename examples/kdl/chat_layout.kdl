@@ -14,7 +14,7 @@ case {
     }
     case {
         attrs {
-        horizontal true
+        horizontal #true
         class "--body shrink border round"
         }
         case {
@@ -51,7 +51,7 @@ case {
                 rack {
                     attrs {
                     class "--message box ac-start gap scrolly"
-                    scroll true
+                    scroll #true
                     }
                     bind "value" {
                         source "chat"
@@ -88,7 +88,7 @@ case {
             case {
                 attrs {
                 class "--input nogrow box --prompt"
-                horizontal true
+                horizontal #true
                 }
                 input {
                     bind "value" {

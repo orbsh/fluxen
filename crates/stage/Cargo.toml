@@ -8,7 +8,7 @@ name = "stage"
 path = "src/main.rs"
 
 [dependencies]
-brick = { workspace = true, features = ["classify", "ops"] }
+brick = { workspace = true, features = ["classify", "ops", "template"] }
 content = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
@@ -19,6 +19,6 @@ tokio-tungstenite = "0.24"
 rustyline = "14"
 clap = { version = "4", features = ["derive"] }
 axum = { version = "0.8", features = ["ws"] }
-kdl = "2.0.0"
+kdl = "6.7.1"
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 http-body-util = "0.1"
