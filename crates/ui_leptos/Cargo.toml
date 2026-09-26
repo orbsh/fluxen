@@ -8,7 +8,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 anyhow.workspace = true
-brick = { workspace = true, features = ["classify", "merge", "ops", "template"] }
+accrete = { workspace = true, features = ["classify", "merge", "ops", "template"] }
 console_error_panic_hook.workspace = true
 content.workspace = true
 futures.workspace = true

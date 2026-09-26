@@ -1,7 +1,7 @@
 use crate::Ctx;
 use crate::ctx::render_children;
 use crate::hooks::{FormState, use_common_css};
-use brick::{Bind, BindVariant, Brick, BrickOps, Form, JsType};
+use accrete::{Accrete, AccreteOps, Bind, BindVariant, Form, JsType};
 use leptos::html::*;
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -27,7 +27,7 @@ fn default_for(kind: &Option<JsType>, default: &Option<Value>) -> Value {
 }
 
 fn collect_fields(
-    b: &Brick,
+    b: &Accrete,
     fields: &mut HashMap<String, RwSignal<Value>>,
     payloads: &mut HashMap<String, Option<Value>>,
 ) {
@@ -51,25 +51,25 @@ fn collect_fields(
 }
 
 /// 表单：收集 `Field` 字段信号，渲染子组件，`confirm` 为真时发送事件。
-pub fn form_(brick: Form, ctx: &Ctx) -> AnyView {
+pub fn form_(accrete: Form, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["case", "f"];
-    if let Some(id) = &brick.id {
+    if let Some(id) = &accrete.id {
         css.push(id.as_str());
     }
-    use_common_css(&mut css, &brick);
+    use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
     let confirm = RwSignal::new(Value::Bool(false));
     let mut fields: HashMap<String, RwSignal<Value>> = HashMap::new();
     let mut payloads: HashMap<String, Option<Value>> = HashMap::new();
-    if let Some(subs) = brick.children.as_deref() {
+    if let Some(subs) = accrete.children.as_deref() {
         for c in subs {
             collect_fields(c, &mut fields, &mut payloads);
         }
     }
 
-    let event = brick
+    let event = accrete
         .get_bind()
         .and_then(|x| x.get("value"))
         .and_then(|b| match &b.variant {
@@ -85,7 +85,7 @@ pub fn form_(brick: Form, ctx: &Ctx) -> AnyView {
         })),
         ..ctx.clone()
     };
-    let children = brick
+    let children = accrete
         .children
         .as_deref()
         .map(|s| render_children(&ctx, s))

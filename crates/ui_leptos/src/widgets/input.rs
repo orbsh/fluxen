@@ -1,6 +1,6 @@
 use crate::Ctx;
 use crate::hooks::use_common_css;
-use brick::{Bind, BindVariant, BrickOps, Input, JsType};
+use accrete::{AccreteOps, Bind, BindVariant, Input, JsType};
 use leptos::ev;
 use leptos::html::*;
 use leptos::prelude::*;
@@ -14,13 +14,13 @@ fn default_option_jskind(v: &Option<JsType>) -> Value {
 }
 
 /// 输入框：`Field` 绑定写 form 字段信号；`Event` 绑定在 Enter 时发送事件。
-pub fn input_(brick: Input, ctx: &Ctx) -> AnyView {
+pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["input", "f", "shadow"];
-    use_common_css(&mut css, &brick);
+    use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
-    let (bind_type, key, kind) = brick
+    let (bind_type, key, kind) = accrete
         .get_bind()
         .and_then(|x| x.get("value"))
         .cloned()

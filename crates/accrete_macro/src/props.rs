@@ -3,7 +3,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::DeriveInput;
 
-pub fn impl_brick_ops(ast: &DeriveInput) -> syn::Result<TokenStream2> {
+pub fn impl_accrete_ops(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     let name = &ast.ident;
 
     let id = if struct_has_field(ast, "id") {
@@ -19,7 +19,7 @@ pub fn impl_brick_ops(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     if struct_has_field(ast, "children") {
         child_ref = quote! { self.children.as_ref() };
         child_mut = quote! { self.children.as_mut() };
-        set_child = quote! { self.children = Some(brick); };
+        set_child = quote! { self.children = Some(accrete); };
     };
 
     let mut attrs_ref = quote! { None };
@@ -37,20 +37,20 @@ pub fn impl_brick_ops(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     };
 
     Ok(quote! {
-        impl BrickOps for #name {
+        impl AccreteOps for #name {
             fn get_id(&self) -> &Option<String> {
                 #id
             }
             fn get_type(&self) -> &str {
                 stringify!(#name)
             }
-            fn borrow_children(&self) -> Option<&Vec<Brick>> {
+            fn borrow_children(&self) -> Option<&Vec<Accrete>> {
                 #child_ref
             }
-            fn borrow_children_mut(&mut self) -> Option<&mut Vec<Brick>> {
+            fn borrow_children_mut(&mut self) -> Option<&mut Vec<Accrete>> {
                 #child_mut
             }
-            fn set_children(&mut self, brick: Vec<Brick>) {
+            fn set_children(&mut self, accrete: Vec<Accrete>) {
                 #set_child
             }
             fn borrow_attrs(&self) -> Option<&dyn Classify> {
@@ -69,7 +69,7 @@ pub fn impl_brick_ops(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     })
 }
 
-pub fn impl_brick_ops_variant(ast: &DeriveInput) -> syn::Result<TokenStream2> {
+pub fn impl_accrete_ops_variant(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     let name = &ast.ident;
     let mut r = Vec::new();
     if let syn::Data::Enum(d) = &ast.data {
@@ -78,28 +78,28 @@ pub fn impl_brick_ops_variant(ast: &DeriveInput) -> syn::Result<TokenStream2> {
         }
     }
     Ok(quote! {
-        impl BrickOps for #name {
+        impl AccreteOps for #name {
             fn get_id(&self) -> &Option<String> {
                 match self {
                     #(#name::#r(c) => c.get_id()),*
                 }
             }
 
-            fn borrow_children(&self) -> Option<&Vec<Brick>> {
+            fn borrow_children(&self) -> Option<&Vec<Accrete>> {
                 match self {
                     #(#name::#r(c) => c.borrow_children()),*
                 }
             }
 
-            fn borrow_children_mut(&mut self) -> Option<&mut Vec<Brick>> {
+            fn borrow_children_mut(&mut self) -> Option<&mut Vec<Accrete>> {
                 match self {
                     #(#name::#r(c) => c.borrow_children_mut()),*
                 }
             }
 
-            fn set_children(&mut self, brick: Vec<Brick>) {
+            fn set_children(&mut self, accrete: Vec<Accrete>) {
                 match self {
-                    #(#name::#r(c) => { c.set_children(brick) }),*
+                    #(#name::#r(c) => { c.set_children(accrete) }),*
                 }
             }
 
@@ -136,7 +136,7 @@ pub fn impl_brick_ops_variant(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     })
 }
 
-pub fn impl_brick_wrap_variant(ast: &DeriveInput) -> syn::Result<TokenStream2> {
+pub fn impl_accrete_wrap_variant(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     let name = &ast.ident;
     let mut r = Vec::new();
     if let syn::Data::Enum(d) = &ast.data {

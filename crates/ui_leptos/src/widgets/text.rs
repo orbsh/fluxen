@@ -1,6 +1,6 @@
 use crate::Ctx;
 use crate::hooks::{use_common_css, use_source_value};
-use brick::{Text, TextAttr};
+use accrete::{Text, TextAttr};
 use leptos::html::*;
 use leptos::prelude::*;
 use markdown::{Options, to_html_with_options};
@@ -14,17 +14,17 @@ static MDFMT: LazyLock<Vec<String>> = LazyLock::new(|| {
 });
 
 /// 文本：`bind["value"].default` 取值；`TextAttr.format` 为 markdown/md 时渲染 HTML。
-pub fn text_(brick: Text, ctx: &Ctx) -> AnyView {
+pub fn text_(accrete: Text, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["text"];
-    if let Some(id) = &brick.id {
+    if let Some(id) = &accrete.id {
         css.push(id);
     }
-    use_common_css(&mut css, &brick);
+    use_common_css(&mut css, &accrete);
     let base_css = css.join(" ");
 
     move || -> AnyView {
-        let text_content = match use_source_value(&ctx, &brick) {
+        let text_content = match use_source_value(&ctx, &accrete) {
             Some(j) if j.is_string() => j.as_str().unwrap().to_owned(),
             Some(j) => j.to_string(),
             None => "".to_string(),
@@ -32,7 +32,7 @@ pub fn text_(brick: Text, ctx: &Ctx) -> AnyView {
 
         if let Some(TextAttr {
             format: Some(fmt), ..
-        }) = &brick.attrs
+        }) = &accrete.attrs
             && MDFMT.contains(fmt)
             && let Ok(md_html) = to_html_with_options(&text_content, &Options::gfm())
         {

@@ -1,16 +1,16 @@
-//! KDL (v2) → Brick decoding.
+//! KDL (v2) → Accrete decoding.
 //!
 //! Backend: the official `kdl` crate (6.x, `KdlDocument::parse` — real KDL v2:
 //! `#true`/`#false`/`#null` typed literals, `key=value` properties on nodes).
 //! nushell 0.115's `from kdl` ships the same implementation, so grammar
 //! behaviour here matches `nu` one-for-one.
 //!
-//! Brick serializes with `#[serde(tag = "type")]`: the wire form is an object
+//! Accrete serializes with `#[serde(tag = "type")]`: the wire form is an object
 //! with a `type` field plus the variant struct's fields. This module builds
-//! exactly that shape as serde_json::Value, then lets serde produce the Brick.
+//! exactly that shape as serde_json::Value, then lets serde produce the Accrete.
 //!
 //! Mapping convention:
-//! 1. node name        → brick type (e.g. `fold`, `text`)
+//! 1. node name        → accrete type (e.g. `fold`, `text`)
 //! 2. entry args       → plain values (bind key, template name)
 //! 3. properties       → scalar fields (id, class, format, ...)
 //! 4. child blocks     → `children`, `bind`, `item`, `style`/`grid`/`data` maps
@@ -19,7 +19,7 @@
 //!    inside child blocks; same behaviour as nushell)
 
 use crate::error::KdlError;
-use brick::Brick;
+use accrete::Accrete;
 use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
 use serde_json::{json, Map, Value};
 
@@ -68,9 +68,9 @@ fn entry_props(node: &KdlNode) -> Vec<(String, Value)> {
         .collect()
 }
 
-pub fn parse(src: &str) -> Result<Vec<Brick>, KdlError> {
+pub fn parse(src: &str) -> Result<Vec<Accrete>, KdlError> {
     let doc = KdlDocument::parse(src).map_err(|e| KdlError { msg: e.to_string() })?;
-    doc.nodes().iter().map(brick_of).collect()
+    doc.nodes().iter().map(accrete_of).collect()
 }
 
 fn err<T>(msg: impl Into<String>) -> Result<T, KdlError> {
@@ -85,8 +85,8 @@ fn node_obj(name: &str, fields: Map<String, Value>) -> Value {
     Value::Object(m)
 }
 
-fn brick_of(node: &KdlNode) -> Result<Brick, KdlError> {
-    let v = serde_json::from_value::<Brick>(brick_value(node)?)?;
+fn accrete_of(node: &KdlNode) -> Result<Accrete, KdlError> {
+    let v = serde_json::from_value::<Accrete>(accrete_value(node)?)?;
     Ok(v)
 }
 
@@ -138,7 +138,7 @@ fn insert_attr(attrs: &mut Map<String, Value>, key: &str, val: Value) -> Result<
     }
 }
 
-fn brick_value(node: &KdlNode) -> Result<Value, KdlError> {
+fn accrete_value(node: &KdlNode) -> Result<Value, KdlError> {
     let name = node.name().value();
 
     let mut fields = Map::new();
@@ -176,7 +176,7 @@ fn brick_value(node: &KdlNode) -> Result<Value, KdlError> {
             "item" => {
                 let idoc = child.children().cloned().unwrap_or_default();
                 for sub in idoc.nodes() {
-                    item.push(brick_value(sub)?);
+                    item.push(accrete_value(sub)?);
                 }
             }
             // attrs block: entries are value-arg nodes `class "a b"` /
@@ -212,20 +212,20 @@ fn brick_value(node: &KdlNode) -> Result<Value, KdlError> {
                 match child.name().value() {
                     "style" => attrs.insert("style".into(), Value::Object(m)),
                     "grid" => attrs.insert("grid".into(), Value::Object(m)),
-                    // `data` is brick::Template's map (minijinja context), not
-                    // a data_* routing other bricks use — that routing never
-                    // existed in brick and is retired with this parser.
+                    // `data` is accrete::Template's map (minijinja context), not
+                    // a data_* routing other accretes use — that routing never
+                    // existed in accrete and is retired with this parser.
                     _ => {
                         template_data = Some(m);
                         None
                     }
                 };
             }
-            _ => children.push(brick_value(child)?),
+            _ => children.push(accrete_value(child)?),
         }
     }
 
-    // brick::Template { name, data }: name is the first positional arg,
+    // accrete::Template { name, data }: name is the first positional arg,
     // data comes from the `data` child block (empty by default — serde
     // rejects a missing `data` field).
     if name == "template" {

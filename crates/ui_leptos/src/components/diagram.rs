@@ -1,17 +1,17 @@
 use crate::Ctx;
 use crate::hooks::{use_common_css, use_default};
-use brick::Diagram;
+use accrete::Diagram;
 use leptos::html::Div;
 use leptos::html::*;
 use leptos::prelude::*;
 
 /// Mermaid 图表：数据取 `bind["value"].default`，挂载后 `mermaid.init`。
-pub fn diagram_(brick: Diagram, _ctx: &Ctx, id: String) -> AnyView {
+pub fn diagram_(accrete: Diagram, _ctx: &Ctx, id: String) -> AnyView {
     let mut css = vec!["diagram"];
-    use_common_css(&mut css, &brick);
+    use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
-    if let Some(x) = use_default(&brick)
+    if let Some(x) = use_default(&accrete)
         && let Some(y) = x.as_str()
     {
         let val = y.to_string();

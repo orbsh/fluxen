@@ -1,27 +1,27 @@
-//! Merge-strategy semantics for streaming Brick updates.
+//! Merge-strategy semantics for streaming Accrete updates.
 //!
-//! These lock the contract of `Brick::merge` + `BrickOp` that
+//! These lock the contract of `Accrete::merge` + `AccreteOp` that
 //! `Content::Join` frames rely on: same-id rows update in place via
 //! Concat / Delete / Replace, and the outer zip of children preserves
 //! positional pairing.
 
-use brick::Brick;
-use brick::BrickOps;
-use brick::merge::{Concat, Delete, Replace};
+use accrete::Accrete;
+use accrete::AccreteOps;
+use accrete::merge::{Concat, Delete, Replace};
 use serde_json::{Value, json};
 
-fn brick(js: Value) -> Brick {
-    serde_json::from_value(js).expect("valid brick json")
+fn accrete(js: Value) -> Accrete {
+    serde_json::from_value(js).expect("valid accrete json")
 }
 
-fn text(id: &str, value: &str) -> Brick {
-    brick(json!({
+fn text(id: &str, value: &str) -> Accrete {
+    accrete(json!({
         "type": "text", "id": id,
         "bind": { "value": { "kind": "default", "default": value } }
     }))
 }
 
-fn default_of(b: &Brick) -> Value {
+fn default_of(b: &Accrete) -> Value {
     b.get_bind()
         .and_then(|m| m.get("value"))
         .and_then(|x| x.default.clone())
@@ -38,11 +38,11 @@ fn concat_string_values_append_left_to_right() {
 
 #[test]
 fn concat_numbers_sum() {
-    let mut lhs = brick(json!({
+    let mut lhs = accrete(json!({
         "type": "text", "id": "n",
         "bind": { "value": { "kind": "default", "default": 3 } }
     }));
-    let mut rhs = brick(json!({
+    let mut rhs = accrete(json!({
         "type": "text", "id": "n",
         "bind": { "value": { "kind": "default", "default": 4 } }
     }));
@@ -53,11 +53,11 @@ fn concat_numbers_sum() {
 
 #[test]
 fn concat_objects_deep_merge_by_key() {
-    let mut lhs = brick(json!({
+    let mut lhs = accrete(json!({
         "type": "text", "id": "o",
         "bind": { "value": { "kind": "default", "default": { "a": 1, "b": 2 } } }
     }));
-    let mut rhs = brick(json!({
+    let mut rhs = accrete(json!({
         "type": "text", "id": "o",
         "bind": { "value": { "kind": "default", "default": { "b": 20, "c": 30 } } }
     }));
@@ -80,11 +80,11 @@ fn delete_removes_substring_and_subtracts_numbers() {
     lhs.merge(&Delete, &mut rhs);
     assert_eq!(default_of(&lhs), json!(""));
 
-    let mut lhs = brick(json!({
+    let mut lhs = accrete(json!({
         "type": "text", "id": "d2",
         "bind": { "value": { "kind": "default", "default": 10 } }
     }));
-    let mut rhs = brick(json!({
+    let mut rhs = accrete(json!({
         "type": "text", "id": "d2",
         "bind": { "value": { "kind": "default", "default": 4 } }
     }));
@@ -94,11 +94,11 @@ fn delete_removes_substring_and_subtracts_numbers() {
 
 #[test]
 fn delete_object_removes_matching_keys_only() {
-    let mut lhs = brick(json!({
+    let mut lhs = accrete(json!({
         "type": "text", "id": "d3",
         "bind": { "value": { "kind": "default", "default": { "a": 1, "b": 2 } } }
     }));
-    let mut rhs = brick(json!({
+    let mut rhs = accrete(json!({
         "type": "text", "id": "d3",
         "bind": { "value": { "kind": "default", "default": { "a": null } } }
     }));
@@ -109,11 +109,11 @@ fn delete_object_removes_matching_keys_only() {
 #[test]
 fn merge_zip_children_keeps_surplus_from_both_sides() {
     // lhs: [c1, c2]; rhs: [r1] -> position 0 merged, position 1 kept.
-    let mut lhs = brick(json!({
+    let mut lhs = accrete(json!({
         "type": "case", "id": "p",
         "children": [ text("x", "A"), text("y", "B") ]
     }));
-    let mut rhs = brick(json!({
+    let mut rhs = accrete(json!({
         "type": "case", "id": "p",
         "children": [ text("x", "+") ]
     }));
@@ -126,11 +126,11 @@ fn merge_zip_children_keeps_surplus_from_both_sides() {
 
 #[test]
 fn merge_child_surplus_from_rhs_is_appended() {
-    let mut lhs = brick(json!({
+    let mut lhs = accrete(json!({
         "type": "case", "id": "p",
         "children": [ text("x", "A") ]
     }));
-    let mut rhs = brick(json!({
+    let mut rhs = accrete(json!({
         "type": "case", "id": "p",
         "children": [ text("x", "+"), text("z", "new") ]
     }));
@@ -143,11 +143,11 @@ fn merge_child_surplus_from_rhs_is_appended() {
 
 #[test]
 fn bind_keys_missing_on_one_side_are_inserted_whole() {
-    let mut lhs = brick(json!({
+    let mut lhs = accrete(json!({
         "type": "text", "id": "k",
         "bind": { "value": { "kind": "default", "default": "v" } }
     }));
-    let mut rhs = brick(json!({
+    let mut rhs = accrete(json!({
         "type": "text", "id": "k",
         "bind": { "extra": { "kind": "default", "default": 7 } }
     }));
@@ -165,7 +165,7 @@ fn bind_keys_missing_on_one_side_are_inserted_whole() {
 fn cmp_id_requires_both_ids_and_equality() {
     assert!(text("a", "1").cmp_id(&text("a", "2")));
     assert!(!text("a", "1").cmp_id(&text("b", "1")));
-    let no_id = brick(json!({ "type": "text" }));
+    let no_id = accrete(json!({ "type": "text" }));
     assert!(!text("a", "1").cmp_id(&no_id));
     assert!(!no_id.cmp_id(&text("a", "1")));
 }

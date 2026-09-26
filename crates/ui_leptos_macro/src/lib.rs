@@ -9,7 +9,7 @@ use syn::{parse_file, parse_macro_input};
 mod attrs;
 use attrs::Attrs;
 
-/// 遍历 brick 源码，收集 struct 是否带 `sub` 字段、枚举各变体信息。
+/// 遍历 accrete 源码，收集 struct 是否带 `sub` 字段、枚举各变体信息。
 struct Field {
     name: String,
     r#type: String,
@@ -51,9 +51,9 @@ fn walk(ast: &syn::File) -> HashMap<String, CompInfo> {
                                 }
                             })
                             .unwrap_or_default();
-                        // 解析 #[ui_brick(has_id = "true")]
+                        // 解析 #[ui_acrete(has_id = "true")]
                         let has_id = v.attrs.iter().any(|a| {
-                            a.path().is_ident("ui_brick")
+                            a.path().is_ident("ui_acrete")
                                 && a.parse_args_with(|input: syn::parse::ParseStream| {
                                     let mut has = false;
                                     while !input.is_empty() {
@@ -86,7 +86,7 @@ fn walk(ast: &syn::File) -> HashMap<String, CompInfo> {
 
 #[proc_macro]
 pub fn gen_dispatch(input: TokenStream) -> TokenStream {
-    // 解析: file = "..", entry = "Brick", object = "brick"
+    // 解析: file = "..", entry = "Accrete", object = "accrete"
     let cfg = parse_macro_input!(input as Attrs);
     let file = cfg.get("file").expect("must provide file").to_owned();
     let entry = cfg.get("entry").expect("must provide entry").to_owned();
@@ -146,7 +146,7 @@ pub fn gen_dispatch(input: TokenStream) -> TokenStream {
     }
 
     let out = quote! {
-        // HACK: 让 rustc 追踪 brick 源码变化
+        // HACK: 让 rustc 追踪 accrete 源码变化
         const _: &[u8] = include_bytes!(#path_str);
 
         pub fn dispatch(#object: &#entry, ctx: &crate::Ctx) -> leptos::prelude::AnyView {

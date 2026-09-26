@@ -1,6 +1,6 @@
 use crate::Ctx;
 use crate::hooks::{use_common_css, use_source, use_source_value, use_target_value};
-use brick::TextArea;
+use accrete::TextArea;
 use leptos::ev;
 use leptos::html::*;
 use leptos::prelude::*;
@@ -8,20 +8,20 @@ use serde_json::{Value, to_value};
 use wasm_bindgen::JsCast;
 
 /// 多行输入：初值取 `bind["value"].default`，Enter 发送 `bind["value"]` 事件。
-pub fn textarea_(brick: TextArea, ctx: &Ctx) -> AnyView {
+pub fn textarea_(accrete: TextArea, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["textarea", "shadow"];
-    use_common_css(&mut css, &brick);
+    use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
     let slot =
-        RwSignal::new(use_source_value(&ctx, &brick).unwrap_or_else(|| to_value("").unwrap()));
+        RwSignal::new(use_source_value(&ctx, &accrete).unwrap_or_else(|| to_value("").unwrap()));
     let placeholder =
-        use_source(&ctx, &brick, "placeholder").and_then(|d| d.as_str().map(String::from));
+        use_source(&ctx, &accrete, "placeholder").and_then(|d| d.as_str().map(String::from));
 
     move || -> AnyView {
         let ctx = ctx.clone();
-        let brick = brick.clone();
+        let accrete = accrete.clone();
         let p = placeholder.clone();
         let oninput = move |event: web_sys::Event| {
             let v = event
@@ -34,7 +34,7 @@ pub fn textarea_(brick: TextArea, ctx: &Ctx) -> AnyView {
         let onkeydown = move |ev: web_sys::KeyboardEvent| {
             if ev.key() == "Enter" {
                 let ctx = ctx.clone();
-                let b = brick.clone();
+                let b = accrete.clone();
                 let val = slot.get();
                 if let Some(emitter) = use_target_value(ctx.clone(), &b) {
                     emitter(val.clone());

@@ -1,13 +1,13 @@
 //! Mirror server: axum app with WS routes + HTTP POST /send.
 //!
 //! Routes:
-//!   GET  /ui | /channel — UI clients (renderers); receive brick frames
+//!   GET  /ui | /channel — UI clients (renderers); receive accrete frames
 //!   GET  /cli           — CLI/peer clients; send frames, receive UI replies
 //!   POST /send          — batch: body is KDL; converted and broadcast to all
 //!                         peers. No dedicated client needed — curl works.
 //!
-//! The mirror does not parse brick/content for routing; POST /send is the one
-//! place that converts (KDL → Message<Brick>) since its input is a file, not
+//! The mirror does not parse accrete/content for routing; POST /send is the one
+//! place that converts (KDL → Message<Accrete>) since its input is a file, not
 //! a peer.
 
 use axum::extract::ws::Message;
@@ -74,7 +74,7 @@ async fn ws_cli(ws: WebSocketUpgrade, State(ctx): State<Ctx>) -> impl IntoRespon
 }
 
 /// POST /send: body is KDL (default) or YAML (`?fmt=yaml`), converted to a
-/// Message<Brick> frame and broadcast. Returns the wire JSON so `curl -fsS`
+/// Message<Accrete> frame and broadcast. Returns the wire JSON so `curl -fsS`
 /// output is inspectable.
 async fn http_send(
     State(ctx): State<Ctx>,

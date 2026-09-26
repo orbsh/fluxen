@@ -1,8 +1,8 @@
 use crate::hooks::FormState;
 use crate::render::dispatch;
-use brick::{
-    Brick, BrickOps,
-    merge::{BrickOp, Concat, Delete, Replace},
+use accrete::{
+    Accrete, AccreteOps,
+    merge::{AccreteOp, Concat, Delete, Replace},
 };
 use content::codec::ActiveCodec;
 use content::{Content, Message, Method};
@@ -26,14 +26,14 @@ static TMPL: LazyLock<RwLock<Environment>> = LazyLock::new(|| {
 /// 嵌套表单靠遮蔽生效（内层覆盖外层）。
 /// per-key 信号槽：外层 map 只存句柄（键集变化时才写外层），
 /// 值经内层信号发布——某个键的更新不通知其他键的订阅者。
-pub type ListSlot = RwSignal<std::sync::Arc<Vec<Brick>>>;
-pub type DataSlot = RwSignal<Option<std::sync::Arc<Brick>>>;
+pub type ListSlot = RwSignal<std::sync::Arc<Vec<Accrete>>>;
+pub type DataSlot = RwSignal<Option<std::sync::Arc<Accrete>>>;
 
 #[derive(Clone)]
 pub struct Ctx {
     pub transport: LeptosTransport,
     pub codec: ActiveCodec,
-    pub layout: RwSignal<Brick>,
+    pub layout: RwSignal<Accrete>,
     pub data: RwSignal<HashMap<String, DataSlot>>,
     pub list: RwSignal<HashMap<String, ListSlot>>,
     /// 槽位的永久 owner：Ctx::new 时捕获的 app 根作用域。
@@ -58,7 +58,7 @@ impl Ctx {
     /// 框架桥接：`spawn_local` 读流写 `frame` 信号，Effect 消费解码分发。
     pub fn new(transport: std::rc::Rc<dyn Transport>, codec: ActiveCodec) -> Self {
         let frame = RwSignal::new(Vec::new());
-        let layout = RwSignal::new(Brick::text(Default::default()));
+        let layout = RwSignal::new(Accrete::text(Default::default()));
         let data = RwSignal::new(HashMap::new());
         let list = RwSignal::new(HashMap::new());
 
@@ -93,7 +93,7 @@ impl Ctx {
             let b = ctx_clone.transport.frame.get();
             if !b.is_empty() {
                 // 收侧双格式自适应：帧首字节定格式，与 ?codec= 钉定的发送格式无关
-                match ctx_clone.codec.decode_auto::<Message<Brick>>(&b) {
+                match ctx_clone.codec.decode_auto::<Message<Accrete>>(&b) {
                     Ok(act) => dispatch_msg(&act, &ctx_clone),
                     // decode 失败若静默丢弃，症状就是"ws 正常但界面空白"——必须留痕
                     Err(e) => tracing::error!("ws frame decode failed: {e}"),
@@ -115,8 +115,9 @@ impl Ctx {
             .await;
     }
 
-    pub fn set(&self, name: impl AsRef<str>, brick: Brick) {
-        self.slot_for_data(name.as_ref()).set(Some(Arc::new(brick)));
+    pub fn set(&self, name: impl AsRef<str>, accrete: Accrete) {
+        self.slot_for_data(name.as_ref())
+            .set(Some(Arc::new(accrete)));
     }
 
     /// 取（或首次时建）某 source 的列表槽。外层 map 用 untracked 读：
@@ -158,7 +159,7 @@ impl Ctx {
     }
 }
 
-fn dispatch_msg(act: &Message<Brick>, ctx: &Ctx) {
+fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
     // 操作通道过滤：非渲染类帧不触碰 layout/data/list（ADR 0003）。
     // Influx.event 是数据槽名，属渲染内部寻址，与此处消息级 ev 平面不同。
     if act.ev != content::EV_DRAW {
@@ -193,7 +194,7 @@ fn dispatch_msg(act: &Message<Brick>, ctx: &Ctx) {
                 let mut d = x.data.clone();
                 let env = TMPL.read().expect("read TMPL failed");
                 d.expand(&env);
-                let vs: &dyn BrickOp = match x.method {
+                let vs: &dyn AccreteOp = match x.method {
                     Method::Replace => &Replace,
                     Method::Concat => &Concat,
                     Method::Delete => &Delete,
@@ -227,12 +228,12 @@ fn dispatch_msg(act: &Message<Brick>, ctx: &Ctx) {
     }
 }
 
-/// 渲染一个 brick 为视图（供 external 触发）。
-pub fn render_brick(ctx: &Ctx, brick: &Brick) -> AnyView {
-    dispatch(brick, ctx)
+/// 渲染一个 accrete 为视图（供 external 触发）。
+pub fn render_accrete(ctx: &Ctx, accrete: &Accrete) -> AnyView {
+    dispatch(accrete, ctx)
 }
 
-/// 渲染一组子 brick。
-pub fn render_children(ctx: &Ctx, subs: &[Brick]) -> Vec<AnyView> {
+/// 渲染一组子 accrete。
+pub fn render_children(ctx: &Ctx, subs: &[Accrete]) -> Vec<AnyView> {
     subs.iter().map(|b| dispatch(b, ctx)).collect()
 }

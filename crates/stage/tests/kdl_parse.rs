@@ -1,6 +1,6 @@
 //! KDL parsing tests: wire-shape correctness + serde round trip.
 
-use brick::{BindVariant, Brick, BrickOps};
+use accrete::{Accrete, AccreteOps, BindVariant};
 
 const SAMPLE: &str = r#"
 fold id="app" class="panel wide" {
@@ -30,48 +30,48 @@ fold id="app" class="panel wide" {
 }
 "#;
 
-fn as_fold(b: &Brick) -> Option<&brick::Fold> {
+fn as_fold(b: &Accrete) -> Option<&accrete::Fold> {
     match b {
-        Brick::fold(f) => Some(f),
+        Accrete::fold(f) => Some(f),
         _ => None,
     }
 }
 
-fn as_form(b: &Brick) -> Option<&brick::Form> {
+fn as_form(b: &Accrete) -> Option<&accrete::Form> {
     match b {
-        Brick::form(f) => Some(f),
+        Accrete::form(f) => Some(f),
         _ => None,
     }
 }
 
-fn as_button(b: &Brick) -> Option<&brick::Button> {
+fn as_button(b: &Accrete) -> Option<&accrete::Button> {
     match b {
-        Brick::button(b) => Some(b),
+        Accrete::button(b) => Some(b),
         _ => None,
     }
 }
 
-fn as_rack(b: &Brick) -> Option<&brick::Rack> {
+fn as_rack(b: &Accrete) -> Option<&accrete::Rack> {
     match b {
-        Brick::rack(r) => Some(r),
+        Accrete::rack(r) => Some(r),
         _ => None,
     }
 }
 
-fn as_group(b: &Brick) -> Option<&brick::Group> {
+fn as_group(b: &Accrete) -> Option<&accrete::Group> {
     match b {
-        Brick::group(g) => Some(g),
+        Accrete::group(g) => Some(g),
         _ => None,
     }
 }
 
 #[test]
 fn kdl_well_formed_tree() {
-    let bricks = stage::kdl_parse::parse(SAMPLE).expect("kdl parse");
-    assert_eq!(bricks.len(), 1);
-    assert_eq!(bricks[0].get_id().as_deref(), Some("app"));
+    let accretes = stage::kdl_parse::parse(SAMPLE).expect("kdl parse");
+    assert_eq!(accretes.len(), 1);
+    assert_eq!(accretes[0].get_id().as_deref(), Some("app"));
 
-    let fold = as_fold(&bricks[0]).expect("fold");
+    let fold = as_fold(&accretes[0]).expect("fold");
     // bind kind survives parsing
     let bind = fold.bind.as_ref().unwrap().get("click").unwrap();
     assert_eq!(
@@ -113,37 +113,37 @@ fn kdl_well_formed_tree() {
 
 #[test]
 fn kdl_serde_roundtrip() {
-    // KDL → Brick → wire Value → Brick must equal KDL → Brick.
+    // KDL → Accrete → wire Value → Accrete must equal KDL → Accrete.
     // i.e. the hand-written translation layer and serde agree on the shape.
-    let via_brick = stage::kdl_parse::parse(SAMPLE).unwrap();
-    for b in &via_brick {
+    let via_accrete = stage::kdl_parse::parse(SAMPLE).unwrap();
+    for b in &via_accrete {
         let wire = serde_json::to_value(b).unwrap();
-        let back: Brick = serde_json::from_value(wire).unwrap();
+        let back: Accrete = serde_json::from_value(wire).unwrap();
         assert_eq!(back, *b);
     }
 }
 
 #[test]
 fn kdl_errors() {
-    assert!(stage::kdl_parse::parse("widget {}").is_err()); // unknown brick
+    assert!(stage::kdl_parse::parse("widget {}").is_err()); // unknown accrete
     assert!(stage::kdl_parse::parse("fold { bind { event \"x\" } }").is_err()); // missing key
 }
 
 #[test]
 fn v2_literals_and_reject_of_v1_booleans() {
     // #true parses (real v2 grammar)…
-    let bricks = stage::kdl_parse::parse("rack scroll=#true").unwrap();
-    assert!(matches!(bricks[0], Brick::rack(_)));
+    let accretes = stage::kdl_parse::parse("rack scroll=#true").unwrap();
+    assert!(matches!(accretes[0], Accrete::rack(_)));
     // …and bare v1-style `true` must now fail (regression lock for the crate swap)
     assert!(stage::kdl_parse::parse("rack scroll=true").is_err());
 }
 
 #[test]
 fn template_node_maps_name_and_data() {
-    // template "<name>" { data { k "v" } } → brick::Template { name, data }
+    // template "<name>" { data { k "v" } } → accrete::Template { name, data }
     let src = "template \"greet\" {\n    data {\n        who \"world\"\n        times 2\n    }\n}";
-    let bricks = stage::kdl_parse::parse(src).unwrap();
-    let wire = serde_json::to_value(&bricks[0]).unwrap();
+    let accretes = stage::kdl_parse::parse(src).unwrap();
+    let wire = serde_json::to_value(&accretes[0]).unwrap();
     assert_eq!(wire["type"], "template");
     assert_eq!(wire["name"], "greet");
     assert_eq!(wire["data"]["who"], "world");
@@ -154,16 +154,16 @@ fn template_node_maps_name_and_data() {
 fn bind_field_payload_subblock() {
     // field kind accepts a `payload { ... }` child → flattened payload map
     let src = "button {\n    bind \"click\" {\n        field \"send\" {\n            payload {\n                channel \"general\"\n            }\n        }\n    }\n}";
-    let bricks = stage::kdl_parse::parse(src).unwrap();
-    let wire = serde_json::to_value(&bricks[0]).unwrap();
+    let accretes = stage::kdl_parse::parse(src).unwrap();
+    let wire = serde_json::to_value(&accretes[0]).unwrap();
     let bind = &wire["bind"]["click"];
     assert_eq!(bind["kind"], "field");
     assert_eq!(bind["field"], "send");
     assert_eq!(bind["payload"]["channel"], "general");
     // must also survive serde round trip into the typed variant
-    let back: Brick = serde_json::from_value(wire).unwrap();
+    let back: Accrete = serde_json::from_value(wire).unwrap();
     match back {
-        Brick::button(b) => {
+        Accrete::button(b) => {
             let bind_map = b.bind.unwrap();
             match &bind_map["click"].variant {
                 BindVariant::Field { field, payload } => {
@@ -179,7 +179,7 @@ fn bind_field_payload_subblock() {
 
 #[test]
 fn content_frame_shape() {
-    // parse_kdl_to_frame wraps bricks in the Content::Create envelope the UI speaks
+    // parse_kdl_to_frame wraps accretes in the Content::Create envelope the UI speaks
     let frame = stage::proto::parse_kdl_to_frame(SAMPLE).unwrap();
     let obj = frame.as_object().unwrap();
     assert_eq!(obj.get("ev").and_then(|v| v.as_str()), Some("draw"));
@@ -191,7 +191,7 @@ fn content_frame_shape() {
         Some("create")
     );
     assert_eq!(create.get("event").and_then(|v| v.as_str()), Some("stage"));
-    // data carries the single brick bare
+    // data carries the single accrete bare
     assert_eq!(
         create
             .get("data")
