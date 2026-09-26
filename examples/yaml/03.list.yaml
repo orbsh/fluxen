@@ -1,0 +1,11 @@
+action: join
+event: chat
+data:
+  type: case
+  children:
+  - type: text
+    bind:
+      value:
+        kind: default
+        default: (case)who are you?
+

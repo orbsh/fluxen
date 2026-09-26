@@ -10,6 +10,7 @@
 //! place that converts (KDL → Message<Brick>) since its input is a file, not
 //! a peer.
 
+use axum::extract::ws::Message;
 use axum::extract::ws::{WebSocket, WebSocketUpgrade};
 use axum::extract::State;
 use axum::response::IntoResponse;
@@ -18,7 +19,6 @@ use axum::Router;
 use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
-use axum::extract::ws::Message;
 
 type Peer = mpsc::UnboundedSender<Message>;
 type Peers = Arc<Mutex<Vec<Peer>>>;
@@ -29,11 +29,7 @@ struct Ctx {
     cli: Peers,
 }
 
-pub async fn serve(
-    port: u16,
-    trunk_port: u16,
-    dist: std::path::PathBuf,
-) -> anyhow::Result<()> {
+pub async fn serve(port: u16, trunk_port: u16, dist: std::path::PathBuf) -> anyhow::Result<()> {
     let ctx = Ctx {
         ui: Arc::new(Mutex::new(Vec::new())),
         cli: Arc::new(Mutex::new(Vec::new())),
@@ -69,7 +65,6 @@ pub async fn serve(
     Ok(())
 }
 
-
 async fn ws_ui(ws: WebSocketUpgrade, State(ctx): State<Ctx>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| run_peer(socket, ctx, true))
 }
@@ -78,10 +73,20 @@ async fn ws_cli(ws: WebSocketUpgrade, State(ctx): State<Ctx>) -> impl IntoRespon
     ws.on_upgrade(move |socket| run_peer(socket, ctx, false))
 }
 
-/// POST /send: body is KDL, converted to a Message<Brick> frame and broadcast.
-/// Returns the wire JSON so `curl -fsS` output is inspectable.
-async fn http_send(State(ctx): State<Ctx>, body: String) -> impl IntoResponse {
-    match crate::proto::parse_kdl_to_frame(&body) {
+/// POST /send: body is KDL (default) or YAML (`?fmt=yaml`), converted to a
+/// Message<Brick> frame and broadcast. Returns the wire JSON so `curl -fsS`
+/// output is inspectable.
+async fn http_send(
+    State(ctx): State<Ctx>,
+    axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
+    body: String,
+) -> impl IntoResponse {
+    let frame = match q.get("fmt").map(|s| s.as_str()) {
+        Some("yaml") => crate::proto::parse_yaml_to_frame(&body),
+        // explicit selection, no content sniffing: absent or any other fmt = KDL
+        _ => crate::proto::parse_kdl_to_frame(&body),
+    };
+    match frame {
         Ok(frame) => {
             let text = frame.to_string();
             let mut ui = ctx.ui.lock().await;
@@ -138,6 +143,12 @@ async fn run_peer(socket: WebSocket, ctx: Ctx, is_ui: bool) {
 
     tokio::join!(out, inp);
 
-    ctx.cli.lock().await.retain(|p| !p.same_channel(&tx_for_cleanup));
-    ctx.ui.lock().await.retain(|p| !p.same_channel(&tx_for_cleanup));
+    ctx.cli
+        .lock()
+        .await
+        .retain(|p| !p.same_channel(&tx_for_cleanup));
+    ctx.ui
+        .lock()
+        .await
+        .retain(|p| !p.same_channel(&tx_for_cleanup));
 }

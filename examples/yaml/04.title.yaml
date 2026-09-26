@@ -1,0 +1,10 @@
+action: set
+method: concat
+event: login
+data:
+  type: text
+  bind:
+    value:
+      kind: default
+      default: "**hello**"
+

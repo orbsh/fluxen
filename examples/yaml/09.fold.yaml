@@ -1,0 +1,52 @@
+action: join
+event: chat
+data:
+  attrs:
+    class:
+    - f
+    - col
+    - gap
+    - xxx
+    - md
+  children:
+  - type: case
+  - type: case
+  - attrs:
+      class:
+      - box
+      - sm
+      - border
+      - round
+      - warn
+      - pointer
+      - highlight
+      - ease
+    children:
+    - attrs: {}
+      children:
+      - attrs:
+          class:
+          - txt
+          - sm
+          - hint
+          format: md
+        type: text
+        bind:
+          value:
+            kind: default
+            default: test
+      item:
+      - attrs:
+          class:
+          - txt
+          - sm
+          - hint
+        type: text
+        bind:
+          value:
+            kind: default
+            default: PartStarting
+      type: fold
+    type: case
+  type: case
+

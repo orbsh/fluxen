@@ -1,0 +1,24 @@
+action: join
+method: concat
+event: chat
+data:
+  type: case
+  id: ""
+  attrs:
+    class:
+    - f
+    - col
+    - gap
+    - xxx
+    - md
+  children:
+  - type: text
+    attrs:
+      format: md
+      class:
+      - clear
+    bind:
+      value:
+        kind: default
+        default: . .
+

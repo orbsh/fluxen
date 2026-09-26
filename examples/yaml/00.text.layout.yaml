@@ -1,0 +1,78 @@
+action: create
+event: ""
+data:
+  type: case
+  attrs:
+    horizontal: true
+    class:
+    - box
+  children:
+  - type: case
+    children:
+    - type: case
+      attrs:
+        class:
+        - box
+        - border
+        - shadow
+      children:
+      - type: text
+        bind:
+          value:
+            kind: default
+            default: child of box
+    - type: text
+      bind:
+        value:
+          kind: source
+          default: 123
+          source: test-data
+  - type: rack
+    attrs: {}
+    bind:
+      value:
+        kind: source
+        source: chat
+    item:
+    - type: case
+      attrs:
+        class:
+        - box
+        - border
+        - shadow
+  - type: case
+    children:
+    - type: text
+      bind:
+        value:
+          kind: source
+          default: lv 1
+          source: test-data
+    - type: case
+      children:
+      - type: text
+        bind:
+          value:
+            kind: default
+            default: lv 2
+      - type: case
+        children:
+        - type: case
+          children: null
+        - type: text
+          bind:
+            value:
+              kind: default
+              default: lv 3
+  - type: input
+    bind:
+      value:
+        kind: event
+        event: message
+  - type: button
+    bind:
+      value:
+        kind: event
+        default: Count
+        event: ok
+

@@ -1,0 +1,15 @@
+action: join
+method: concat
+event: chat
+data:
+  type: template
+  name: segment
+  data:
+    rank: 5
+    payload:
+      type: text
+      bind:
+        value:
+          kind: default
+          default: who are you?
+

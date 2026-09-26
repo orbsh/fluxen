@@ -50,11 +50,32 @@ UI emits — both sender and event monitor. Commands: `/send <file.kdl>`,
 `/raw <json>` (send a bare `Message<Brick>` — needed for Set/Join frames),
 `/quit`.
 
-Push content from anywhere (KDL wraps as Create — replaces the root layout):
+Push layout frames from a KDL file (wraps as Create — replaces the root layout):
 
 ```
 curl -X POST --data-binary @examples/kdl/chat_layout.kdl http://localhost:3002/send
 ```
+
+YAML files carry full Content expressiveness (any action: create/set/join/tmpl —
+the action is preserved, not forced to create). A file is one Content item or an
+array of them; `?fmt=yaml` selects the parser (KDL stays the default):
+
+```
+curl -X POST --data-binary @examples/yaml/02.concat.yaml "http://localhost:3002/send?fmt=yaml"
+```
+
+`examples/fluxen.nu` wraps both carriers for nushell (`send <file> [-p <patch>]`
+by extension, plus the border-flashing / message-concat / message-replace demo
+loops), and `examples/push_demo.py` streams Set/Join frames over a raw `/cli`
+WebSocket:
+
+```
+nu -c 'use examples/fluxen.nu *; send 02.concat.yaml'
+python3 examples/push_demo.py
+```
+
+Frames must carry the render channel: top-level `"ev": "draw"` (see
+docs/decisions/0003-ev-channel.md). Non-draw frames are ignored by the UI.
 
 To stream Set/Join frames against a running layout, use `/raw` in the console,
 e.g. a chat token append:
@@ -78,3 +99,4 @@ cargo run -p stage -- tojson examples/kdl/chat_layout.kdl   # KDL -> Brick JSON
 
 Streaming semantics, key behavior, and codec details: see the wiki doc linked
 above plus ADRs in `docs/decisions/`.
+

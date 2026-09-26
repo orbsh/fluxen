@@ -48,6 +48,26 @@ console REPL 会把每一帧回显出来（`<- {...}`），包括 UI 上报的�
 curl -X POST --data-binary @examples/kdl/chat_layout.kdl http://localhost:3002/send
 ```
 
+YAML 文件承载完整 Content 表达力（action 可为 create/set/join/tmpl——不再被强制
+包成 create）。文件内容 = 一个 Content 项或其数组；`?fmt=yaml` 显式选择解析器
+（默认仍是 KDL）：
+
+```
+curl -X POST --data-binary @examples/yaml/02.concat.yaml "http://localhost:3002/send?fmt=yaml"
+```
+
+`examples/fluxen.nu` 是两种载体的 nushell 封装（`send <file> [-p <patch>]` 按扩展名
+分派，另有 border-flashing / message-concat / message-replace 演示循环），
+`examples/push_demo.py` 经裸 `/cli` WebSocket 流式推 Set/Join 帧：
+
+```
+nu -c 'use examples/fluxen.nu *; send 02.concat.yaml'
+python3 examples/push_demo.py
+```
+
+帧必须携带渲染通道：顶层 `"ev": "draw"`（见 docs/decisions/0003-ev-channel.md），
+非 draw 帧被 UI 忽略。
+
 要在不重建布局的前提下流式推 Set/Join 帧，经 console 的 `/raw` 发裸消息，例如一次聊天 token 追加：
 
 ```
