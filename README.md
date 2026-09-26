@@ -60,7 +60,7 @@ To stream Set/Join frames against a running layout, use `/raw` in the console,
 e.g. a chat token append:
 
 ```
-/raw {"sender":"demo","content":[{"action":"join","event":"chat","method":"concat","data":{"type":"text","id":"m1","bind":{"value":{"kind":"default","default":"hello "}}}}]}
+/raw {"ev":"draw","sender":"demo","content":[{"action":"join","event":"chat","method":"concat","data":{"type":"text","id":"m1","bind":{"value":{"kind":"default","default":"hello "}}}}]}
 ```
 
 Rows streamed into a rack should carry `id` — merge and DOM identity are both
@@ -78,4 +78,3 @@ cargo run -p stage -- tojson examples/kdl/chat_layout.kdl   # KDL -> Brick JSON
 
 Streaming semantics, key behavior, and codec details: see the wiki doc linked
 above plus ADRs in `docs/decisions/`.
-
