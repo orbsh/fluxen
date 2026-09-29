@@ -73,6 +73,34 @@
 渲染行为相关（§1 过滤路径）跑 e2e（draw 帧正常渲染、伪造 ev 值不渲染且无 panic）。
 主题分提交：ADR+代码各一、kdl_parse+示例改写一、yaml+examples 迁移一、nu 工具一（提交前确认分组）。
 
+已知缺陷（非本计划范围，勿 drive-by）：x.nu 移根后头部注释仍写
+`use examples/fluxen.nu` 与 "(this file lives in examples/)"，待 nu 工具主题提交时顺路修。
+
+### 6. 操作层重构：Value 与 Patch（ADR 0005，active）
+
+- `content`：`Content` enum 改为 create/set/append/patch/remove/empty；
+  新增 `PatchOp { event, id, path, op, value }`（path=JSON Pointer，
+  op=replace|append）；删 `Method`、`Influx.method` 字段、`join`。
+- `accrete`：删 `merge.rs`（位置合并）；`AccreteOps`/`classify` 相应收缩；
+  patch 应用逻辑放 accrete（`apply_patch(&mut self, path, kind, value)`），
+  未命中返回 Err 供上层 warn。
+- `stage`：proto/kdl_parse 的 join→append；新增 patch 的 KDL 语法
+  （`patch { event "chat" id "a1" path "/bind/value/default" append "tok" }`）
+  与 YAML 载体支持。
+- `ui_leptos`：`dispatch_msg` 删 merge 分支，Set 保持整体替换；Append 仅
+  push，行 id 与现有列表冲突则拒收 + `tracing::warn`（keyed 身份在边界守住，
+  不留给渲染层）；Remove 按 id 删行；Patch 按平面路由
+  （""→layout，id→行内，其余→数据槽）。
+- 测试先行（RED→GREEN）：`apply_patch` 单测——replace 深层值、append
+  字符串、append 数组、未命中 Err、attrs 路径、类型冲突写回失败回滚
+  （节点保持原值）；`dispatch_msg` 平面路由单测；append 同 id 拒收单测。
+- 示例迁移：02.concat/02.replace 改写为 patch 帧；push_demo.py 的 a1 追帧
+  改 `patch id=a1 append`；examples/kdl 与 x.nu 工具同步。
+- 门槛：workspace build/test + wasm build；e2e 跑 push_demo 等价流程
+  （create layout → append 行 → patch token 流逐帧增长、兄弟行 DOM 存活）。
+- 删除项记录：`Method`、`merge.rs`、join 的合并职能、02.concat/02.replace
+  旧形态。fluxora 为存档，不做兼容。
+
 ## Resolved
 
 ### Input clear-on-Enter (dioxus-port defect) — done 2026-09
