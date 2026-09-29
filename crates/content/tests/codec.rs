@@ -2,7 +2,7 @@
 //! plus the `OneOrMany` shape the gateway wire relies on.
 
 use content::codec::{ActiveCodec, CodecType};
-use content::{Content, Influx, Message, Method};
+use content::{AppendOp, Content, Influx, Message, PatchKind, PatchOp, RemoveOp};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -17,14 +17,13 @@ fn sample() -> Message<Payload> {
         ev: "draw".into(),
         sender: "stage".into(),
         created: None,
-        content: vec![Content::Join(Influx {
+        content: vec![Content::Append(AppendOp {
             event: "chat".into(),
+            id: Some("a1".into()),
             data: Payload {
                 n: 7,
                 s: "hi".into(),
             },
-            method: Method::Concat,
-            channel: None,
         })],
     }
 }
@@ -58,30 +57,71 @@ fn cbor_roundtrip_preserves_message() {
 }
 
 #[test]
-fn method_wire_names_are_lowercase() {
-    assert_eq!(
-        serde_json::to_value(Method::Replace).unwrap(),
-        json!("replace")
-    );
-    assert_eq!(
-        serde_json::to_value(Method::Concat).unwrap(),
-        json!("concat")
-    );
-    assert_eq!(
-        serde_json::to_value(Method::Delete).unwrap(),
-        json!("delete")
-    );
-    assert_eq!(
-        serde_json::from_value::<Method>(json!("concat")).unwrap(),
-        Method::Concat
-    );
+fn action_wire_names_are_lowercase() {
+    let cases = [
+        (
+            Content::Set(Influx {
+                event: "e".into(),
+                data: Payload { n: 1, s: "x".into() },
+            }),
+            "set",
+        ),
+        (
+            Content::Append(AppendOp {
+                event: "e".into(),
+                id: None,
+                data: Payload { n: 1, s: "x".into() },
+            }),
+            "append",
+        ),
+        (
+            Content::Remove(RemoveOp {
+                event: "e".into(),
+                id: "x".into(),
+            }),
+            "remove",
+        ),
+        (
+            Content::Patch(PatchOp {
+                event: "e".into(),
+                id: None,
+                path: "/a/b".into(),
+                op: PatchKind::Replace,
+                value: json!(1),
+            }),
+            "patch",
+        ),
+    ];
+    for (c, name) in cases {
+        let v = serde_json::to_value(&c).unwrap();
+        assert_eq!(v["action"], json!(name), "wire name for {name}");
+    }
 }
 
 #[test]
-fn method_defaults_to_replace_when_absent() {
+fn patch_op_wire_shape() {
+    let v = serde_json::to_value(PatchKind::Append).unwrap();
+    assert_eq!(v, json!("append"));
+    assert_eq!(
+        serde_json::from_value::<PatchKind>(json!("replace")).unwrap(),
+        PatchKind::Replace
+    );
+    // Patch is self-describing: op is a required wire field
+    let p: PatchOp = serde_json::from_value(json!({
+        "event": "e", "path": "/x", "op": "append", "value": "tok"
+    }))
+    .unwrap();
+    assert_eq!(p.id, None);
+    assert_eq!(p.op, PatchKind::Append);
+}
+
+#[test]
+fn influx_no_longer_carries_method_or_channel() {
+    // ADR 0005: `method` was the positional-merge knob — retired with join.
     let v = json!({ "event": "e", "data": { "n": 1, "s": "x" } });
     let inf: Influx<Payload> = serde_json::from_value(v).unwrap();
-    assert_eq!(inf.method, Method::Replace);
+    let back = serde_json::to_value(&inf).unwrap();
+    assert_eq!(back, json!({ "event": "e", "data": { "n": 1, "s": "x" } }));
 }
 
 #[test]
@@ -93,7 +133,7 @@ fn content_tagged_by_action_and_accepts_single_or_array() {
         v["content"].is_object(),
         "single content collapses to object"
     );
-    assert_eq!(v["content"]["action"], json!("join"));
+    assert_eq!(v["content"]["action"], json!("append"));
     // and the bare-object form deserializes back into a one-item vec
     let back: Message<Payload> = serde_json::from_value(v).unwrap();
     assert_eq!(back.content.len(), 1);

@@ -1,11 +1,8 @@
 use crate::hooks::FormState;
 use crate::render::dispatch;
-use accrete::{
-    Accrete, AccreteOps,
-    merge::{AccreteOp, Concat, Delete, Replace},
-};
+use accrete::{Accrete, AccreteOps};
 use content::codec::ActiveCodec;
-use content::{Content, Message, Method};
+use content::{Content, Message, PatchKind};
 use leptos::prelude::*;
 use minijinja::Environment;
 use serde_json::Value;
@@ -190,41 +187,101 @@ fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
                 d.expand(&env);
                 ctx.slot_for_data(&x.event).set(Some(Arc::new(d)));
             }
-            Content::Join(x) => {
+            Content::Append(x) => {
                 let mut d = x.data.clone();
                 let env = TMPL.read().expect("read TMPL failed");
                 d.expand(&env);
-                let vs: &dyn AccreteOp = match x.method {
-                    Method::Replace => &Replace,
-                    Method::Concat => &Concat,
-                    Method::Delete => &Delete,
-                };
-                // 只写该键的内层槽：clone 壳 + make_mut 独占重建该条目，
-                // 其他键的槽与其他行的 Arc 原样带给各自订阅者。
                 // untracked 读：dispatch_msg 运行在消费 frame 的 Effect 里，
                 // tracked 读会让 Effect 订阅自己写入的槽 → 自激循环。
                 let slot = ctx.slot_for_list(&x.event);
                 let cur = slot.get_untracked();
                 let mut list = std::sync::Arc::unwrap_or_clone(cur);
-                if d.get_id().is_some() {
-                    let mut is_merge = false;
-                    for i in list.iter_mut() {
-                        if i.cmp_id(&d) {
-                            is_merge = true;
-                            let mut rhs = d.clone();
-                            i.merge(vs, &mut rhs);
+                // 空串 id = 位置行（无身份，可重复追加），与 DSL 的 no-id 约定一致
+                let id_of = |s: &Option<String>| s.clone().filter(|s| !s.is_empty());
+                let id = id_of(&x.id).or_else(|| id_of(d.get_id()));
+                if let Some(id) = &id {
+                    // 行 id 唯一性在边界守住（ADR 0005）：重复 append 拒收，
+                    // keyed 渲染身份不留给下游打架。
+                    if list.iter().any(|i| i.get_id().as_deref() == Some(id.as_str())) {
+                        tracing::warn!(
+                            "append rejected: event {:?} already has row id {:?}",
+                            x.event,
+                            id
+                        );
+                        continue;
+                    }
+                    // head id 落进行身份（patch/remove 按 id 寻行，须与数据一致）
+                    if d.get_id().as_deref().filter(|s| !s.is_empty()) != Some(id.as_str()) {
+                        if let Err(e) = d.replace_at("/id", Value::String(id.clone())) {
+                            tracing::warn!("append row {id:?} id stamp failed: {e}");
+                            continue;
                         }
                     }
-                    if !is_merge {
-                        list.push(d.clone());
-                    }
-                } else {
-                    list.push(d.clone());
                 }
+                list.push(d.clone());
                 slot.set(Arc::new(list));
+            }
+            Content::Remove(x) => {
+                let slot = ctx.slot_for_list(&x.event);
+                let cur = slot.get_untracked();
+                let mut list = std::sync::Arc::unwrap_or_clone(cur);
+                let before = list.len();
+                list.retain(|i| i.get_id().as_deref() != Some(x.id.as_str()));
+                if list.len() != before {
+                    slot.set(Arc::new(list));
+                } else {
+                    tracing::warn!("remove: event {:?} has no row id {:?}", x.event, x.id);
+                }
+            }
+            Content::Patch(x) => {
+                // 平面路由（ADR 0005）："" = layout 根；id 设 = 列表行；
+                // 其余 = 具名数据槽。
+                let result = if x.event.is_empty() {
+                    let mut d = ctx.layout.get_untracked();
+                    apply_patch(&mut d, x)
+                } else if let Some(id) = &x.id {
+                    let slot = ctx.slot_for_list(&x.event);
+                    let cur = slot.get_untracked();
+                    let mut list = std::sync::Arc::unwrap_or_clone(cur);
+                    let r = match list
+                        .iter_mut()
+                        .find(|i| i.get_id().as_deref() == Some(id.as_str()))
+                    {
+                        Some(row) => apply_patch(row, x),
+                        None => Err(format!("no row {id:?} in {:?}", x.event)),
+                    };
+                    if r.is_ok() {
+                        slot.set(Arc::new(list));
+                    }
+                    r
+                } else {
+                    let slot = ctx.slot_for_data(&x.event);
+                    match slot.get_untracked().map(|a| std::sync::Arc::unwrap_or_clone(a)) {
+                        Some(mut d) => {
+                            let r = apply_patch(&mut d, x);
+                            if r.is_ok() {
+                                slot.set(Some(Arc::new(d)));
+                            }
+                            r
+                        }
+                        None => Err(format!("no data slot {:?}", x.event)),
+                    }
+                };
+                if let Err(e) = result {
+                    // 未命中是合法降级（补丁可能先于其 create 到达），warn 保证可观测。
+                    tracing::warn!("patch {x:?} skipped: {e}");
+                }
             }
             Content::Empty => {}
         }
+    }
+}
+
+/// Route a patch's op onto the target Accrete node (Value-domain addressing).
+fn apply_patch(target: &mut Accrete, p: &content::PatchOp) -> Result<(), String> {
+    match p.op {
+        PatchKind::Replace => target.replace_at(&p.path, p.value.clone()),
+        PatchKind::Append => target.append_at(&p.path, p.value.clone()),
     }
 }
 

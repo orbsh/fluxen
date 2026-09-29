@@ -3,14 +3,13 @@
 
 #[test]
 fn yaml_single_content_item_keeps_action() {
-    // fluxora file shape: one Content head (action:/event:/method:/data:)
+    // ADR 0005 carrier shape: append head with row id
     let src = r#"
-action: join
-method: concat
+action: append
 event: chat
+id: m1
 data:
   type: text
-  id: m1
   bind:
     value:
       kind: default
@@ -19,11 +18,40 @@ data:
     let frame = stage::proto::parse_yaml_to_frame(src).unwrap();
     assert_eq!(frame["ev"], "draw");
     assert_eq!(frame["sender"], "stage");
-    // OneOrMany: single item collapses to an object; action is join (not create)
-    assert_eq!(frame["content"]["action"], "join");
-    assert_eq!(frame["content"]["method"], "concat");
+    // OneOrMany: single item collapses to an object; action is append (not create)
+    assert_eq!(frame["content"]["action"], "append");
+    assert_eq!(frame["content"]["id"], "m1");
     assert_eq!(frame["content"]["event"], "chat");
     assert_eq!(frame["content"]["data"]["type"], "text");
+}
+
+#[test]
+fn yaml_patch_item_roundtrips() {
+    let src = r#"
+action: patch
+event: chat
+id: a1
+path: /bind/value/default
+op: append
+value: " tok"
+"#;
+    let frame = stage::proto::parse_yaml_to_frame(src).unwrap();
+    assert_eq!(frame["content"]["action"], "patch");
+    assert_eq!(frame["content"]["path"], "/bind/value/default");
+    assert_eq!(frame["content"]["op"], "append");
+    assert_eq!(frame["content"]["value"], " tok");
+}
+
+#[test]
+fn yaml_remove_item_roundtrips() {
+    let src = r#"
+action: remove
+event: chat
+id: a1
+"#;
+    let frame = stage::proto::parse_yaml_to_frame(src).unwrap();
+    assert_eq!(frame["content"]["action"], "remove");
+    assert_eq!(frame["content"]["id"], "a1");
 }
 
 #[test]
