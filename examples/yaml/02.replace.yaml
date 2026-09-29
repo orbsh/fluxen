@@ -1,24 +1,31 @@
-action: join
-method: replace
-event: chat
-data:
-  type: case
-  id: ""
-  attrs:
-    class:
-    - f
-    - col
-    - gap
-    - xxx
-    - md
-  children:
-  - type: text
+# Replace demo (ADR 0005): the row is appended once (id `s2`), then the
+# frame replaces the cell's whole value (op: replace — not the retired
+# positional Replace-merge). Send the row once, then re-send repeatedly.
+- action: append
+  event: chat
+  data:
+    type: case
+    id: s2
     attrs:
-      format: md
       class:
-      - clear
-    bind:
-      value:
-        kind: default
-        default: ===
-
+      - f
+      - col
+      - gap
+      - xxx
+      - md
+    children:
+    - type: text
+      attrs:
+        format: md
+        class:
+        - clear
+      bind:
+        value:
+          kind: default
+          default: old
+- action: patch
+  event: chat
+  id: s2
+  path: /children/0/bind/value/default
+  op: replace
+  value: ===

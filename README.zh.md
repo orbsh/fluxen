@@ -48,33 +48,34 @@ console REPL 会把每一帧回显出来（`<- {...}`），包括 UI 上报的�
 curl -X POST --data-binary @examples/kdl/chat_layout.kdl http://localhost:3002/send
 ```
 
-YAML 文件承载完整 Content 表达力（action 可为 create/set/join/tmpl——不再被强制
-包成 create）。文件内容 = 一个 Content 项或其数组；`?fmt=yaml` 显式选择解析器
+YAML 文件承载完整 Content 表达力（action 可为 create/set/append/patch/remove/
+tmpl——不再被强制包成 create；见 docs/decisions/0005-operation-layer-value-patch.md）。
+文件内容 = 一个 Content 项或其数组；`?fmt=yaml` 显式选择解析器
 （默认仍是 KDL）：
 
 ```
 curl -X POST --data-binary @examples/yaml/02.concat.yaml "http://localhost:3002/send?fmt=yaml"
 ```
 
-`examples/fluxen.nu` 是两种载体的 nushell 封装（`send <file> [-p <patch>]` 按扩展名
+`x.nu`（仓库根）是两种载体的 nushell 封装（`send <file> [-p <patch>]` 按扩展名
 分派，另有 border-flashing / message-concat / message-replace 演示循环），
-`examples/push_demo.py` 经裸 `/cli` WebSocket 流式推 Set/Join 帧：
+`examples/push_demo.py` 经裸 `/cli` WebSocket 流式推 Set/Append/Patch 帧：
 
 ```
-nu -c 'use examples/fluxen.nu *; send 02.concat.yaml'
+nu -c 'use x.nu *; send 02.concat.yaml'
 python3 examples/push_demo.py
 ```
 
 帧必须携带渲染通道：顶层 `"ev": "draw"`（见 docs/decisions/0003-ev-channel.md），
 非 draw 帧被 UI 忽略。
 
-要在不重建布局的前提下流式推 Set/Join 帧，经 console 的 `/raw` 发裸消息，例如一次聊天 token 追加：
+要在不重建布局的前提下流式推更新帧，经 console 的 `/raw` 发裸消息，例如向 `m1` 行追加一个聊天 token（JSON Pointer 指向行的线上形状）：
 
 ```
-/raw {"ev":"draw","sender":"demo","content":[{"action":"join","event":"chat","method":"concat","data":{"type":"text","id":"m1","bind":{"value":{"kind":"default","default":"hello "}}}}]}
+/raw {"ev":"draw","sender":"demo","content":[{"action":"patch","event":"chat","id":"m1","path":"/bind/value/default","op":"append","value":"hello "}]}
 ```
 
-流入 rack 的行应携带 `id`——合并与 DOM 身份都以它为键（见 docs/PLAN.md 约定）。
+流入 rack 的行应携带 `id`——补丁寻址与 DOM keyed 身份都以它为键（见 docs/PLAN.md 约定）。
 
 UI 开发要热重建时，在 `stage serve` **之前**起 `trunk serve`（:8281）——网关会代理到它而不是读盘。trunk 是可选开发工具，不是运行时依赖。
 

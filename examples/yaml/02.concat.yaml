@@ -1,24 +1,31 @@
-action: join
-method: concat
-event: chat
-data:
-  type: case
-  id: ""
-  attrs:
-    class:
-    - f
-    - col
-    - gap
-    - xxx
-    - md
-  children:
-  - type: text
+# Streaming append demo (ADR 0005): the row is appended once (id `s1`),
+# then each frame patches only the token — O(1) per frame, no full prefix.
+# Send the row once, then re-send the patch part repeatedly.
+- action: append
+  event: chat
+  data:
+    type: case
+    id: s1
     attrs:
-      format: md
       class:
-      - clear
-    bind:
-      value:
-        kind: default
-        default: . .
-
+      - f
+      - col
+      - gap
+      - xxx
+      - md
+    children:
+    - type: text
+      attrs:
+        format: md
+        class:
+        - clear
+      bind:
+        value:
+          kind: default
+          default: ""
+- action: patch
+  event: chat
+  id: s1
+  path: /children/0/bind/value/default
+  op: append
+  value: . .

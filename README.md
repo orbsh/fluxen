@@ -56,36 +56,37 @@ Push layout frames from a KDL file (wraps as Create — replaces the root layout
 curl -X POST --data-binary @examples/kdl/chat_layout.kdl http://localhost:3002/send
 ```
 
-YAML files carry full Content expressiveness (any action: create/set/join/tmpl —
-the action is preserved, not forced to create). A file is one Content item or an
-array of them; `?fmt=yaml` selects the parser (KDL stays the default):
+YAML files carry full Content expressiveness (any action: create/set/append/
+patch/remove/tmpl — the action is preserved, not forced to create; see
+docs/decisions/0005-operation-layer-value-patch.md). A file is one Content item
+or an array of them; `?fmt=yaml` selects the parser (KDL stays the default):
 
 ```
 curl -X POST --data-binary @examples/yaml/02.concat.yaml "http://localhost:3002/send?fmt=yaml"
 ```
 
-`examples/fluxen.nu` wraps both carriers for nushell (`send <file> [-p <patch>]`
+`x.nu` (repo root) wraps both carriers for nushell (`send <file> [-p <patch>]`
 by extension, plus the border-flashing / message-concat / message-replace demo
-loops), and `examples/push_demo.py` streams Set/Join frames over a raw `/cli`
-WebSocket:
+loops), and `examples/push_demo.py` streams Set/Append/Patch frames over a raw
+`/cli` WebSocket:
 
 ```
-nu -c 'use examples/fluxen.nu *; send 02.concat.yaml'
+nu -c 'use x.nu *; send 02.concat.yaml'
 python3 examples/push_demo.py
 ```
 
 Frames must carry the render channel: top-level `"ev": "draw"` (see
 docs/decisions/0003-ev-channel.md). Non-draw frames are ignored by the UI.
 
-To stream Set/Join frames against a running layout, use `/raw` in the console,
-e.g. a chat token append:
+To stream updates against a running layout, use `/raw` in the console,
+e.g. a chat token append onto row `m1` (JSON Pointer into the row's wire shape):
 
 ```
-/raw {"ev":"draw","sender":"demo","content":[{"action":"join","event":"chat","method":"concat","data":{"type":"text","id":"m1","bind":{"value":{"kind":"default","default":"hello "}}}}]}
+/raw {"ev":"draw","sender":"demo","content":[{"action":"patch","event":"chat","id":"m1","path":"/bind/value/default","op":"append","value":"hello "}]}
 ```
 
-Rows streamed into a rack should carry `id` — merge and DOM identity are both
-keyed on it (see docs/PLAN.md conventions).
+Rows streamed into a rack should carry `id` — row identity (patch addressing
+and DOM keyed diff) are both keyed on it (see docs/PLAN.md conventions).
 
 For hot rebuilds during UI development, start `trunk serve` (port 8281)
 *before* `stage serve` — the gateway will proxy to it instead of reading dist
