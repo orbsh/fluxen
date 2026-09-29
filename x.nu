@@ -1,14 +1,28 @@
+export def start [--dev] {
+    do {
+        cd crates/ui_leptos/
+        if $dev {
+            trunk serve
+        } else {
+            trunk build
+        }
+    }
+    cargo run -p stage -- serve
+}
+
+
 # fluxen send tools — ported from fluxora's x.nu. Gateway-side plumbing
 # (rpk/kafka, /admin/send, watch-message) is dropped: fluxen's stage mirror
 # is the only receiver. Use as a module:
 #   nu -c 'use examples/fluxen.nu *; send 02.concat.yaml'
 
 const BASE = 'http://127.0.0.1:3002'
-const ROOT = path self ..    # repo root (this file lives in examples/)
+const ROOT = path self .    # repo root (this file lives in examples/)
 const YAML = $ROOT | path join examples/yaml
 
 def "fluxen file" [] {
-    (ls ($YAML | path join "*.yaml") | get name) ++ (ls ($ROOT | path join examples/kdl "*.kdl") | get name)
+    glob examples/**/*.{yaml,kdl}
+    | each { $in | path relative-to $env.PWD }
 }
 
 export def send [
