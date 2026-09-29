@@ -1,4 +1,4 @@
-- action: join
+- action: append
   event: chat
   data:
     type: text
@@ -6,7 +6,7 @@
       value:
         kind: default
         default: alex
-- action: join
+- action: append
   event: chat
   data:
     type: text
@@ -14,7 +14,7 @@
       value:
         kind: default
         default: bill
-- action: join
+- action: append
   event: chat
   data:
     type: text

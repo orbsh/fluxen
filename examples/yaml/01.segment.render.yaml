@@ -1,4 +1,4 @@
-action: join
+action: append
 method: concat
 event: chat
 data:

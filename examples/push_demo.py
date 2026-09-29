@@ -30,11 +30,16 @@ def set_ev(event, accrete):
     return {"ev": "draw", "sender": "demo", "content": [{"action": "set", "event": event, "data": accrete}]}
 
 def join(ev, id, v, sel=None):
-    data = {"type": "text", "id": id, "bind": {"value": {"kind": "default", "default": v}}}
+    data = {"type": "text", "bind": {"value": {"kind": "default", "default": v}}}
     if sel:
         # selector lives in attrs (Text's wire shape), not at the top level
         data["attrs"] = {"selector": sel}
-    return {"ev": "draw", "sender": "demo", "content": [{"action": "join", "event": ev, "method": "concat", "data": data}]}
+    return {"ev": "draw", "sender": "demo", "content": [{"action": "append", "event": ev, "id": id, "data": data}]}
+
+def patch(ev, id, v, op="append", path="/bind/value/default"):
+    return {"ev": "draw", "sender": "demo", "content": [{
+        "action": "patch", "event": ev, "id": id, "path": path, "op": op, "value": v
+    }]}
 
 text_accrete = lambda v: {"type": "text", "bind": {"value": {"kind": "default", "default": v}}}
 
@@ -50,8 +55,10 @@ for f in frames:
     send_text(json.dumps(f))
     time.sleep(0.12)
 
+# ADR 0005: streaming tokens are O(1) patches onto the row id — the row's
+# full structure is never re-sent.
 for tok in [" 追帧只挂新行，", "兄弟行的 DOM 节点", "身份跨 merge/append 存活；", "流式 token 进同一行时", "也只换该行内容。"]:
-    send_text(json.dumps(join("chat", "a1", tok)))
+    send_text(json.dumps(patch("chat", "a1", tok)))
     time.sleep(0.22)
 
 print("all frames pushed")
