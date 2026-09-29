@@ -1,0 +1,7 @@
+target/
+crates/*/target/
+crates/*/dist/
+.git/
+docs/
+examples/
+README*.md
