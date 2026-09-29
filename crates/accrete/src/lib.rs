@@ -4,8 +4,6 @@ use schemars::JsonSchema;
 pub mod classify;
 #[cfg(feature = "classify")]
 use classify::Classify;
-#[cfg(feature = "merge")]
-pub mod merge;
 #[cfg(feature = "template")]
 pub mod template;
 #[cfg(any(feature = "ops", feature = "classify"))]
@@ -680,6 +678,112 @@ impl Accrete {
             return false;
         };
         id == oid
+    }
+}
+
+impl Accrete {
+    /// JSON Pointer (RFC 6901) segments, with `~1`/`~0` unescaping.
+    fn pointer_segments(path: &str) -> Result<Vec<String>, String> {
+        if !path.starts_with('/') {
+            return Err(format!("pointer must start with '/': {path:?}"));
+        }
+        Ok(path[1..]
+            .split('/')
+            .map(|s| s.replace("~1", "/").replace("~0", "~"))
+            .collect())
+    }
+
+    /// Apply `f` to the value at `path`, then re-validate the whole node.
+    /// The pointer works on the WIRE shape (serde field names) — the same
+    /// vocabulary external producers see, no second path syntax (ADR 0005).
+    /// On any miss, type violation, or invalid result the node is untouched
+    /// (atomicity comes from the type system, not hand-written setters).
+    fn with_pointer(
+        &mut self,
+        path: &str,
+        f: impl FnOnce(Value) -> Option<Value>,
+    ) -> Result<(), String> {
+        let segs = Self::pointer_segments(path)?;
+        let mut root = serde_json::to_value(&*self).map_err(|e| e.to_string())?;
+
+        // Descend to the parent container (all but the last segment).
+        let mut cur = &mut root;
+        for seg in &segs[..segs.len().saturating_sub(1)] {
+            cur = match cur {
+                Value::Object(map) => {
+                    map.get_mut(seg.as_str()).ok_or_else(|| {
+                        format!("pointer miss: {path:?} (no key {seg:?})")
+                    })?
+                }
+                Value::Array(arr) => {
+                    let idx: usize = seg
+                        .parse()
+                        .map_err(|_| format!("bad array index {seg:?} at {path:?}"))?;
+                    arr.get_mut(idx).ok_or_else(|| {
+                        format!("pointer miss: {path:?} (no index {idx})")
+                    })?
+                }
+                _ => return Err(format!("pointer miss: {path:?} (hit non-container)")),
+            };
+        }
+
+        // Last segment: apply f. Note RFC 6901 makes "/" the member keyed
+        // "" (not the node itself), which the Object arm below handles.
+        let seg = segs.last().unwrap();
+        match cur {
+            Value::Object(map) => {
+                let old = map
+                    .remove(seg.as_str())
+                    .ok_or_else(|| format!("pointer miss: {path:?} (no key {seg:?})"))?;
+                let new = f(old).ok_or_else(|| format!("unsupported append at {path:?}"))?;
+                map.insert(seg.clone(), new);
+            }
+            Value::Array(arr) => {
+                let idx: usize = seg
+                    .parse()
+                    .map_err(|_| format!("bad array index {seg:?} at {path:?}"))?;
+                let old = arr
+                    .get_mut(idx)
+                    .ok_or_else(|| format!("pointer miss: {path:?} (no index {idx})"))?;
+                let take = std::mem::replace(old, Value::Null);
+                let new = f(take).ok_or_else(|| format!("unsupported append at {path:?}"))?;
+                *old = new;
+            }
+            _ => return Err(format!("pointer miss: {path:?} (hit non-container)")),
+        }
+
+        let patched: Accrete =
+            serde_json::from_value(root).map_err(|e| format!("patch rejected: {e}"))?;
+        *self = patched;
+        Ok(())
+    }
+
+    /// Replace the value at a JSON Pointer path (ADR 0005 `op: replace`).
+    pub fn replace_at(&mut self, path: &str, value: Value) -> Result<(), String> {
+        self.with_pointer(path, |_| Some(value))
+    }
+
+    /// Extend the value at a JSON Pointer path (ADR 0005 `op: append`):
+    /// string concatenation or array push. Other shapes are an error —
+    /// the streaming-accumulator job of the retired positional merge.
+    pub fn append_at(&mut self, path: &str, value: Value) -> Result<(), String> {
+        self.with_pointer(path, |mut old| {
+            match old {
+                Value::String(ref mut s) => match value {
+                    Value::String(t) => {
+                        s.push_str(&t);
+                        Some(Value::String(std::mem::take(s)))
+                    }
+                    other => Some(Value::String(other.to_string())),
+                },
+                Value::Array(mut a) => {
+                    a.push(value);
+                    Some(Value::Array(a))
+                }
+                Value::Null => Some(value),
+                _ => None,
+            }
+        })
     }
 }
 

@@ -68,12 +68,62 @@ pub enum Content<T> {
     #[serde(rename = "set")]
     Set(Influx<T>),
 
-    #[serde(rename = "join")]
-    Join(Influx<T>),
+    /// Append a row to the list slot `event` (ADR 0005, ex-join minus its
+    /// merge role). Optional row id; the renderer rejects duplicates.
+    #[serde(rename = "append")]
+    Append(AppendOp<T>),
+
+    /// Remove the row `id` from the list slot `event`.
+    #[serde(rename = "remove")]
+    Remove(RemoveOp),
+
+    /// Value-domain update addressed by JSON Pointer (ADR 0005).
+    /// Plane: `event == ""` → layout root; `id` set → that list row;
+    /// otherwise → the named data slot.
+    #[serde(rename = "patch")]
+    Patch(PatchOp),
 
     #[serde(rename = "empty")]
     #[default]
     Empty,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct AppendOp<T> {
+    pub event: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    pub data: T,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct RemoveOp {
+    pub event: String,
+    pub id: String,
+}
+
+/// Patch write semantics (ADR 0005). `Replace` swaps the pointed value;
+/// `Append` extends a string / pushes into an array (the token-stream job
+/// of the retired positional Concat).
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PatchKind {
+    #[serde(rename = "replace")]
+    #[default]
+    Replace,
+    #[serde(rename = "append")]
+    Append,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PatchOp {
+    pub event: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// JSON Pointer (RFC 6901) into the target node's WIRE shape — the
+    /// field vocabulary external producers see, no second path syntax.
+    pub path: String,
+    pub op: PatchKind,
+    pub value: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -82,25 +132,10 @@ pub struct InfluxTmpl {
     pub data: String,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Method {
-    #[serde(rename = "replace")]
-    #[default]
-    Replace,
-    #[serde(rename = "concat")]
-    Concat,
-    #[serde(rename = "delete")]
-    Delete,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Influx<T> {
     pub event: String,
     pub data: T,
-    #[serde(default)]
-    pub method: Method,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub channel: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

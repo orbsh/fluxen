@@ -22,8 +22,6 @@ pub fn parse_kdl_to_frame(src: &str) -> Result<Value, crate::error::KdlError> {
         content: vec![Content::Create(content::Influx {
             event: "stage".into(),
             data: payload,
-            method: Default::default(),
-            channel: None,
         })],
     };
     Ok(serde_json::to_value(&msg)?)
@@ -35,9 +33,9 @@ pub fn parse_kdl_to_accretes(src: &str) -> Result<Vec<accrete::Accrete>, crate::
 }
 
 /// Parse a YAML document as Content items (one item or an array — the
-/// fluxora file shape: `action:/event:/method:/data:` heads) and wrap them
+/// fluxora file shape: `action:/event:/data:` heads) and wrap them
 /// in a draw frame. Unlike KDL (layout-only, forced into Content::Create),
-/// the action survives: set/join/tmpl files are first-class.
+/// the action survives: set/append/patch/remove/tmpl files are first-class.
 pub fn parse_yaml_to_frame(src: &str) -> Result<Value, crate::error::KdlError> {
     // serde_yaml deserializes straight into the typed Content<Accrete> — the
     // current accrete shape (children + tagged bind), NOT fluxora's retired
