@@ -1,0 +1,38 @@
+# 示例：3D 浏览器能力模块（ADR 0007 模块契约的第一个实现）。
+# 构建：
+#   cargo build --release                       # 产物在 workspace target 下
+#   wasm-bindgen gen --target web -o pkg pkg/3dbrowser.wasm   # pkg/ 即 CDN 单元
+# pkg/ 目录内容（3dbrowser.js + 3dbrowser_bg.wasm）整体上传 CDN，
+# Canvas 组件的 url 指向 3dbrowser.js。
+[workspace]
+
+[package]
+name = "browser3d"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+three-d = { version = "0.19", default-features = false }
+three-d-asset = { version = "0.10", features = ["gltf"] }
+ciborium = "0.2"
+glow = "0.17"
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "HtmlCanvasElement",
+    "WebGl2RenderingContext",
+    "Document",
+    "Element",
+    "CssStyleDeclaration",
+    "console",
+] }
+
+[profile.release]
+opt-level = "s"
+lto = "fat"

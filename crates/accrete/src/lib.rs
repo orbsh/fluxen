@@ -244,6 +244,27 @@ pub struct Diagram {
     pub bind: Option<HashMap<String, Bind>>,
 }
 
+/// 外部渲染模块的原位挂载容器（ADR 0007）。
+/// 核心不解释 `data`——载荷语义完全归模块；尺寸/样式走 `attrs`，
+/// 与数据流的联动走现有 bind 槽协议（`set`/`patch` 按 `data_event` 寻址）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+pub struct Canvas {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// CDN 上的 ES module 地址（导出 mount/update/resize/unmount 契约）。
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<SizeAttr>,
+    /// `bind["value"]`：载荷惯例与 Chart/diagram 同族——`kind: source` 指向
+    /// 具名数据槽（槽内节点的 `bind.value.default` 原始 JSON 即模块 data 区），
+    /// 流式喂数据 = 对该槽 `set`/`patch`（指针 `/bind/value/default/...`）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bind: Option<HashMap<String, Bind>>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
@@ -642,6 +663,8 @@ pub enum Accrete {
     chart(Chart),
     #[ui_acrete(has_id = "true")]
     diagram(Diagram),
+    #[ui_acrete(has_id = "true")]
+    canvas(Canvas),
     float(Float),
     #[ui_acrete(has_id = "true")]
     fold(Fold),
