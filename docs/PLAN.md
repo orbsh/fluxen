@@ -73,10 +73,13 @@
 渲染行为相关（§1 过滤路径）跑 e2e（draw 帧正常渲染、伪造 ev 值不渲染且无 panic）。
 主题分提交：ADR+代码各一、kdl_parse+示例改写一、yaml+examples 迁移一、nu 工具一（提交前确认分组）。
 
-已知缺陷（非本计划范围，勿 drive-by）：x.nu 移根后头部注释仍写
-`use examples/fluxen.nu` 与 "(this file lives in examples/)"，待 nu 工具主题提交时顺路修。
+收尾修复（2026-09-30 e2e 暴露）：`dispatch_msg` 的 layout 根 patch 路由应用成功
+后未写回 `ctx.layout` 信号，响应式根永不重建——现 `is_ok()` 时 `set(d)`。
+`x.nu` 的 `flashing-frame` 同步改为单条 layout 根 patch 帧（不再重发整棵树）。
+e2e 复验：create 布局 → patch `/children/.../item/1/attrs/class` → 新行 DOM 带
+新 class（primary→disable 两轮）、已有行 `===` 存活。
 
-### 6. 操作层重构：Value 与 Patch（ADR 0005，active）
+### 6. 操作层重构：Value 与 Patch（ADR 0005）— done 2026-09-30
 
 - `content`：`Content` enum 改为 create/set/append/patch/remove/empty；
   新增 `PatchOp { event, id, path, op, value }`（path=JSON Pointer，
