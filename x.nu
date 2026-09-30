@@ -14,10 +14,10 @@ export def start [--dev] {
 # fluxen send tools — ported from fluxora's x.nu. Gateway-side plumbing
 # (rpk/kafka, /admin/send, watch-message) is dropped: fluxen's stage mirror
 # is the only receiver. Use as a module:
-#   nu -c 'use examples/fluxen.nu *; send 02.concat.yaml'
+#   nu -c 'use x.nu *; send 02.concat.yaml'
 
 const BASE = 'http://127.0.0.1:3002'
-const ROOT = path self .    # repo root (this file lives in examples/)
+const ROOT = path self .    # repo root (this file lives at the root)
 const YAML = $ROOT | path join examples/yaml
 
 def "fluxen file" [] {
@@ -52,20 +52,22 @@ export def send [
     }
 }
 
-# cycle the rack's default row border colour (x.nu:252 port).
-# Builds the frame in-process with a cell-path update — deep-merging lists
-# through `merge deep` is positional and lossy here; update is exact.
+# cycle the rack's default row border colour via an O(1) layout-root patch
+# (ADR 0005): replace only that class array, never re-send the tree.
 def flashing-frame [colour: string] {
-    let f = $YAML | path join "00.chat_layout.yaml"
-    open $f | update data.children.1.children.1.children.0.children.0.item.1.attrs.class [
-        "nogrow" "as-stretch" "box" "border" "round" "shadow" $colour
-    ]
+    {
+        action: patch
+        event: ""
+        path: "/children/1/children/1/children/0/children/0/item/1/attrs/class"
+        op: replace
+        value: ["nogrow" "as-stretch" "box" "border" "round" "shadow" $colour]
+    }
 }
 
 export def border-flashing [] {
     for _ in 1.. {
         for i in [primary disable secondary accent] {
-            sleep 0.2sec
+            sleep 0.02sec
             flashing-frame $i | to yaml | http post --content-type "text/plain" $"($BASE)/send?fmt=yaml"
         }
     }

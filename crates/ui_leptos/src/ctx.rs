@@ -231,7 +231,12 @@ fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
                 // 其余 = 具名数据槽。
                 let result = if x.event.is_empty() {
                     let mut d = ctx.layout.get_untracked();
-                    apply_patch(&mut d, x)
+                    let r = apply_patch(&mut d, x);
+                    // 写回 layout 信号，否则响应式根（lib.rs tracked get）永不重建
+                    if r.is_ok() {
+                        ctx.layout.set(d);
+                    }
+                    r
                 } else if let Some(id) = &x.id {
                     let slot = ctx.slot_for_list(&x.event);
                     let cur = slot.get_untracked();
