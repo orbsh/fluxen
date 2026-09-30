@@ -29,12 +29,13 @@ def send_text(payload):
 def set_ev(event, accrete):
     return {"ev": "draw", "sender": "demo", "content": [{"action": "set", "event": event, "data": accrete}]}
 
-def join(ev, id, v, sel=None):
-    data = {"type": "text", "bind": {"value": {"kind": "default", "default": v}}}
+def append(ev, id, v, sel=None):
+    # row identity lives in the data (ADR 0005, cf. examples/yaml/02.concat.yaml)
+    data = {"type": "text", "id": id, "bind": {"value": {"kind": "default", "default": v}}}
     if sel:
         # selector lives in attrs (Text's wire shape), not at the top level
         data["attrs"] = {"selector": sel}
-    return {"ev": "draw", "sender": "demo", "content": [{"action": "append", "event": ev, "id": id, "data": data}]}
+    return {"ev": "draw", "sender": "demo", "content": [{"action": "append", "event": ev, "data": data}]}
 
 def patch(ev, id, v, op="append", path="/bind/value/default"):
     return {"ev": "draw", "sender": "demo", "content": [{
@@ -46,10 +47,10 @@ text_accrete = lambda v: {"type": "text", "bind": {"value": {"kind": "default", 
 frames = [
     set_ev("login", text_accrete("chat with **AI** (user: alice)")),
     set_ev("float", text_accrete("keyed rack demo")),
-    join("channel::list", "1", "general"),
-    join("channel::list", "2", "rust-dev"),
-    join("chat", "u1", "keyed rack 修好了？给我看看", sel="ask"),
-    join("chat", "a1", "修好了——"),
+    append("channel::list", "1", "general"),
+    append("channel::list", "2", "rust-dev"),
+    append("chat", "u1", "keyed rack 修好了？给我看看", sel="ask"),
+    append("chat", "a1", "修好了——"),
 ]
 for f in frames:
     send_text(json.dumps(f))
