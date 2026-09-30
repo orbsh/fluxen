@@ -69,7 +69,8 @@ pub enum Content<T> {
     Set(Influx<T>),
 
     /// Append a row to the list slot `event` (ADR 0005, ex-join minus its
-    /// merge role). Optional row id; the renderer rejects duplicates.
+    /// merge role). Row identity lives in the data (`data.id`); the renderer
+    /// rejects duplicate row ids.
     #[serde(rename = "append")]
     Append(AppendOp<T>),
 
@@ -91,8 +92,6 @@ pub enum Content<T> {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AppendOp<T> {
     pub event: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
     pub data: T,
 }
 

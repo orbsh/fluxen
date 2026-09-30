@@ -3,13 +3,13 @@
 
 #[test]
 fn yaml_single_content_item_keeps_action() {
-    // ADR 0005 carrier shape: append head with row id
+    // ADR 0005 carrier shape: append head; row id lives in the DATA
     let src = r#"
 action: append
 event: chat
-id: m1
 data:
   type: text
+  id: m1
   bind:
     value:
       kind: default
@@ -20,9 +20,9 @@ data:
     assert_eq!(frame["sender"], "stage");
     // OneOrMany: single item collapses to an object; action is append (not create)
     assert_eq!(frame["content"]["action"], "append");
-    assert_eq!(frame["content"]["id"], "m1");
     assert_eq!(frame["content"]["event"], "chat");
     assert_eq!(frame["content"]["data"]["type"], "text");
+    assert_eq!(frame["content"]["data"]["id"], "m1");
 }
 
 #[test]

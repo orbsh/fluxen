@@ -19,7 +19,6 @@ fn sample() -> Message<Payload> {
         created: None,
         content: vec![Content::Append(AppendOp {
             event: "chat".into(),
-            id: Some("a1".into()),
             data: Payload {
                 n: 7,
                 s: "hi".into(),
@@ -69,7 +68,6 @@ fn action_wire_names_are_lowercase() {
         (
             Content::Append(AppendOp {
                 event: "e".into(),
-                id: None,
                 data: Payload { n: 1, s: "x".into() },
             }),
             "append",
