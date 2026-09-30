@@ -30,6 +30,8 @@ enum Cmd {
     },
     /// Offline: parse KDL and print the Accrete JSON tree
     Tojson { file: String },
+    /// Print the JSON Schema (draft 2020-12) of the Accrete wire shape
+    Schema,
 }
 
 #[tokio::main]
@@ -72,6 +74,11 @@ async fn main() -> anyhow::Result<()> {
                 serde_json::to_value(&accretes)?
             };
             println!("{}", serde_json::to_string_pretty(&value)?);
+            Ok(())
+        }
+        Cmd::Schema => {
+            let schema = schemars::schema_for!(accrete::Accrete);
+            println!("{}", serde_json::to_string_pretty(&schema)?);
             Ok(())
         }
     }

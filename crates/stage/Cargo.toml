@@ -8,8 +8,9 @@ name = "stage"
 path = "src/main.rs"
 
 [dependencies]
-accrete = { workspace = true, features = ["classify", "ops", "template"] }
+accrete = { workspace = true, features = ["classify", "ops", "template", "schema"] }
 content = { workspace = true }
+schemars = "1.2.1"
 anyhow = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
