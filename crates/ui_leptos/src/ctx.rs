@@ -196,9 +196,9 @@ fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
                 let slot = ctx.slot_for_list(&x.event);
                 let cur = slot.get_untracked();
                 let mut list = std::sync::Arc::unwrap_or_clone(cur);
-                // 空串 id = 位置行（无身份，可重复追加），与 DSL 的 no-id 约定一致
-                let id_of = |s: &Option<String>| s.clone().filter(|s| !s.is_empty());
-                let id = id_of(&x.id).or_else(|| id_of(d.get_id()));
+                // 行身份在数据里（ADR 0005：`data.id`）；空串 id = 位置行
+                // （无身份，可重复追加），与 DSL 的 no-id 约定一致
+                let id = d.get_id().clone().filter(|s| !s.is_empty());
                 if let Some(id) = &id {
                     // 行 id 唯一性在边界守住（ADR 0005）：重复 append 拒收，
                     // keyed 渲染身份不留给下游打架。
@@ -209,13 +209,6 @@ fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
                             id
                         );
                         continue;
-                    }
-                    // head id 落进行身份（patch/remove 按 id 寻行，须与数据一致）
-                    if d.get_id().as_deref().filter(|s| !s.is_empty()) != Some(id.as_str()) {
-                        if let Err(e) = d.replace_at("/id", Value::String(id.clone())) {
-                            tracing::warn!("append row {id:?} id stamp failed: {e}");
-                            continue;
-                        }
                     }
                 }
                 list.push(d.clone());
