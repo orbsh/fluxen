@@ -106,6 +106,17 @@ e2e 复验：create 布局 → patch `/children/.../item/1/attrs/class` → 新�
 
 ## Resolved
 
+### Enter "does nothing" — console dropped CBOR uplinks (fixed 2026-09-30)
+
+Typing + Enter in the chat input sends the event frame and clears the box, yet
+the stage console printed nothing, so the only feedback surface of the dev
+mirror looked dead. Root cause was not the widget: `console.rs` printed only
+`Message::Text` frames, while the UI's default send codec is CBOR (binary) —
+every event frame uplinked by a default page was silently dropped by the
+printer. The console now auto-decodes Binary frames back to JSON
+(`ActiveCodec::decode_auto`, first byte decides) before printing. Verified
+e2e on the default (CBOR) page: `<- {"data":"cbor-fixed","event":"message"}`.
+
 ### Input clear-on-Enter (dioxus-port defect) — done 2026-09
 
 Ported from dioxus with the clear logic intact (`slot.set(default)` after
