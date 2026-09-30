@@ -119,6 +119,39 @@ e2e 复验：create 布局 → patch `/children/.../item/1/attrs/class` → 新�
 - 后续独立小改动（勿耦合提交）：Chart 渲染器演进（ApexCharts eval → GoG
   spec + 别的渲染实现）——独立议题、独立 ADR，与 Canvas 无关。
 
+待办（2026-09-30 实现落地后遗留，主提交 934ab6c）：
+- [ ] 模块产物落静态服务：拷贝 `examples/modules/3dbrowser/pkg/browser3d.js +
+      browser3d_bg.wasm + index.js` → `crates/ui_leptos/assets/3dbrowser/`
+      （stage serve 自带静态服务，Canvas url 指 `/assets/3dbrowser/index.js`）。
+      产物不入 git（pkg/ 被 .gitignore），按 Cargo.toml 头注释重建。
+- [ ] 示例帧 `examples/yaml/13.canvas.3dbrowser.yaml`：create 布局挂
+      `canvas { url, bind.value default {primitives:{cube:null...}, assets:{duck:null}} }`
+      → 逐帧 `patch path=/bind/value/default/assets/duck op=replace value=<url>`
+      验证流式加载（null 占位是 ADR 0005 指针只能 replace 已存在键的约定）。
+- [ ] e2e 全链：create→update→resize→remove + host.send 上行回 console。
+- [ ] ADR 0007 状态"草案"→"已接受"（实现已落地，等确认）。
+- [ ] 模块加载失败的可重试语义：3dbrowser 的 seen 撤下目前是桩（forget()
+      no-op），正式版记失败表或提供显式 reset；示例够用，生产前补。
+
+后续单元（本地联动：bind 路由机制，统一协议而非 Canvas 专属）：
+- [ ] 需求：点击频道列表切频道、点菜单切页面——组件间纯前端联动，不走
+      transport 往返。现状所有 emit（button/select/form/input 的
+      `kind: event`）一律上行；接收侧（`kind: source` 读 data/list 槽）
+      机制已存在且组件无关。缺的只是路由：把某个事件的落点从服务端改成
+      本地信号。
+- [ ] 方案：bind 的事件类 kind 增加本地目标（如 `Local { signal }`，或
+      复活死变体 `Target { target }` 承载此语义——做时一并裁决命名）：
+      emit 组件命中本地目标 → 直接写 Ctx 具名 data 槽，不上行。接收侧
+      零改动：case/placeholder 渲染 source 槽 = 切页面；rack 订阅 list
+      槽 = 切内容。Canvas 只是新增的一个 emit 方（host.send 同样可路由
+      本地），机制对它无特判。
+- [ ] wire 面影响：kind 集合改动需同步 schema/examples/生产端；布局帧
+      由 AI 生产者声明连线（事件名→槽名），UI 核心不预设任何业务联动。
+- [ ] bind 现状核对（2026-09-30）：kind 标签是 serde 统一形态的产物——
+      早期组件类型隐式决定方向（输入框=发送、纯展示=接收），加字段后
+      历史 `Target { target }` 变体全仓无消费者（ui 不读、stage/examples
+      不产，死变体）。注意 kind 集合改动是 wire 面（schema/示例/生产端同扫）。
+
 ## Resolved
 
 ### Enter "does nothing" — console dropped CBOR uplinks (fixed 2026-09-30)
