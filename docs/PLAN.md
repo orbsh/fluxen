@@ -104,6 +104,21 @@ e2e 复验：create 布局 → patch `/children/.../item/1/attrs/class` → 新�
 - 删除项记录：`Method`、`merge.rs`、join 的合并职能、02.concat/02.replace
   旧形态。fluxora 为存档，不做兼容。
 
+### 7. Canvas 组件：外部渲染模块原位挂载（ADR 0007，草案待确认）— pending
+
+- accrete 新变体 `Canvas { id, url, attrs, bind }`（wire tag `canvas`），
+  derive 门控照 Chart 抄（schema/ops/classify + `has_id="true"`）。
+- ui_leptos 挂载：NodeRef on_load → 动态 `import(url)` → 导出契约检查
+  （mount/update/resize/unmount）→ mount(el, CBOR(bind["value"]), host)；
+  槽信号订阅 → update；ResizeObserver → resize；Owner drop → unmount。
+  失败/缺导出 = warn + 空容器。
+- data 区零新机制：载荷 = `bind["value"]` 槽，流式喂 = 现有 set/patch
+  pointer 路径；`host.send` 上行通道留口不设语义（事件绑定后置）。
+- 测试：serde 回环 + schema dump 含新变体；挂载路径 e2e（用最小探针模块：
+  导出四函数、mount 画个色块，验证 create→update→resize→remove 全链）。
+- 后续独立小改动（勿耦合提交）：Chart 渲染器演进（ApexCharts eval → GoG
+  spec + 别的渲染实现）——独立议题、独立 ADR，与 Canvas 无关。
+
 ## Resolved
 
 ### Enter "does nothing" — console dropped CBOR uplinks (fixed 2026-09-30)

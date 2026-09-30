@@ -225,6 +225,13 @@ fn accrete_value(node: &KdlNode) -> Result<Value, KdlError> {
         }
     }
 
+    // accrete::Canvas { url, ... }: url is the first positional arg.
+    if name == "canvas" {
+        if let Some(first) = entry_args(node).first() {
+            fields.insert("url".into(), entry_scalar(first));
+        }
+    }
+
     // accrete::Template { name, data }: name is the first positional arg,
     // data comes from the `data` child block (empty by default — serde
     // rejects a missing `data` field).

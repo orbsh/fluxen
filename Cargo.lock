@@ -3197,6 +3197,7 @@ version = "0.1.0"
 dependencies = [
  "accrete",
  "anyhow",
+ "ciborium",
  "console_error_panic_hook",
  "content",
  "futures",
@@ -3215,6 +3216,7 @@ dependencies = [
  "transport-ws",
  "ui_leptos_macro",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 
