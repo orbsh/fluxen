@@ -2,19 +2,19 @@
 
 > 本文是 [README.md](README.md) 的中文镜像；表述冲突时以英文版为准。
 
-AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 流式合并 + CBOR 编码。自 Fluxora 拆出（事件总线/Gateway 半区成为 [Prism](../prism/)；Fluxora 本体迁向 Leptos 并保留原名）。
+AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set/append/patch/remove）+ CBOR 编码。自 Fluxora 拆出（事件总线/Gateway 半区成为 [Prism](../prism/)；Fluxora 本体迁向 Leptos 并保留原名）。
 
-设计文档：[Fluxora 架构](../../.hermes/wiki/projects/fluxora-architecture.md)（wiki —— Accrete DSL、merge 策略、codec 决策均在彼处）。
+设计文档：[Fluxora 架构](../../.hermes/wiki/projects/fluxora-architecture.md)（wiki —— Accrete DSL、操作协议、codec 决策均在彼处）。
 
 ## 迁入内容
 
 - **Accrete DSL**（`accrete` / `accrete_macro`）：闭合类型 enum，`#[serde(tag = "type")]`，Bind 系统，面向 AI 生成的 JsonSchema 校验
-- **流式合并**（`merge`）：Replace / Concat / Delete 三种策略，`Vec<String>` 片段缓冲
+- **操作协议**（ADR 0005，取代原流式合并）：create/set/append/patch/remove 动作；`patch` 以 JSON Pointer 寻址任意节点的线上形状；`tmpl` 注册槽位替换模板（ADR 0006）
 - **编码**（`codec`）：`ActiveCodec` 枚举分发（Json/CBOR），URL 参数握手定版，`encode_ws()` 辅助函数
 
 ## 定位
 
-只做渲染层——没有事件总线，没有 gateway，没有传输。上游（Prism / Aura realm / 任何生产者）发送 Accrete 操作，Fluxen 负责渲染与合并。厚壳原则不变：AI 生成经 schema 校验的结构化 JSON（内容 + 结构），框架掌握样式与渲染确定性。
+只做渲染层——没有事件总线，没有 gateway，没有传输。上游（Prism / Aura realm / 任何生产者）发送 Accrete 操作，Fluxen 负责渲染与操作应用。厚壳原则不变：AI 生成经 schema 校验的结构化 JSON（内容 + 结构），框架掌握样式与渲染确定性。
 
 ## 开发工作流（`stage`）
 
@@ -40,7 +40,7 @@ UI 的 WS 地址默认取页面 origin，无需配置。接收侧逐帧自适应
 `{` = JSON，CBOR map 主类型 = CBOR），网关可混发两种格式；`?codec=json` 只
 决定 UI 自身*发送*（用户事件）的格式——方便在 devtools 里读。发送默认为 CBOR。
 
-console REPL 会把每一帧回显出来（`<- {...}`），包括 UI 上报的事件——既是发送端也是事件监视器。命令：`/send <file.kdl>`、`/raw <json>`（发送裸 `Message<Accrete>`——发 Set/Join 帧必须走这条）、`/quit`。
+console REPL 会把每一帧回显出来（`<- {...}`），包括 UI 上报的事件——既是发送端也是事件监视器。命令：`/send <file.kdl>`、`/raw <json>`（发送裸 `Message<Accrete>`——发 Set/Append/Patch 帧必须走这条，KDL 表达不了）、`/quit`。
 
 从任意位置推送内容（KDL 一律包装成 Create——替换整个根布局）：
 
@@ -77,12 +77,19 @@ python3 examples/push_demo.py
 
 流入 rack 的行应携带 `id`——补丁寻址与 DOM keyed 身份都以它为键（见 docs/PLAN.md 约定）。
 
+Bind 路由（ADR 0008）：`kind: event` 走动作协议上行；`kind: local { slot }`
+把载荷留在浏览器内的值平面（`ctx.vals`），任意读方组件订阅同槽（可选
+`path` 提取——`kind: source` 也获得了同一 `path`，指向节点的线上形状）。
+`examples/kdl/14.local_routing.kdl` / `examples/yaml/14.local_routing.yaml`
+演示菜单→标题的频道模式，零 transport 往返。
+
 UI 开发要热重建时，在 `stage serve` **之前**起 `trunk serve`（:8281）——网关会代理到它而不是读盘。trunk 是可选开发工具，不是运行时依赖。
 
 离线助手（不需要起服务）：
 
 ```
 cargo run -p stage -- tojson examples/kdl/chat_layout.kdl   # KDL -> Accrete JSON
+cargo run -p stage -- schema                                # Accrete 线上形状 JSON Schema
 ```
 
 流式语义、行身份行为、codec 细节：见上文 wiki 链接与 `docs/decisions/` 下的 ADR。
