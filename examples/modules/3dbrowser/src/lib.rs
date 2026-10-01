@@ -237,6 +237,15 @@ pub fn unmount(ctx: u32) {
 pub fn frame(ctx: u32) -> Result<(), JsError> {
     let job = with_ctx(ctx, |s| s.pump())?;
     if let Some((id, url)) = job {
+        // reqwest 只吃绝对 URL：相对 url 按 document.baseURI 归一化
+        // （载荷约定同源相对路径，示例 `/assets/3dbrowser/tile.glb`）。
+        let base = web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.base_uri().ok().flatten())
+            .unwrap_or_default();
+        let url = web_sys::Url::new_with_base(&url, &base)
+            .map(|u| u.href())
+            .unwrap_or(url);
         // 异步加载：成功后回注 state；失败的 asset 不回 seen，下次 update 可重试
         wasm_bindgen_futures::spawn_local(async move {
             match three_d_asset::io::load_async(&[&url]).await {
