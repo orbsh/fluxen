@@ -2,10 +2,8 @@
 //! 故此处 re-export 所有组件函数，使它们在 `crate::components` 命名空间可见。
 pub mod case;
 pub use case::{case_, placeholder_};
-pub mod chart;
-pub use chart::chart_;
 pub mod canvas;
-pub use canvas::canvas_;
+pub use canvas::{canvas_, chart_};
 pub mod diagram;
 pub use diagram::diagram_;
 pub mod float;

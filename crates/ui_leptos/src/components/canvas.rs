@@ -1,6 +1,6 @@
 use crate::Ctx;
 use accrete::classify::Classify;
-use accrete::{AccreteOps, Canvas};
+use accrete::{AccreteOps, Canvas, Chart};
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::Value;
@@ -8,15 +8,17 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
-/// 外部渲染模块的原位挂载容器（ADR 0007）。
+/// 外部渲染模块的原位挂载（ADR 0007 宿主 + ADR 0009 Chart 共用通道）。
 ///
-/// 核心不知道模块是什么：url 指向 CDN 上的 ES module，须导出
-/// mount/update/resize/unmount 四函数；数据区（`bind["value"]` 惯例，同
-/// chart/diagram）以 CBOR 字节推给模块，语义完全归模块（示例 3dbrowser 用
-/// `{primitives:{...}, assets:{key:url}}`）。渲染循环与输入事件归模块自己
-/// （见示例 index.js 的包装），宿主只提供容器、载荷变化通知与尺寸。
+/// 核心不知道模块是什么：url 指向 ES module，须导出
+/// mount/update/resize/unmount 四函数；数据区（`bind["value"]` 惯例）
+/// 以 CBOR 字节推给模块，语义完全归模块（3dbrowser 用
+/// `{primitives, assets}`，g2chart 用 G2 spec）。渲染循环与输入事件归
+/// 模块自己，宿主只提供容器、载荷变化通知与尺寸。
+///
+/// canvas 与 chart 的差异全在三个入参：url、容器样式（chart 用 class
+/// 无显式尺寸）、其余同构——因此共享一个 mount_module，不复制挂载逻辑。
 pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
-    let url = accrete.url.clone();
     let style = accrete
         .attrs
         .as_ref()
@@ -27,30 +29,60 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
         .as_ref()
         .and_then(|a| a.get_class().clone().map(|c| c.join(" ")))
         .unwrap_or_default();
+    let (source, inline) = bind_value(&accrete);
+    mount_module(&id, &accrete.url, style, css, source, inline, ctx)
+}
 
-    // 载荷解析沿用 bind["value"] 惯例：inline default 直用；
-    // kind:source 读槽内节点（其 bind.value.default 优先，否则整个节点 JSON）。
-    // 流式喂数据 = 对源槽 set/patch（ADR 0005 的指针协议），零新机制。
-    let source = accrete
-        .get_bind()
-        .and_then(|b| b.get("value"))
-        .and_then(|v| match &v.variant {
-            accrete::BindVariant::Source { source, .. } => Some(source.clone()),
-            _ => None,
-        });
-    let inline = accrete
-        .get_bind()
-        .and_then(|b| b.get("value"))
-        .and_then(|v| v.default.clone());
+/// G2 图表：载荷 = G2 spec（GoG 词汇的纯 JSON），渲染器 = url 指向的
+/// 封装模块（ADR 0009，默认 /assets/g2chart/index.js）。eval 注入已
+/// 退役——挂载走 canvas 同一条 import(url) 契约通道。
+pub fn chart_(accrete: Chart, ctx: &Ctx, id: String) -> AnyView {
+    let css = accrete
+        .attrs
+        .as_ref()
+        .and_then(|a| a.get_class().clone().map(|c| c.join(" ")))
+        .unwrap_or_default();
+    let (source, inline) = bind_value(&accrete);
+    mount_module(&id, &accrete.url, String::new(), css, source, inline, ctx)
+}
 
-    // 空槽/无载荷 = `{}`：模块的 spec 全字段有默认，空 map 是合法"尚无数据"。
-    // 喂 null 会让严格 decode 的模块在 mount 就拒绝——而"先挂空布局、
-    // 后写数据槽"正是流式的标准顺序（e2e 抓到的缺陷）。
+/// `bind["value"]` → (source 槽名, inline default)。
+fn bind_value(a: &impl AccreteOps) -> (Option<String>, Option<Value>) {
+    let b = a.get_bind().and_then(|b| b.get("value")).cloned();
+    match b {
+        Some(accrete::Bind {
+            variant: accrete::BindVariant::Source { source, .. },
+            ..
+        }) => (Some(source), None),
+        Some(accrete::Bind { default, .. }) => (None, default),
+        None => (None, None),
+    }
+}
+
+/// 挂载全逻辑：解析载荷闭包 → import(url) → 契约检查 → mount →
+/// update 订阅 → ResizeObserver → unmount。失败路径一律 warn + 空容器
+/// （fail-loud，对齐 ADR 0003 惯例）。
+fn mount_module(
+    id: &str,
+    url: &str,
+    style: String,
+    css: String,
+    source: Option<String>,
+    inline_default: Option<Value>,
+    ctx: &Ctx,
+) -> AnyView {
+    // 载荷解析：inline default 直用；kind:source 读槽内节点（其
+    // bind.value.default 优先，否则整个节点 JSON）。
+    // 流式喂数据 = 对源槽 set/patch（ADR 0005 指针协议），零新机制。
+    // 空槽/无载荷 = `{}`：模块的 spec 全字段有默认，空 map 是合法
+    // "尚无数据"；喂 null 会让严格 decode 的模块 mount 即拒——而
+    // "先挂空布局、后写数据槽"正是流式标准顺序（e2e 抓到的缺陷）。
     let empty = Value::Object(Default::default());
+    let inline = inline_default.unwrap_or(Value::Null);
     let payload: Rc<dyn Fn() -> Value> = {
         let source = source.clone();
-        let inline = inline.clone();
         let ctx = ctx.clone();
+        let empty = empty.clone();
         Rc::new(move || {
             if let Some(src) = &source {
                 return match ctx.slot_for_data(src).get_untracked().map(|a| (*a).clone()) {
@@ -62,13 +94,18 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
                     None => empty.clone(),
                 };
             }
-            inline.clone().unwrap_or(empty.clone())
+            if inline.is_null() {
+                empty.clone()
+            } else {
+                inline.clone()
+            }
         })
     };
 
     let nr = NodeRef::<Div>::new();
-    let el_id = id.clone();
+    let el_id = id.to_string();
     let ctx2 = ctx.clone();
+    let url = url.to_string();
     nr.on_load(move |el| {
         let el: web_sys::HtmlElement = el.dyn_into().expect("div is element");
         let id = el_id.clone();
@@ -81,8 +118,8 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
             let data0 = encode(&payload0());
 
             // 宿主通道：host.send(event, cborBytes) → 现有动作帧上行。
-            // 闭包持 Rc<Ctx> + id，每次回调 clone ctx，事件名与解码后的
-            // JSON 一起交给 ctx.send（与表单 submit 同一条 uplink）。
+            // 闭包持 Rc<Ctx> + id，事件名与解码后的 JSON 一起交给
+            // ctx.send（与表单 submit 同一条 uplink）。
             let host = js_sys::Object::new();
             let cb = Closure::<dyn FnMut(String, js_sys::Uint8Array)>::new(
                 {
@@ -101,11 +138,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
                     }
                 },
             );
-            let _ = js_sys::Reflect::set(
-                &host,
-                &JsValue::from_str("send"),
-                cb.as_ref(),
-            );
+            let _ = js_sys::Reflect::set(&host, &JsValue::from_str("send"), cb.as_ref());
             // cb 不 drop（closure 转成 JS 函数后被模块持有，泄漏归模块生命周期管）
             cb.into_js_value(); // 让所有权交给 JS，宿主不再 retain
 
@@ -113,7 +146,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
             let module = match import_module(&url).await {
                 Some(m) => m,
                 None => {
-                    tracing::warn!("canvas {id}: import {url:?} failed");
+                    tracing::warn!("module host {id}: import {url:?} failed");
                     return;
                 }
             };
@@ -125,7 +158,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
                     .and_then(|v| v.dyn_into::<js_sys::Function>().ok());
             }
             let [Some(mount), Some(update), Some(resize), Some(unmount)] = contract else {
-                tracing::warn!("canvas {id}: module {url:?} misses contract exports");
+                tracing::warn!("module host {id}: module {url:?} misses contract exports");
                 return;
             };
 
@@ -137,7 +170,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
             let ret = match js_sys::Reflect::apply(&mount, &JsValue::UNDEFINED, &args) {
                 Ok(r) => r,
                 Err(e) => {
-                    tracing::warn!("canvas {id}: mount threw: {e:?}");
+                    tracing::warn!("module host {id}: mount threw: {e:?}");
                     return;
                 }
             };
@@ -145,7 +178,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
                 match wasm_bindgen_futures::JsFuture::from(p).await {
                     Ok(v) => v,
                     Err(e) => {
-                        tracing::warn!("canvas {id}: mount rejected: {e:?}");
+                        tracing::warn!("module host {id}: mount rejected: {e:?}");
                         return;
                     }
                 }
@@ -173,14 +206,14 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
                         a.push(&cid);
                         a.push(&d.into());
                         if let Err(e) = js_sys::Reflect::apply(&update, &JsValue::UNDEFINED, &a) {
-                            tracing::warn!("canvas {id}: update threw: {e:?}");
+                            tracing::warn!("module host {id}: update threw: {e:?}");
                         }
                     }
                 });
             }
 
             // 尺寸归宿主：ResizeObserver 观察容器（css 像素）→ resize(cid, w, h)。
-            // dpr 换算与 canvas.width 设置归模块（见 index.js）。
+            // dpr 换算与 canvas.width 设置归模块（见各 index.js）。
             {
                 let cid_ro = cid.clone();
                 let cb = Closure::<dyn FnMut(js_sys::Array, JsValue)>::new(
@@ -207,7 +240,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
                             if let Err(err) =
                                 js_sys::Reflect::apply(&resize, &JsValue::UNDEFINED, &a)
                             {
-                                tracing::warn!("canvas {id}: resize threw: {err:?}");
+                                tracing::warn!("module host {id}: resize threw: {err:?}");
                             }
                         }
                     },
@@ -238,7 +271,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
     });
 
     div()
-        .id(id.as_str())
+        .id(id)
         .class(css.as_str())
         .style(style.as_str())
         .node_ref(nr)

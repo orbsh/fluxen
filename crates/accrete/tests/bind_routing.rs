@@ -67,6 +67,20 @@ fn get_at_walks_wire_shape() {
 }
 
 #[test]
+fn chart_url_has_backward_compatible_default() {
+    // ADR 0009: old frames without `url` still decode (serde default).
+    let c: accrete::Chart = serde_json::from_value(json!({
+        "bind": {"value": {"kind": "default", "default": {"type": "line"}}}
+    }))
+    .unwrap();
+    assert_eq!(c.url, "/assets/g2chart/index.js");
+    // explicit url wins
+    let c2: accrete::Chart =
+        serde_json::from_value(json!({"url": "https://cdn/g2chart/index.js"})).unwrap();
+    assert_eq!(c2.url, "https://cdn/g2chart/index.js");
+}
+
+#[test]
 fn local_roundtrips_through_serde() {
     let a: Accrete = serde_json::from_value(json!({
         "type": "select",

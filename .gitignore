@@ -7,3 +7,6 @@ node_modules/
 # Canvas 模块产物（ADR 0007）：从 examples/modules/3dbrowser 拷入，不入 git
 # （重建配方见该目录 Cargo.toml 头注释）
 crates/ui_leptos/assets/3dbrowser/
+# Chart 封装模块 + G2 库（ADR 0009）：从 examples/modules/g2chart 拷入，
+# g2.min.js 来自 npmmirror tarball（版本固定 5.4.8），不入 git
+crates/ui_leptos/assets/g2chart/

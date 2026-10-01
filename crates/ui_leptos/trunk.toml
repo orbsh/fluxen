@@ -6,14 +6,6 @@ address = "0.0.0.0"
 port = 8281
 
 [[proxy]]
-backend = "http://localhost:3000/assets/apexcharts.min.js"
-rewrite = "/assets/apexcharts.min.js"
-
-[[proxy]]
-backend = "http://localhost:3000/assets/apexcharts.min.css"
-rewrite = "/assets/apexcharts.min.css"
-
-[[proxy]]
 backend = "http://localhost:3000/assets/mermaid.min.js"
 rewrite = "/assets/mermaid.min.js"
 

@@ -1,72 +1,32 @@
-action: append
-event: chat
-data:
-  type: chart
-  bind:
-    value:
-      kind: default
-      default:
-        series:
-        - name: TEAM A
-          type: area
-          data:
-          - 44
-          - 55
-          - 31
-          - 47
-          - 31
-          - 43
-          - 26
-          - 41
-          - 31
-          - 47
-          - 33
-        - name: TEAM B
+# G2 流式追点（ADR 0009 + ADR 0005）：先 append 一行图，再 op:append 数据行进 spec 的
+# data 数组（append 语义 = push 目标数组，指针指向数组本身）——封装模块
+# 整 spec 重设 + chart.update() 增量重绘，即 token 流驱动的实时曲线。
+- action: append
+  event: chat
+  data:
+    type: chart
+    id: stream-chart
+    attrs:
+      class:
+      - f
+    bind:
+      value:
+        kind: default
+        default:
           type: line
           data:
-          - 55
-          - 69
-          - 45
-          - 61
-          - 43
-          - 54
-          - 37
-          - 52
-          - 44
-          - 61
-          - 43
-        chart:
-          height: 350
-          type: line
-        stroke:
-          curve: smooth
-        fill:
-          type: solid
-          opacity:
-          - 0.35
-          - 1
-        labels:
-        - Dec 01
-        - Dec 02
-        - Dec 03
-        - Dec 04
-        - Dec 05
-        - Dec 06
-        - Dec 07
-        - Dec 08
-        - Dec 09
-        - Dec 10
-        - Dec 11
-        markers:
-          size: 0
-        yaxis:
-        - title:
-            text: Series A
-        - opposite: true
-          title:
-            text: Series B
-        tooltip:
-          shared: true
-          intersect: false
-          y: {}
+          - {day: Dec 01, value: 55}
+          - {day: Dec 02, value: 69}
+          encode:
+            x: day
+            y: value
+          interaction:
+            tooltip: {}
+- action: patch
+  event: chat
+  id: stream-chart
+  # op:append 在数组上 = 尾部 push（ADR 0005 的流式累加语义）
+  path: /bind/value/default/data
+  op: append
+  value: {day: Dec 03, value: 45}
 
