@@ -121,33 +121,35 @@ pub fn impl_classify_variant(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     }
     Ok(quote! {
         impl Classify for #name {
+            // attrs-less variants (template, path, ...) borrow_attrs() == None:
+            // unwrap panicked (e2e: rack row = unresolvable template). Fall back.
             fn get_class(&self) -> &Option<Vec<String>> {
                 match self {
-                    #(#name::#r(c) => c.borrow_attrs().unwrap().get_class(),)*
+                    #(#name::#r(c) => match c.borrow_attrs() { Some(a) => a.get_class(), None => &None },)*
                     _ => &None
                 }
             }
             fn get_selector(&self) -> &Option<String> {
                 match self {
-                    #(#name::#r(c) => c.borrow_attrs().unwrap().get_selector(),)*
+                    #(#name::#r(c) => match c.borrow_attrs() { Some(a) => a.get_selector(), None => &None },)*
                     _ => &None
                 }
             }
             fn add_class(&mut self, class: &str) {
                 match self {
-                    #(#name::#r(c) => { c.borrow_attrs_mut().unwrap().add_class(class) })*
+                    #(#name::#r(c) => { if let Some(a) = c.borrow_attrs_mut() { a.add_class(class) } })*
                     _ => {}
                 }
             }
             fn delete_class(&mut self, class: &str) {
                 match self {
-                    #(#name::#r(c) => { c.borrow_attrs_mut().unwrap().delete_class(class) })*
+                    #(#name::#r(c) => { if let Some(a) = c.borrow_attrs_mut() { a.delete_class(class) } })*
                     _ => {}
                 }
             }
             fn is_horizontal(&self) -> bool {
                 match self {
-                    #(#name::#r(c) => c.borrow_attrs().unwrap().is_horizontal(),)*
+                    #(#name::#r(c) => match c.borrow_attrs() { Some(a) => a.is_horizontal(), None => false },)*
                     _ => false
                 }
             }
