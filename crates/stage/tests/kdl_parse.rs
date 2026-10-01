@@ -7,6 +7,11 @@ fold id="app" class="panel wide" {
     bind "click" {
         event "toggle"
     }
+    text {
+        bind "page" {
+            local "chan"
+        }
+    }
     text id="title" format="markdown"
     form instant=#true {
         input id="q"
@@ -81,9 +86,21 @@ fn kdl_well_formed_tree() {
         }
     );
 
-    // children count: text, form, rack, group
+    // children count: text(page local), text, form, rack, group
     let children = fold.borrow_children().unwrap();
-    assert_eq!(children.len(), 4);
+    assert_eq!(children.len(), 5);
+
+    // local kind: first positional arg maps to `slot` (ADR 0008)
+    let paged = children.iter().find_map(|c| {
+        c.get_bind().and_then(|b| b.get("page")).cloned()
+    });
+    assert_eq!(
+        paged.map(|b| b.variant),
+        Some(BindVariant::Local {
+            slot: "chan".into(),
+            path: None
+        })
+    );
 
     // nested form → button → submit bind
     let form = children.iter().find_map(as_form).unwrap();

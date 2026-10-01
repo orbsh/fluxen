@@ -1,0 +1,28 @@
+// 本地联动示例（ADR 0008）：菜单 select 点击不上行——选中项 id 整值写入
+// local 值槽 `chan`，标题订阅同一槽即时反映（纯前端，零 RTT）。
+// 标签页/频道列表/走马灯 = 同一 primitive 换渲染位置，本帧演示频道形态。
+// 服务端仍负责喂 options 的 list 槽（菜单项），联动本身不经服务端。
+// （`path` 提取适用于复杂载荷——如 form submit 的整张记录进 Local 槽后，
+//  订阅侧按 `/字段` 取子值；本例载荷是裸 id 字符串，整值订阅即可。）
+case class="maximize" {
+    case class="--header nogrow" {
+        // 订阅侧：读 local 平面 chan 槽（emit 前用 default 兜底）
+        text {
+            bind "value" {
+                local "chan"
+                default "**未选频道**"
+            }
+        }
+    }
+    case class="--body shrink border round" horizontal=#true {
+        // 发射侧：Local 落点，选中 id 进 chan 槽，不上行 transport
+        select {
+            bind "value" {
+                local "chan"
+            }
+            bind "options" {
+                source "menu"
+            }
+        }
+    }
+}

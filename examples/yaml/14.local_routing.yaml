@@ -1,0 +1,60 @@
+# 本地联动数据帧（ADR 0008 配套）：给 14.local_routing.kdl 的布局喂菜单。
+# options 走 list 平面（source "menu"），服务端职责不变；联动（select→chan
+# 槽→标题）纯前端。选中第二项后，stage console 不应出现任何上行事件。
+- action: create
+  event: ""
+  data:
+    type: case
+    attrs:
+      class:
+      - maximize
+    children:
+    - type: case
+      attrs:
+        class:
+        - --header
+        - nogrow
+      children:
+      - type: text
+        attrs:
+          format: md
+        bind:
+          value:
+            kind: local
+            slot: chan
+            default: "**未选频道**"
+    - type: case
+      attrs:
+        class:
+        - --body
+        - shrink
+        - border
+        - round
+        horizontal: true
+      children:
+      - type: select
+        bind:
+          value:
+            kind: local
+            slot: chan
+          options:
+            kind: source
+            source: menu
+- action: append
+  event: menu
+  data:
+    type: text
+    id: general
+    bind:
+      value:
+        kind: default
+        default: 综合频道
+- action: append
+  event: menu
+  data:
+    type: text
+    id: tech
+    bind:
+      value:
+        kind: default
+        default: 技术频道
