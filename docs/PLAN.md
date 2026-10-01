@@ -227,6 +227,26 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
   CDP 探针 CHART-OK（inline 路径 canvas 1280x960），最终由用户在
   stage 直连验证通过（图表渲染与交互目检）。
 
+### 11. Pages 组件 + 事件形状统一（ADR 0010，草案待确认）— pending
+
+- emit 载荷形状与落点解耦：Local 落槽改写包装对象
+  `{event, id?, data}`（与 content::Outflow 同构，复用该类型）；
+  `Local` 增可选 `event` 字段（缺省=槽名）。path 自此有稳定提取对象。
+- 新变体 `Pages { id, attrs, bind, display }`：bind.value→list 页面行
+  （id=字典键，复用行身份纪律）；bind.select→local/source + path 提键
+  （tracked）。display=render（只挂命中行）| dom（全挂、未选中 hide，
+  滚动/输入/GL 状态保持）。未命中键 warn+空白。
+- 15.tabs.yaml 重写为诚实形态（菜单标签与页面内容互异，同事件两处
+  取件：标题 /data、Pages /data）；14.local_routing 示例同步包装形状。
+- 测试：emit 包装形状（Local 带/不带 event、id 透传）、Pages 键提取/
+  未命中、display dom 模式状态存活探针；三门槛 + stage 直驱 e2e。
+- 缺陷挂账（用户 2026-10-01 目检发现，实施本单元时一并排查）：
+  15.tabs.yaml 的 tab 栏 `horizontal: true` 疑似失效——包裹 select 的
+  case 设了 horizontal 但选项没横排。排查方向：attrs 映射路径
+  （YAML→serde 字段是否真落到 CaseAttr.horizontal）、CSS flex 上下文
+  （.col 与 flex-direction:row 的生成条件）、select 自身 class 组合。
+  非本单元阻塞项，修时给最小复现帧。
+
 ## Resolved
 
 ### Enter "does nothing" — console dropped CBOR uplinks (fixed 2026-09-30)
