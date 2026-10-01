@@ -223,9 +223,19 @@ Ported from dioxus with the clear logic intact (`slot.set(default)` after
 Root cause is browser value-attribute semantics: once the user types, the
 `defaultValue` is dirty and attribute-level updates never reset the shown
 value; a persistent node needs an imperative `set_value("")`. Dioxus's
-whole-tree vDOM rebuild hid this. `textarea_` still has the same shape
-(`slot.set(Value::Null)` with attribute-only binding) and will show the
-same symptom — fix only if a consumer needs it.
+whole-tree vDOM rebuild hid this. `textarea_` carried the same shape until
+the ADR 0008 upgrade (2026-10-01): Enter now routes through the unified
+`Ctx::emit` (Event uplinks, Local writes the value plane), clears with
+signal-set + imperative `set_value("")` before awaiting, and skips empty
+values / bind-less edits. It also exposed a second defect class fixed
+same commit: emitter components read their initial value via
+`use_source_untracked` — a tracked read inside the parent layout render
+closure subscribes the parent to the very slot the emitter writes, so
+every emit rebuilt the subtree and "restored" the sent content (DOM
+identity probe: textarea node replaced, value back). Pure readers
+(text/placeholder subscribers) keep tracked reads. e2e: Local path stays
+cleared across two sends with subscriber updating draft-one→draft-two,
+zero uplinks; Event path regression `<- note` intact.
 
 ### Notification fan-out (per-key slots) — done 2026-09
 

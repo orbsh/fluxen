@@ -1,6 +1,6 @@
 use crate::Ctx;
 use crate::ctx::render_accrete;
-use crate::hooks::{use_common_css, use_source_list, use_source_value, use_target_value};
+use crate::hooks::{use_common_css, use_source_list, use_source_untracked, use_target_value};
 use accrete::{AccreteOps, Select, classify::Classify};
 use leptos::html::*;
 use leptos::prelude::*;
@@ -13,8 +13,10 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
+    // 发射组件初值 untracked 读（同 textarea_：避免父渲染闭包订阅到自己
+    // emit 写的槽，emit 即重建子树还原选择）
     let current = RwSignal::new(
-        use_source_value(&ctx, &accrete)
+        use_source_untracked(&ctx, &accrete, "value")
             .and_then(|v| v.as_str().map(String::from))
             .unwrap_or_default(),
     );
