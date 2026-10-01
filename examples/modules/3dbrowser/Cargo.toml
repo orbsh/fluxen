@@ -16,7 +16,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 three-d = { version = "0.19", default-features = false }
-three-d-asset = { version = "0.10", features = ["gltf"] }
+three-d-asset = { version = "0.10", features = ["gltf", "http"] }
 ciborium = "0.2"
 glow = "0.17"
 js-sys = "0.3"
@@ -30,6 +30,8 @@ web-sys = { version = "0.3", features = [
     "Document",
     "Element",
     "CssStyleDeclaration",
+    "Url",
+    "Window",
     "console",
 ] }
 

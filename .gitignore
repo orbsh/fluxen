@@ -4,3 +4,6 @@ pkg/
 build/
 out/
 node_modules/
+# Canvas 模块产物（ADR 0007）：从 examples/modules/3dbrowser 拷入，不入 git
+# （重建配方见该目录 Cargo.toml 头注释）
+crates/ui_leptos/assets/3dbrowser/

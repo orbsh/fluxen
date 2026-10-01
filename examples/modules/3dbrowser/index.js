@@ -2,8 +2,8 @@
 // 宿主（ui_leptos Canvas 组件）只 import 本文件，调用
 //   mount(el, data, host) -> Promise<ctx> / update(ctx, data) / resize(ctx, w, h) / unmount(ctx)
 // 渲染循环与输入事件归本模块（“模块自持事件循环”），wasm 字节码由
-// wasm-bindgen glue（./3dbrowser.js，同目录）内部加载。
-import init, * as wasm from "./3dbrowser.js";
+// wasm-bindgen glue（./browser3d.js，同目录）内部加载。
+import init, * as wasm from "./browser3d.js";
 
 const runtime = init(); // 首次挂载时下载/实例化 wasm；重复调用共享同一 Promise
 
@@ -53,6 +53,11 @@ export async function mount(el, data, host) {
   const endDrag = () => (view.drag = null);
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
+  // 上行走 host 通道（ADR 0007 留口的最小验证）：payload 是 CBOR 字节，
+  // 0xA0 = 空 map，宿主 ActiveCodec::Cbor 解成 `{}` 后交 ctx.send 上行。
+  canvas.addEventListener("dblclick", () => {
+    host.send("pick", new Uint8Array([0xa0]));
+  });
   canvas.addEventListener(
     "wheel",
     (ev) => {
