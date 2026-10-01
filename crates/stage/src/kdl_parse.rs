@@ -212,7 +212,7 @@ fn accrete_value(node: &KdlNode) -> Result<Value, KdlError> {
                 match child.name().value() {
                     "style" => attrs.insert("style".into(), Value::Object(m)),
                     "grid" => attrs.insert("grid".into(), Value::Object(m)),
-                    // `data` is accrete::Template's map (minijinja context), not
+                    // `data` is accrete::Template's map (slot substitution), not
                     // a data_* routing other accretes use — that routing never
                     // existed in accrete and is retired with this parser.
                     _ => {

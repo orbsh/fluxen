@@ -4,17 +4,15 @@ use accrete::{Accrete, AccreteOps};
 use content::codec::ActiveCodec;
 use content::{Content, Message, PatchKind};
 use leptos::prelude::*;
-use minijinja::Environment;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::{LazyLock, RwLock};
 use transport::Transport;
 
-static TMPL: LazyLock<RwLock<Environment>> = LazyLock::new(|| {
-    let env = Environment::new();
-    RwLock::new(env)
-});
+/// 已注册模板表（ADR 0006：`{{key}}` 纯槽位替换，无模板引擎）。
+static TMPL: LazyLock<RwLock<accrete::template::Templates>> =
+    LazyLock::new(|| RwLock::new(accrete::template::Templates::new()));
 
 /// 全局共享状态容器：掌管布局、数据、列表与传输收发。
 ///
@@ -168,15 +166,16 @@ fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
             Content::Tmpl(x) => {
                 let n = x.name.clone();
                 let d = x.data.clone();
-                let _ = TMPL
-                    .write()
+                TMPL.write()
                     .expect("write TMPL failed")
-                    .add_template_owned(n, d);
+                    .insert(n, d);
             }
             Content::Create(x) => {
                 let mut d = x.data.clone();
                 let env = TMPL.read().expect("read TMPL failed");
-                d.expand(&env);
+                for w in d.expand(&env) {
+                    tracing::warn!("{w}");
+                }
                 tracing::info!("create: layout set, root = {:.100?}", d);
                 // Effect 内写信号一律 set/untracked；tracked 读见上注释
                 ctx.layout.set(d);
@@ -184,13 +183,17 @@ fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
             Content::Set(x) => {
                 let mut d = x.data.clone();
                 let env = TMPL.read().expect("read TMPL failed");
-                d.expand(&env);
+                for w in d.expand(&env) {
+                    tracing::warn!("{w}");
+                }
                 ctx.slot_for_data(&x.event).set(Some(Arc::new(d)));
             }
             Content::Append(x) => {
                 let mut d = x.data.clone();
                 let env = TMPL.read().expect("read TMPL failed");
-                d.expand(&env);
+                for w in d.expand(&env) {
+                    tracing::warn!("{w}");
+                }
                 // untracked 读：dispatch_msg 运行在消费 frame 的 Effect 里，
                 // tracked 读会让 Effect 订阅自己写入的槽 → 自激循环。
                 let slot = ctx.slot_for_list(&x.event);

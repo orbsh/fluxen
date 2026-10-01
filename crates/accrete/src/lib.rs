@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 pub mod classify;
 #[cfg(feature = "classify")]
 use classify::Classify;
-#[cfg(feature = "template")]
+#[cfg(feature = "ops")]
 pub mod template;
 #[cfg(any(feature = "ops", feature = "classify"))]
 use accrete_macro::AccreteOps;
@@ -687,7 +687,6 @@ pub enum Accrete {
     td(Td),
     text(Text),
     textarea(TextArea),
-    #[cfg(feature = "template")]
     template(Template),
 }
 

@@ -29,7 +29,6 @@ indoc = "2.0.7"
 itertools = "0.14.0"
 js-sys = "0.3.98"
 markdown = "1.0.0"
-minijinja = { version = "2.19.0", features = ["loader"] }
 proc-macro2 = { version = "1.0.106", features = ["span-locations"] }
 quote = "1.0.45"
 regex = "1"
