@@ -2,19 +2,19 @@
 
 [中文版](README.zh.md)
 
-AI-native UI rendering library: Accrete DSL + Leptos rendering + streaming merge + CBOR codec. Carved out of Fluxora (the event-bus/Gateway half became [Prism](../prism/); Fluxora itself is migrating to Leptos and keeps its name).
+AI-native UI rendering library: Accrete DSL + Leptos rendering + operation protocol (create/set/append/patch/remove) + CBOR codec. Carved out of Fluxora (the event-bus/Gateway half became [Prism](../prism/); Fluxora itself is migrating to Leptos and keeps its name).
 
-Design: [Fluxora 架构](../../.hermes/wiki/projects/fluxora-architecture.md) (wiki — Accrete DSL, merge strategies, codec decisions all documented there).
+Design: [Fluxora 架构](../../.hermes/wiki/projects/fluxora-architecture.md) (wiki — Accrete DSL, operation protocol, codec decisions all documented there).
 
 ## What moved in
 
 - **Accrete DSL** (`accrete` / `accrete_macro`): closed typed enum, `#[serde(tag = "type")]`, Bind system, JsonSchema validation for AI generation
-- **Streaming merge** (`merge`): Replace / Concat / Delete strategies, `Vec<String>` fragment buffering
+- **Operation protocol** (ADR 0005, replaced the original streaming merge): create/set/append/patch/remove actions; `patch` addresses any node by JSON Pointer into its wire shape; `tmpl` registers slot-substitution templates (ADR 0006)
 - **Codec** (`codec`): `ActiveCodec` enum dispatch (Json/CBOR), URL-param handshake pinning, `encode_ws()` helper
 
 ## Position
 
-Rendering layer only — no event bus, no gateway, no transport. Upstream (Prism / Aura realm / any producer) sends Accrete operations; Fluxen renders and merges. The thick-shell principle stays: AI generates schema-validated structured JSON (content + structure), the framework owns styling and rendering determinism.
+Rendering layer only — no event bus, no gateway, no transport. Upstream (Prism / Aura realm / any producer) sends Accrete operations; Fluxen renders and applies them. The thick-shell principle stays: AI generates schema-validated structured JSON (content + structure), the framework owns styling and rendering determinism.
 
 ## Dev workflow (`stage`)
 
@@ -47,8 +47,8 @@ in devtools. Default send format is CBOR.
 
 The console REPL streams every frame back (`<- {...}`), including events the
 UI emits — both sender and event monitor. Commands: `/send <file.kdl>`,
-`/raw <json>` (send a bare `Message<Accrete>` — needed for Set/Join frames),
-`/quit`.
+`/raw <json>` (send a bare `Message<Accrete>` — needed for Set/Append/Patch
+frames, which KDL cannot express), `/quit`.
 
 Push layout frames from a KDL file (wraps as Create — replaces the root layout):
 
@@ -88,6 +88,13 @@ e.g. a chat token append onto row `m1` (JSON Pointer into the row's wire shape):
 Rows streamed into a rack should carry `id` — row identity (patch addressing
 and DOM keyed diff) are both keyed on it (see docs/PLAN.md conventions).
 
+Bind routing (ADR 0008): `kind: event` uplinks the action protocol;
+`kind: local { slot }` keeps the payload in-browser on the value plane
+(`ctx.vals`), and any reading widget subscribes the same slot (optionally
+extracting by `path` — `kind: source` gained the same `path` for wire-shape
+pointers). `examples/kdl/14.local_routing.kdl` / `examples/yaml/14.local_routing.yaml`
+demonstrate the menu→header channel pattern with zero transport round trip.
+
 For hot rebuilds during UI development, start `trunk serve` (port 8281)
 *before* `stage serve` — the gateway will proxy to it instead of reading dist
 from disk. `trunk` is an optional dev tool, not a runtime dependency.
@@ -96,6 +103,7 @@ Offline helper (no server needed):
 
 ```
 cargo run -p stage -- tojson examples/kdl/chat_layout.kdl   # KDL -> Accrete JSON
+cargo run -p stage -- schema                                # Accrete wire-shape JSON Schema
 ```
 
 Streaming semantics, key behavior, and codec details: see the wiki doc linked
