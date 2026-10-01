@@ -72,10 +72,8 @@ pub fn form_(accrete: Form, ctx: &Ctx) -> AnyView {
     let event = accrete
         .get_bind()
         .and_then(|x| x.get("value"))
-        .and_then(|b| match &b.variant {
-            BindVariant::Event { event } => Some(event.clone()),
-            _ => None,
-        });
+        .map(|b| b.variant.clone())
+        .filter(|v| matches!(v, BindVariant::Event { .. } | BindVariant::Local { .. }));
 
     // 注入表单状态并克隆下传：子树内的 input_/button_ 拿到的 ctx 自带归属
     let ctx = Ctx {
@@ -108,10 +106,9 @@ pub fn form_(accrete: Form, ctx: &Ctx) -> AnyView {
                     })
                     .collect();
                 let val = to_value(content).unwrap_or(Value::Null);
-                let ev = event.clone();
-                leptos::task::spawn_local(async move {
-                    ctx.send(ev, None, val).await;
-                });
+                // 落点统一路由（ADR 0008）：Event 上行、Local 整张表单
+                // 记录进本地值槽。
+                ctx.emit(&event, None, val);
                 confirm.set(Value::Bool(false));
             }
         });

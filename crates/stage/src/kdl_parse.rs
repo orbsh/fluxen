@@ -266,7 +266,7 @@ fn accrete_value(node: &KdlNode) -> Result<Value, KdlError> {
 fn bind_value(node: &KdlNode) -> Result<Value, KdlError> {
     let mut m = Map::new();
 
-    // kind node: name = kind (source/target/event/field/submit), value arg =
+    // kind node: name = kind (source/local/event/field/submit), value arg =
     // its string; `default` child holds the default value; a `field` kind may
     // carry a `payload { ... }` child block (flattened payload map for the
     // BindVariant::Field variant).
@@ -281,7 +281,10 @@ fn bind_value(node: &KdlNode) -> Result<Value, KdlError> {
         }
         let mut kf = Map::new();
         if let Some(v) = entry_args(c).first() {
-            kf.insert(cname.to_string(), entry_scalar(v));
+            // kind 节点首参 = 该 kind 的主字段；`local` 的字段名是 slot
+            // （ADR 0008：事件数据落本地值槽，slot 与 source 同为槽名）。
+            let fname = if cname == "local" { "slot" } else { cname };
+            kf.insert(fname.to_string(), entry_scalar(v));
         }
         for (k, v) in entry_props(c) {
             kf.insert(k, v);

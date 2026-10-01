@@ -35,7 +35,7 @@ pub fn use_default(accrete: &impl AccreteOps) -> Option<Value> {
 /// 取 `bind["value"]` 的 Source 来源名。
 pub fn use_source_id(accrete: &impl AccreteOps) -> Option<&String> {
     if let Bind {
-        variant: BindVariant::Source { source },
+        variant: BindVariant::Source { source, .. },
         ..
     } = accrete.get_bind().and_then(|x| x.get("value"))?
     {
@@ -55,10 +55,11 @@ pub fn use_source_list(
     source_of(accrete, key).map(|src| ctx.slot_for_list(src).get())
 }
 
-/// `bind[key]` 为 Source 时取其 source 名。
+/// `bind[key]` 为 Source 时取其 source 名（path 只经 source_of_path 消费，
+/// 避免 4 元组到处传递）。
 pub fn source_of<'a>(accrete: &'a impl AccreteOps, key: &str) -> Option<&'a String> {
     if let Bind {
-        variant: BindVariant::Source { source },
+        variant: BindVariant::Source { source, .. },
         ..
     } = accrete.get_bind().and_then(|x| x.get(key))?
     {
@@ -68,16 +69,69 @@ pub fn source_of<'a>(accrete: &'a impl AccreteOps, key: &str) -> Option<&'a Stri
     }
 }
 
-/// 取 `bind[key]` 对应的值：Source 则从 `ctx.data[source]` 槽订阅取值，
-/// 否则取 accrete 自身。
+/// Source 绑定的可选提取路径（ADR 0008）。
+pub fn source_of_path<'a>(accrete: &'a impl AccreteOps, key: &str) -> Option<&'a String> {
+    if let Bind {
+        variant: BindVariant::Source { path: Some(p), .. },
+        ..
+    } = accrete.get_bind().and_then(|x| x.get(key))?
+    {
+        Some(p)
+    } else {
+        None
+    }
+}
+
+/// 取 `bind[key]` 对应的值：`Source` 从 `ctx.data[source]` 订阅
+/// （带 `path` 进槽内节点 WIRE SHAPE 提取），`Local` 从 `ctx.vals[slot]`
+/// 订阅裸值平面（带 `path` 进槽内 Value 的 JSON Pointer 提取——形状归
+/// 生产端），否则取 accrete 自身 `bind[key].default`。
 pub fn use_source(ctx: &Ctx, accrete: &impl AccreteOps, key: &str) -> Option<Value> {
-    let from_source: Option<std::sync::Arc<Accrete>> =
-        source_of(accrete, key).and_then(|src| ctx.slot_for_data(src).get());
-    let comp: &dyn AccreteOps = match &from_source {
-        Some(d) => &**d,
-        None => accrete,
-    };
-    comp.get_bind().and_then(|b| b.get(key))?.default.clone()
+    let bind = accrete.get_bind().and_then(|b| b.get(key));
+    match bind.map(|b| &b.variant) {
+        Some(BindVariant::Source { source, path }) => {
+            let node = ctx.slot_for_data(source).get();
+            match (node.as_deref(), path) {
+                (Some(n), Some(p)) => match n.get_at(p) {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        tracing::warn!("source {source:?} path {p:?}: {e}");
+                        None
+                    }
+                },
+                // 同 key 直传惯例：取槽节点自己 bind[key].default；
+                // 槽空回退自身 default（原实现语义，渲染未喂先有值）。
+                (Some(n), None) => n
+                    .get_bind()
+                    .and_then(|b| b.get(key))
+                    .and_then(|b| b.default.clone())
+                    .or_else(|| accrete.get_bind().and_then(|b| b.get(key))?.default.clone()),
+                (None, _) => bind.and_then(|b| b.default.clone()),
+            }
+        }
+        Some(BindVariant::Local { slot, path }) => {
+            let v = ctx.slot_for_value(slot).get();
+            match (v, path) {
+                (Some(v), Some(p)) => {
+                    let mut cur = v;
+                    for seg in p.split('/').skip(1) {
+                        let seg = seg.replace("~1", "/").replace("~0", "~");
+                        cur = match cur {
+                            Value::Object(m) => m.get(seg.as_str())?.clone(),
+                            Value::Array(a) => a.get(seg.parse::<usize>().ok()?)?.clone(),
+                            _ => return None,
+                        };
+                    }
+                    Some(cur)
+                }
+                (Some(v), None) => Some(v),
+                // 槽未写入：回退自身 default（emit 前的初始显示，与
+                // Source 槽空回退同语义）
+                (None, _) => bind.and_then(|b| b.default.clone()),
+            }
+        }
+        _ => bind?.default.clone(),
+    }
 }
 
 /// `use_source(ctx, accrete, "value")`。
@@ -85,28 +139,23 @@ pub fn use_source_value(ctx: &Ctx, accrete: &impl AccreteOps) -> Option<Value> {
     use_source(ctx, accrete, "value")
 }
 
-/// `bind[key]` 为 Event 时，返回一个发送该事件的闭包。
+/// `bind[key]` 为 Event/Local 时，返回一个 emit 闭包（ADR 0008：
+/// 落点由 Ctx::emit 统一路由——上行或本地槽）。
 pub fn use_target<'a>(
     ctx: Ctx,
     accrete: &'a impl AccreteOps,
     key: &'a str,
 ) -> Option<impl Fn(Value)> {
-    if let Some(Bind {
-        variant: BindVariant::Event { event },
-        default: _,
-        r#type: _,
-    }) = accrete.get_bind().and_then(|x| x.get(key))
-    {
-        let ev = event.clone();
-        Some(move |val| {
+    let variant = accrete
+        .get_bind()
+        .and_then(|x| x.get(key))
+        .map(|b| b.variant.clone())?;
+    match variant {
+        BindVariant::Event { .. } | BindVariant::Local { .. } => Some(move |val| {
             let ctx = ctx.clone();
-            let ev = ev.clone();
-            leptos::task::spawn_local(async move {
-                ctx.send(ev, None, val).await;
-            });
-        })
-    } else {
-        None
+            ctx.emit(&variant, None, val);
+        }),
+        _ => None,
     }
 }
 

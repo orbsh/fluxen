@@ -55,7 +55,7 @@ pub fn placeholder_(accrete: Placeholder, ctx: &Ctx, id: String) -> AnyView {
         .get_bind()
         .and_then(|x| x.get("value"))
         .and_then(|b| match &b.variant {
-            BindVariant::Source { source } => Some(source.clone()),
+            BindVariant::Source { source, .. } => Some(source.clone()),
             _ => None,
         });
 

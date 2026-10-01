@@ -13,31 +13,32 @@ fn default_option_jskind(v: &Option<JsType>) -> Value {
         .unwrap_or_else(|| to_value("").unwrap())
 }
 
-/// 输入框：`Field` 绑定写 form 字段信号；`Event` 绑定在 Enter 时发送事件。
+/// 输入框：`Field` 绑定写 form 字段信号；`Event`/`Local` 绑定在 Enter 时
+/// emit（落点由 Ctx::emit 路由，ADR 0008）。
 pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["input", "f", "shadow"];
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
-    let (bind_type, key, kind) = accrete
-        .get_bind()
-        .and_then(|x| x.get("value"))
-        .cloned()
-        .map(|x| match x {
-            Bind {
-                variant: BindVariant::Field { field, .. },
-                r#type: kind,
-                ..
-            } => ("field", field, kind),
-            Bind {
-                variant: BindVariant::Event { event },
-                r#type: kind,
-                ..
-            } => ("event", event, kind),
-            _ => ("", "".to_string(), Default::default()),
-        })
-        .unwrap_or(("", "".to_string(), Default::default()));
+    // (落点变体, 字段名, JsType)——Field 用字段名接 form 信号，
+    // Event/Local 用变体走 ctx.emit。
+    let bind = accrete.get_bind().and_then(|x| x.get("value")).cloned();
+    let (variant, key, kind) = match bind {
+        Some(Bind { variant, r#type, .. }) => {
+            let field = match &variant {
+                BindVariant::Field { field, .. } => field.clone(),
+                _ => String::new(),
+            };
+            (variant, field, r#type)
+        }
+        None => (BindVariant::Default {}, String::new(), None),
+    };
+    let bind_type = match &variant {
+        BindVariant::Field { .. } => "field",
+        BindVariant::Event { .. } | BindVariant::Local { .. } => "event",
+        _ => "",
+    };
 
     let field_sig = if bind_type == "field" {
         ctx.form
@@ -70,7 +71,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let onkeydown = {
         let ctx = ctx.clone();
         let k2 = kind.clone();
-        let k3 = key.clone();
+        let variant_emit = variant.clone();
         move |ev: web_sys::KeyboardEvent| {
             if ev.key() == "Enter" {
                 match bind_type {
@@ -81,7 +82,6 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
                     }
                     "event" => {
                         let ctx = ctx.clone();
-                        let key = k3.clone();
                         let kk = k2.clone();
                         let val = slot.get_untracked();
                         // 空值回车不触发事件
@@ -99,9 +99,8 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
                         {
                             el.set_value("");
                         }
-                        leptos::task::spawn_local(async move {
-                            ctx.send(key, None, val).await;
-                        });
+                        // 落点统一路由（ADR 0008）：Event 上行、Local 写槽。
+                        ctx.emit(&variant_emit, None, val);
                     }
                     _ => {}
                 }
