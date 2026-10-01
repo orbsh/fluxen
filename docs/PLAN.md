@@ -202,6 +202,31 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
   Event 路径回归（Enter 上行完好）。
 - 门槛：三门槛 + e2e；破坏性 wire（kind 集合增删）单独提交。
 
+### 10. Chart 渲染器演进：G2 spec + 模块通道（ADR 0009）— done 2026-10-01
+
+- 载荷 = G2 spec（纯数据、GoG 正统）；`bind["value"]` 槽直装 spec，
+  流式更新 = 指针 patch 进 `/data` + update 重绘（ADR 0005 零新机制）。
+- 去 eval：薄封装 ES module（mount/update/resize/unmount 契约，内部
+  动态 import g2、CBOR→spec 解码），chart.rs 复用 ADR 0007 的
+  import(url) 通道；`Chart { url }` 字段 serde default 向后兼容。
+- 资产：g2.min.js（321KB gz）进 assets/ 照 3dbrowser 的 gitignore+
+  重建配方模式；ApexCharts 资产与 index.html script 标签退役。
+- 示例：08.apexchart.yaml 改写为 G2 spec；08.chart.yaml 保留驱动帧。
+- 验证：headless 已证 spec 渲染出 canvas；tooltip/interaction 的鼠标
+  行为需有头浏览器目检（实施 e2e 覆盖）；交互细节未取证前 ADR 保持草案。
+- 门槛：三门槛 + e2e（create 布局挂 chart → set 换 spec → 重绘；
+  patch append 数据行 → update）。
+- 实施记录：canvas.rs 抽出共享 mount_module（chart_/canvas_ 均为薄包装，
+  差异仅 url/容器样式/绑定解析）；Chart 增 url 字段（serde default
+  /assets/g2chart/index.js，向后兼容，测试锁形态）；g2chart 封装 =
+  UMD script 自举 + 最小 cbor.js（roundtrip 测过 uint8/16 头、UTF-8、
+  空 map）。修一个实施期真缺陷：UMD `<script>` 相对 src 按文档 base
+  解析（页面在 / 时 404）→ `new URL(..., import.meta.url)`。
+  ApexCharts 资产/index.html 标签/trunk.toml 代理/08.apexchart.yaml
+  退役；08.g2chart.yaml + 08.chart.yaml 为 G2 形态。e2e：headful
+  CDP 探针 CHART-OK（inline 路径 canvas 1280x960），最终由用户在
+  stage 直连验证通过（图表渲染与交互目检）。
+
 ## Resolved
 
 ### Enter "does nothing" — console dropped CBOR uplinks (fixed 2026-09-30)

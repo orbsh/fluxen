@@ -236,10 +236,22 @@ pub struct Placeholder {
 pub struct Chart {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    /// G2 封装模块的 ES module 地址（ADR 0009：ADR 0007 契约，
+    /// mount/update/resize/unmount）。默认指向自家静态资产——
+    /// 版本固定，换渲染实现/CDN 时显式覆盖。
+    #[serde(default = "default_chart_url")]
+    pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
+    /// `bind["value"]`：G2 spec（纯数据，GoG 词汇——type/data/encode/
+    /// transform/scale/interaction）。流式更新 = set/patch 指针进
+    /// `/data` 等节点，封装模块整 spec 重设 + `chart.update()` 增量重绘。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
+}
+
+pub fn default_chart_url() -> String {
+    "/assets/g2chart/index.js".to_string()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
