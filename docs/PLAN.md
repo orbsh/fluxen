@@ -104,7 +104,7 @@ e2e 复验：create 布局 → patch `/children/.../item/1/attrs/class` → 新�
 - 删除项记录：`Method`、`merge.rs`、join 的合并职能、02.concat/02.replace
   旧形态。fluxora 为存档，不做兼容。
 
-### 7. Canvas 组件：外部渲染模块原位挂载（ADR 0007，草案待确认）— pending
+### 7. Canvas 组件：外部渲染模块原位挂载（ADR 0007）— done 2026-10-01
 
 - accrete 新变体 `Canvas { id, url, attrs, bind }`（wire tag `canvas`），
   derive 门控照 Chart 抄（schema/ops/classify + `has_id="true"`）。
@@ -119,19 +119,30 @@ e2e 复验：create 布局 → patch `/children/.../item/1/attrs/class` → 新�
 - 后续独立小改动（勿耦合提交）：Chart 渲染器演进（ApexCharts eval → GoG
   spec + 别的渲染实现）——独立议题、独立 ADR，与 Canvas 无关。
 
-待办（2026-09-30 实现落地后遗留，主提交 934ab6c）：
-- [ ] 模块产物落静态服务：拷贝 `examples/modules/3dbrowser/pkg/browser3d.js +
-      browser3d_bg.wasm + index.js` → `crates/ui_leptos/assets/3dbrowser/`
-      （stage serve 自带静态服务，Canvas url 指 `/assets/3dbrowser/index.js`）。
-      产物不入 git（pkg/ 被 .gitignore），按 Cargo.toml 头注释重建。
-- [ ] 示例帧 `examples/yaml/13.canvas.3dbrowser.yaml`：create 布局挂
-      `canvas { url, bind.value default {primitives:{cube:null...}, assets:{duck:null}} }`
-      → 逐帧 `patch path=/bind/value/default/assets/duck op=replace value=<url>`
-      验证流式加载（null 占位是 ADR 0005 指针只能 replace 已存在键的约定）。
-- [ ] e2e 全链：create→update→resize→remove + host.send 上行回 console。
-- [ ] ADR 0007 状态"草案"→"已接受"（实现已落地，等确认）。
-- [ ] 模块加载失败的可重试语义：3dbrowser 的 seen 撤下目前是桩（forget()
-      no-op），正式版记失败表或提供显式 reset；示例够用，生产前补。
+收尾（2026-10-01）：待办五项落地情况——
+- [x] 模块产物落 `crates/ui_leptos/assets/3dbrowser/`（glue+wasm+index.js+
+      tile.glb 样例模型；目录已进 .gitignore，重建配方在模块 Cargo.toml
+      头注释；wasm-bindgen CLI 须与 wasm-bindgen crate 同版本，本机用
+      trunk 缓存 0.2.128 配 0.2.129 依赖会报 schema 错配）。
+- [x] 示例帧 `examples/yaml/13.canvas.3dbrowser.yaml`：create(source 绑
+      空槽) → set(完整载荷) → patch(槽内指针流式改色)——source 形态
+      是流式的正解（inline default 不随后续帧重推，e2e 抓到的形态差）。
+- [x] e2e 全链：create→update→resize→remove 通过（remove=换布局，
+      unmount 无残留报错；tile.glb 实际被拉取入场景）；host.send 上行
+      已验证（模块 dblclick → host.send("pick", CBOR {})，stage console
+      收到 `<- {"event":"pick"}`）。后台标签页 rAF 节流会冻结模块的
+      asset 泵——测试须 bringToFront，产品无关。
+- [x] ADR 0007 已接受。
+- [ ] forget() 仍是失败重试桩（示例够用，生产前补）。
+宿主 e2e 修复三缺陷（canvas.rs）：`new URL()` 返回对象不是字符串
+（原 Rust 侧 dyn_into::<JsString> 必失败，import 解析整体移 JS 侧）；
+ES module namespace 原型链为 null，`dyn_into::<Object>` 必拒（保留
+JsValue，契约查找走 Reflect）；空槽喂 CBOR null 令严格 decode 模块
+mount 即拒（改喂 `{}`——"先挂空布局后写槽"是流式标准顺序）。
+模块侧（3dbrowser）：glue 引用名笔误 `3dbrowser.js`→`browser3d.js`；
+three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
+相对 asset URL 在 frame() 泵里按 document.baseURI 归一化（reqwest
+只吃绝对 URL）。
 
 后续单元（本地联动：bind 路由机制，统一协议而非 Canvas 专属）：
 - [ ] 需求：点击频道列表切频道、点菜单切页面——组件间纯前端联动，不走
@@ -139,8 +150,10 @@ e2e 复验：create 布局 → patch `/children/.../item/1/attrs/class` → 新�
       `kind: event`）一律上行；接收侧（`kind: source` 读 data/list 槽）
       机制已存在且组件无关。缺的只是路由：把某个事件的落点从服务端改成
       本地信号。
-- [ ] 方案：bind 的事件类 kind 增加本地目标（如 `Local { signal }`，或
-      复活死变体 `Target { target }` 承载此语义——做时一并裁决命名）：
+- [x] 命名裁决（用户 2026-10-01）：事件类本地落点用 `Local { signal }`
+      新变体；历史死变体 `Target { target }` 太模糊、删除（不复活）。
+      kind 集合改动是 wire 面——同步 schema/示例/生产端。
+- [ ] 方案：bind 的事件类 kind 增加本地目标 `Local { signal }`：
       emit 组件命中本地目标 → 直接写 Ctx 具名 data 槽，不上行。接收侧
       零改动：case/placeholder 渲染 source 槽 = 切页面；rack 订阅 list
       槽 = 切内容。Canvas 只是新增的一个 emit 方（host.send 同样可路由
