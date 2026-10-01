@@ -43,6 +43,10 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
         .and_then(|b| b.get("value"))
         .and_then(|v| v.default.clone());
 
+    // 空槽/无载荷 = `{}`：模块的 spec 全字段有默认，空 map 是合法"尚无数据"。
+    // 喂 null 会让严格 decode 的模块在 mount 就拒绝——而"先挂空布局、
+    // 后写数据槽"正是流式的标准顺序（e2e 抓到的缺陷）。
+    let empty = Value::Object(Default::default());
     let payload: Rc<dyn Fn() -> Value> = {
         let source = source.clone();
         let inline = inline.clone();
@@ -54,11 +58,11 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
                         .get_bind()
                         .and_then(|b| b.get("value"))
                         .and_then(|v| v.default.clone())
-                        .unwrap_or_else(|| serde_json::to_value(&node).unwrap_or(Value::Null)),
-                    None => Value::Null,
+                        .unwrap_or_else(|| serde_json::to_value(&node).unwrap_or(empty.clone())),
+                    None => empty.clone(),
                 };
             }
-            inline.clone().unwrap_or(Value::Null)
+            inline.clone().unwrap_or(empty.clone())
         })
     };
 
@@ -100,7 +104,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
             let _ = js_sys::Reflect::set(
                 &host,
                 &JsValue::from_str("send"),
-                &JsValue::from(cb.as_ref().clone()),
+                cb.as_ref(),
             );
             // cb 不 drop（closure 转成 JS 函数后被模块持有，泄漏归模块生命周期管）
             cb.into_js_value(); // 让所有权交给 JS，宿主不再 retain
@@ -211,7 +215,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
                 let ro = web_sys::ResizeObserver::new(cb.as_ref().unchecked_ref());
                 // ro 若不可用（旧浏览器）只是不转发尺寸，不影响挂载
                 if let Ok(ro) = ro {
-                    let _ = ro.observe(&el);
+                    ro.observe(&el);
                     cb.forget(); // observer 长期持有 callback
                     let unmount = unmount.clone();
                     let ro_disconnect = ro.clone();
@@ -242,30 +246,40 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
 }
 
 /// `import(new URL(url, document.baseURI))`——相对 url 也能用（CDN 绝对地址直通）。
-async fn import_module(url: &str) -> Option<js_sys::Object> {
-    let win = web_sys::window()?;
-    let base: String = win.document()?.base_uri().ok().flatten().unwrap_or_default();
-    let url_ctor: js_sys::Function = js_sys::Reflect::get(&win, &JsValue::from_str("URL"))
-        .ok()?
-        .dyn_into()
-        .ok()?;
-    let full = js_sys::Reflect::construct(
-        &url_ctor,
-        &js_sys::Array::of2(&JsValue::from_str(url), &JsValue::from_str(&base)),
-    )
-    .ok()?
-    .dyn_into::<js_sys::JsString>()
-    .ok()?
-    .as_string()?;
-    let p = js_sys::eval(&format!("import(\"{full}\")"))
-        .ok()?
-        .dyn_into::<js_sys::Promise>()
-        .ok()?;
-    wasm_bindgen_futures::JsFuture::from(p)
-        .await
-        .ok()?
-        .dyn_into::<js_sys::Object>()
-        .ok()
+/// URL 解析整个放在 JS 侧完成：`new URL(...)` 返回 URL 对象而非字符串，
+/// Rust 侧 dyn_into::<JsString>() 永远失败（e2e 首跑抓到的缺陷）。
+async fn import_module(url: &str) -> Option<JsValue> {
+    let escaped = url.replace('\\', "\\\\").replace('"', "\\\"");
+    let script = format!("import(new URL(\"{escaped}\", document.baseURI).href)");
+    let p = match js_sys::eval(&script) {
+        Ok(v) => match v.dyn_into::<js_sys::Promise>() {
+            Ok(p) => p,
+            Err(_) => {
+                tracing::warn!("canvas import: eval did not return a Promise for {script}");
+                return None;
+            }
+        },
+        Err(e) => {
+            tracing::warn!(
+                "canvas import: eval threw: {:?}",
+                e.as_string().unwrap_or_else(|| format!("{e:?}"))
+            );
+            return None;
+        }
+    };
+    match wasm_bindgen_futures::JsFuture::from(p).await {
+        // 注意：ES module namespace 对象原型链为 null，dyn_into::<Object>()
+        // （instanceof 语义）对它必然失败——保留 JsValue，契约查找走
+        // Reflect::get，对任意接收者有效。
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!(
+                "canvas import: promise rejected: {:?}",
+                e.as_string().unwrap_or_else(|| format!("{e:?}"))
+            );
+            None
+        }
+    }
 }
 
 /// Value → CBOR 字节（JS Uint8Array → wasm Vec<u8>）；边界传数据不传对象。
