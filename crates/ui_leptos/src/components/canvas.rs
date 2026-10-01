@@ -35,7 +35,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
         .get_bind()
         .and_then(|b| b.get("value"))
         .and_then(|v| match &v.variant {
-            accrete::BindVariant::Source { source } => Some(source.clone()),
+            accrete::BindVariant::Source { source, .. } => Some(source.clone()),
             _ => None,
         });
     let inline = accrete

@@ -81,9 +81,20 @@ impl JsType {
 pub enum BindVariant {
     Source {
         source: String,
+        /// 可选 JSON Pointer（ADR 0008）：进槽内节点的 WIRE SHAPE 提取
+        /// 子值（与 ADR 0005 patch 路径同一词法）；省略 = 取槽节点自己的
+        /// `bind[<key>].default`（同 key 直传惯例）。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
     },
-    Target {
-        target: String,
+    /// 具名本地值槽（ADR 0008）：独立于 data（Accrete 展示形态）的
+    /// 裸 Value 平面——发射侧省略 `path`（整值写入），订阅侧带 `path`
+    /// 时进槽内 Value 的 JSON Pointer 提取子值（形状归生产端，
+    /// 与 wire-shape 无关）。
+    Local {
+        slot: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
     },
     Event {
         event: String,
@@ -704,6 +715,32 @@ impl Accrete {
 }
 
 impl Accrete {
+    /// Read-only JSON Pointer walk over the WIRE shape (ADR 0008, the
+    /// `Source.path` extraction). Same segment vocabulary as the patch
+    /// path — one syntax for both directions.
+    pub fn get_at(&self, path: &str) -> Result<Value, String> {
+        let segs = Self::pointer_segments(path)?;
+        let mut cur = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        for seg in segs {
+            cur = match cur {
+                Value::Object(map) => map
+                    .get(seg.as_str())
+                    .cloned()
+                    .ok_or_else(|| format!("pointer miss: {path:?} (no key {seg:?})"))?,
+                Value::Array(arr) => {
+                    let idx: usize = seg
+                        .parse()
+                        .map_err(|_| format!("bad array index {seg:?} at {path:?}"))?;
+                    arr.into_iter().nth(idx).ok_or_else(|| {
+                        format!("pointer miss: {path:?} (no index {idx})")
+                    })?
+                }
+                _ => return Err(format!("pointer miss: {path:?} (hit non-container)")),
+            };
+        }
+        Ok(cur)
+    }
+
     /// JSON Pointer (RFC 6901) segments, with `~1`/`~0` unescaping.
     fn pointer_segments(path: &str) -> Result<Vec<String>, String> {
         if !path.starts_with('/') {

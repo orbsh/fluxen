@@ -182,6 +182,26 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
 - 门槛：workspace build/test + wasm build + e2e（tmpl 注册 → 挂 template
   节点 → 换数据重发 create，DOM 更新）。
 
+### 9. bind 本地路由：Local 事件落点 + 值平面订阅（ADR 0008）— done 2026-10-01
+
+- BindVariant：删死变体 `Target`；增 `Local { slot, path? }` 落
+  **独立值平面** `ctx.vals`（裸 Value，与 data 的 Accrete 分平面——
+  用户裁决：事件数据不是展示形态）；`Source` 增可选 `path`
+  （进槽节点 WIRE SHAPE 的只读指针 `get_at`）。
+- 发射侧收敛：`Ctx::emit` 助手（Event→ctx.send 上行 / Local→值槽整值），
+  input/form/use_target 三路改接；一 bind key 一落点；槽未写入回退
+  自身 default（与 Source 同语义）。
+- 订阅侧：use_source 统一读（Local 裸值 pointer / Source wire-shape
+  pointer），凡取值走它的组件天然可订阅，零逐个改造。
+- 边沿=约定非机制：瞬时事件载荷带 seq/时间戳，电平槽写整值天然可见。
+- wire 面同步：kdl_parse `local` kind（首参→slot）、schema 自动跟
+  serde、示例 kdl/yaml 14.local_routing（select→chan 槽→header）。
+- 测试：bind_routing.rs（Local/Source.path serde、Target 拒、get_at、
+  roundtrip）、kdl local 解析断言。
+- e2e：点菜单项→header 变 `tech` 且 stage console 零上行帧（通过）；
+  Event 路径回归（Enter 上行完好）。
+- 门槛：三门槛 + e2e；破坏性 wire（kind 集合增删）单独提交。
+
 ## Resolved
 
 ### Enter "does nothing" — console dropped CBOR uplinks (fixed 2026-09-30)

@@ -23,6 +23,9 @@ static TMPL: LazyLock<RwLock<accrete::template::Templates>> =
 /// 值经内层信号发布——某个键的更新不通知其他键的订阅者。
 pub type ListSlot = RwSignal<std::sync::Arc<Vec<Accrete>>>;
 pub type DataSlot = RwSignal<Option<std::sync::Arc<Accrete>>>;
+/// 裸 Value 槽（ADR 0008 local 平面）：事件数据不是展示形态，
+/// 与 data（Accrete）分平面。
+pub type ValueSlot = RwSignal<Option<Value>>;
 
 #[derive(Clone)]
 pub struct Ctx {
@@ -31,6 +34,8 @@ pub struct Ctx {
     pub layout: RwSignal<Accrete>,
     pub data: RwSignal<HashMap<String, DataSlot>>,
     pub list: RwSignal<HashMap<String, ListSlot>>,
+    /// local 平面：`kind: local` 事件落点与订阅共用的具名 Value 槽。
+    pub vals: RwSignal<HashMap<String, ValueSlot>>,
     /// 槽位的永久 owner：Ctx::new 时捕获的 app 根作用域。
     /// 槽若建在消费帧的 Effect 作用域里，Effect 重跑会 dispose 其存储，
     /// 外层 map 里留下的就是死句柄（panic: already disposed）。
@@ -56,6 +61,7 @@ impl Ctx {
         let layout = RwSignal::new(Accrete::text(Default::default()));
         let data = RwSignal::new(HashMap::new());
         let list = RwSignal::new(HashMap::new());
+        let vals = RwSignal::new(HashMap::new());
 
         // 读循环：transport.on() -> frame 信号
         {
@@ -78,6 +84,7 @@ impl Ctx {
             layout,
             data,
             list,
+            vals,
             owner: Owner::current().expect("Ctx::new requires a reactive owner"),
             form: None,
         };
@@ -115,6 +122,29 @@ impl Ctx {
             .set(Some(Arc::new(accrete)));
     }
 
+    /// emit 统一落点（ADR 0008）：`Event` 上行 transport（现状不变），
+    /// `Local` 不上行——载荷整值写入 local 平面的具名值槽
+    /// （裸 Value，与 data 的 Accrete 展示形态分平面）。发射侧忽略
+    /// 自己的 `path` 字段（写必整值——形状归生产端，指针提取是订阅侧
+    /// 的事）。其他变体返回 false，调用方保持自己的兜底。
+    pub fn emit(&self, variant: &accrete::BindVariant, id: Option<String>, payload: Value) -> bool {
+        match variant {
+            accrete::BindVariant::Event { event } => {
+                let event = event.clone();
+                let ctx = self.clone();
+                leptos::task::spawn_local(async move {
+                    ctx.send(event, id, payload).await;
+                });
+                true
+            }
+            accrete::BindVariant::Local { slot, .. } => {
+                self.slot_for_value(slot).set(Some(payload));
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// 取（或首次时建）某 source 的列表槽。外层 map 用 untracked 读：
     /// 订阅本槽即可，键集变化不该惊动 reader。
     pub fn slot_for_list(&self, source: &str) -> ListSlot {
@@ -147,6 +177,24 @@ impl Ctx {
             m.entry(name).or_insert(slot);
         });
         self.data
+            .get_untracked()
+            .get(source)
+            .copied()
+            .unwrap_or(slot)
+    }
+
+    /// 取（或首次时建）某 slot 的本地值槽（ADR 0008 local 平面，
+    /// 语义同 slot_for_data——per-key 信号、建在根 owner 下）。
+    pub fn slot_for_value(&self, source: &str) -> ValueSlot {
+        if let Some(s) = self.vals.get_untracked().get(source).copied() {
+            return s;
+        }
+        let slot = self.owner.with(|| RwSignal::new(None));
+        let name = source.to_string();
+        self.vals.update(|m| {
+            m.entry(name).or_insert(slot);
+        });
+        self.vals
             .get_untracked()
             .get(source)
             .copied()
