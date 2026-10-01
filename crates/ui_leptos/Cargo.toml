@@ -8,7 +8,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 anyhow.workspace = true
-accrete = { workspace = true, features = ["classify", "ops", "template"] }
+accrete = { workspace = true, features = ["classify", "ops"] }
 console_error_panic_hook.workspace = true
 content.workspace = true
 futures.workspace = true
@@ -17,7 +17,6 @@ itertools.workspace = true
 js-sys.workspace = true
 leptos.workspace = true
 markdown.workspace = true
-minijinja.workspace = true
 send_wrapper.workspace = true
 serde.workspace = true
 serde_json.workspace = true

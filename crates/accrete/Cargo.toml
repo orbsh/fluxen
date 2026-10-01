@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 itertools.workspace = true
-minijinja = { workspace = true, features = ["loader"] }
 serde.workspace = true
 serde_json.workspace = true
 schemars = { version = "1.2.1", optional = true, features = ["chrono04"] }
@@ -13,12 +12,10 @@ regex = { workspace = true, optional = true }
 accrete_macro = { path = "../accrete_macro", optional = true }
 
 [dev-dependencies]
-accrete = { path = ".", features = ["ops", "classify", "template"] }
+accrete = { path = ".", features = ["ops", "classify"] }
 serde_json.workspace = true
-minijinja = { workspace = true, features = ["loader"] }
 
 [features]
 schema = ["dep:schemars"]
 classify = ["dep:regex", "dep:accrete_macro"]
 ops = ["dep:accrete_macro"]
-template = ["ops"]

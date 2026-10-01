@@ -152,6 +152,23 @@ e2e 复验：create 布局 → patch `/children/.../item/1/attrs/class` → 新�
       历史 `Target { target }` 变体全仓无消费者（ui 不读、stage/examples
       不产，死变体）。注意 kind 集合改动是 wire 面（schema/示例/生产端同扫）。
 
+### 8. 移除 minijinja：template 降级为纯槽位替换（ADR 0006）— done 2026-10-01
+
+- wire 零改动：`action: tmpl {name, data:String}` 注册、
+  `Accrete::template {name, data}` 应用形态不变；仅 `expand` 语义收缩为
+  `{{key}}` 槽位 → JSON 序列化值文本替换，替换后 `from_str::<Accrete>`。
+- 不支持 `{% %}`/过滤器/路径取值；循环逻辑上移生产端（01.segment 示例改造）。
+- 错误策略：静默吞掉改为 warn + 节点保留原形（expand 返回结果，warn 在
+  ui_leptos 侧，accrete 保持零日志依赖）。
+- `template` cargo feature 删除、变体常开（替换实现零依赖，门控失去理由；
+  此项为超时未裁决的推荐默认，用户可推翻）。
+- 依赖删除：minijinja（根/accrete×2/ui_leptos）；TMPL 静态改
+  `RwLock<HashMap<String,String>>`；`crates/accrete/src/template.rs` 重写。
+- 测试改写：template_expand.rs 用槽位语义重写（含 parse 失败保留、
+  未注册名 warn、循环片段由 data 提供）。
+- 门槛：workspace build/test + wasm build + e2e（tmpl 注册 → 挂 template
+  节点 → 换数据重发 create，DOM 更新）。
+
 ## Resolved
 
 ### Enter "does nothing" — console dropped CBOR uplinks (fixed 2026-09-30)

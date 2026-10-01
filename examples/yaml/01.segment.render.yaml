@@ -1,15 +1,19 @@
 action: append
-method: concat
 event: chat
 data:
   type: template
   name: segment
   data:
-    rank: 5
-    payload:
-      type: text
-      bind:
-        value:
-          kind: default
-          default: who are you?
-
+    id: seg1
+    attrs: {}
+    kids:
+      - type: case
+      - type: case
+      - type: case
+      - type: case
+      - type: case
+      - type: text
+        bind:
+          value:
+            kind: default
+            default: who are you?
