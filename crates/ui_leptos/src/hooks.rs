@@ -86,11 +86,19 @@ pub fn source_of_path<'a>(accrete: &'a impl AccreteOps, key: &str) -> Option<&'a
 /// （带 `path` 进槽内节点 WIRE SHAPE 提取），`Local` 从 `ctx.vals[slot]`
 /// 订阅裸值平面（带 `path` 进槽内 Value 的 JSON Pointer 提取——形状归
 /// 生产端），否则取 accrete 自身 `bind[key].default`。
-pub fn use_source(ctx: &Ctx, accrete: &impl AccreteOps, key: &str) -> Option<Value> {
+/// `tracked == false` 用于发射组件的初值显示：自己 emit 写回的槽若被
+/// tracked 读，会把发射方自己重建、刚发送的内容"还原"（e2e 抓到的回路）。
+fn resolve_bind(ctx: &Ctx, accrete: &impl AccreteOps, key: &str, tracked: bool) -> Option<Value> {
+    let read_data = |src: &str| -> Option<std::sync::Arc<Accrete>> {
+        if tracked { ctx.slot_for_data(src).get() } else { ctx.slot_for_data(src).get_untracked() }
+    };
+    let read_val = |slot: &str| -> Option<Value> {
+        if tracked { ctx.slot_for_value(slot).get() } else { ctx.slot_for_value(slot).get_untracked() }
+    };
     let bind = accrete.get_bind().and_then(|b| b.get(key));
     match bind.map(|b| &b.variant) {
         Some(BindVariant::Source { source, path }) => {
-            let node = ctx.slot_for_data(source).get();
+            let node = read_data(source);
             match (node.as_deref(), path) {
                 (Some(n), Some(p)) => match n.get_at(p) {
                     Ok(v) => Some(v),
@@ -110,7 +118,7 @@ pub fn use_source(ctx: &Ctx, accrete: &impl AccreteOps, key: &str) -> Option<Val
             }
         }
         Some(BindVariant::Local { slot, path }) => {
-            let v = ctx.slot_for_value(slot).get();
+            let v = read_val(slot);
             match (v, path) {
                 (Some(v), Some(p)) => {
                     let mut cur = v;
@@ -132,6 +140,15 @@ pub fn use_source(ctx: &Ctx, accrete: &impl AccreteOps, key: &str) -> Option<Val
         }
         _ => bind?.default.clone(),
     }
+}
+
+pub fn use_source(ctx: &Ctx, accrete: &impl AccreteOps, key: &str) -> Option<Value> {
+    resolve_bind(ctx, accrete, key, true)
+}
+
+/// 非反应式变体：发射组件显示初值专用。
+pub fn use_source_untracked(ctx: &Ctx, accrete: &impl AccreteOps, key: &str) -> Option<Value> {
+    resolve_bind(ctx, accrete, key, false)
 }
 
 /// `use_source(ctx, accrete, "value")`。
