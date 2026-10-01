@@ -1,6 +1,8 @@
-# G2 流式追点（ADR 0009 + ADR 0005）：先 append 一行图，再 op:append 数据行进 spec 的
-# data 数组（append 语义 = push 目标数组，指针指向数组本身）——封装模块
-# 整 spec 重设 + chart.update() 增量重绘，即 token 流驱动的实时曲线。
+# G2 多系列 + 流式追点（ADR 0009 + ADR 0005）：11 天 × 两队长格式数据，
+# color encode 分系列（原 ApexCharts 的平行 series[] 在 GoG 里是同一张表）。
+# 后两帧 op:append 数据行进 spec 的 data 数组（append 语义 = push 目标
+# 数组，指针指向数组本身）——封装模块整 spec 重设 + chart.update()
+# 增量重绘，即 token 流驱动的实时曲线。
 - action: append
   event: chat
   data:
@@ -15,18 +17,47 @@
         default:
           type: line
           data:
-          - {day: Dec 01, value: 55}
-          - {day: Dec 02, value: 69}
+          - {day: Dec 01, value: 44, team: TEAM A}
+          - {day: Dec 02, value: 55, team: TEAM A}
+          - {day: Dec 03, value: 31, team: TEAM A}
+          - {day: Dec 04, value: 47, team: TEAM A}
+          - {day: Dec 05, value: 31, team: TEAM A}
+          - {day: Dec 06, value: 43, team: TEAM A}
+          - {day: Dec 07, value: 26, team: TEAM A}
+          - {day: Dec 08, value: 41, team: TEAM A}
+          - {day: Dec 09, value: 31, team: TEAM A}
+          - {day: Dec 10, value: 47, team: TEAM A}
+          - {day: Dec 11, value: 33, team: TEAM A}
+          - {day: Dec 01, value: 55, team: TEAM B}
+          - {day: Dec 02, value: 69, team: TEAM B}
+          - {day: Dec 03, value: 45, team: TEAM B}
+          - {day: Dec 04, value: 61, team: TEAM B}
+          - {day: Dec 05, value: 43, team: TEAM B}
+          - {day: Dec 06, value: 54, team: TEAM B}
+          - {day: Dec 07, value: 37, team: TEAM B}
+          - {day: Dec 08, value: 52, team: TEAM B}
+          - {day: Dec 09, value: 44, team: TEAM B}
+          - {day: Dec 10, value: 61, team: TEAM B}
+          - {day: Dec 11, value: 43, team: TEAM B}
           encode:
             x: day
             y: value
+            color: team
+          style:
+            lineWidth: 2
           interaction:
-            tooltip: {}
+            tooltip: {shared: true}
 - action: patch
   event: chat
   id: stream-chart
-  # op:append 在数组上 = 尾部 push（ADR 0005 的流式累加语义）
+  # op:append 在数组上 = 尾部 push（ADR 0005 的流式累加语义）：
+  # 两队各补第 12 天，模拟实时追点。
   path: /bind/value/default/data
   op: append
-  value: {day: Dec 03, value: 45}
-
+  value: {day: Dec 12, value: 49, team: TEAM A}
+- action: patch
+  event: chat
+  id: stream-chart
+  path: /bind/value/default/data
+  op: append
+  value: {day: Dec 12, value: 58, team: TEAM B}

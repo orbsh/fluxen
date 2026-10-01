@@ -1,0 +1,68 @@
+<!DOCTYPE html><html><head><title>booting</title></head><body>
+<iframe id="app" src="http://localhost:3002/" style="width:800px;height:500px"></iframe>
+<script>
+// 标签页联动 e2e（ADR 0008）：iframe 挂真实 UI wasm，本页经 /cli 广播帧、
+// 在 iframe 内点击 tab，验证 local 槽订阅方文本随点击切换、无上行事件。
+// 结果经 document.title 自报（CDP /json 可直读，无需 Runtime.evaluate）。
+// 用法：cp 到 crates/ui_leptos/dist/assets/ 后
+//   chromium --app=http://localhost:3002/assets/drive-tabs.html
+function st(s) { document.title = s; }
+function step() {
+  var doc;
+  try { doc = document.getElementById("app").contentDocument; }
+  catch (e) { st("IFRAME-ERR"); return; }
+  if (!doc || doc.readyState !== "complete") { setTimeout(step, 800); return; }
+  if (!doc.getElementById("main") || !doc.querySelector("#main div")) {
+    setTimeout(step, 800); return;
+  }
+  var ws = new WebSocket("ws://localhost:3002/cli");
+  ws.onopen = function () {
+    ws.send(JSON.stringify({
+      ev: "draw", sender: "drive",
+      content: [
+        { action: "create", event: "", data: {
+            type: "case", attrs: { class: ["maximize"] }, children: [
+            { type: "case", attrs: { class: ["--tabs", "nogrow"], horizontal: true },
+              children: [ { type: "select", attrs: { class: ["f"] },
+                bind: { value: { kind: "local", slot: "page" },
+                        options: { kind: "source", source: "tabs" } } } ] },
+            { type: "text", attrs: { class: ["--page-title", "shadow"] },
+              bind: { value: { kind: "local", slot: "page", default: "PAGE-UNSET" } } }
+          ] } },
+        { action: "append", event: "tabs", data: { type: "text", id: "home",
+            bind: { value: { kind: "default", default: "HOME" } } } },
+        { action: "append", event: "tabs", data: { type: "text", id: "docs",
+            bind: { value: { kind: "default", default: "DOCS" } } } },
+        { action: "append", event: "tabs", data: { type: "text", id: "about",
+            bind: { value: { kind: "default", default: "ABOUT" } } } }
+      ]
+    }));
+    var tries = 0;
+    var iv = setInterval(function () {
+      tries++;
+      var tabEls = Array.from(doc.querySelectorAll(".select .text"));
+      var docs = tabEls.find(function (e) { return e.innerText.indexOf("DOCS") >= 0; });
+      var titleEl = doc.querySelector(".--page-title");
+      if (!docs || !titleEl) {
+        if (tries > 20) {
+          st("NOT-SETUP tabs=" + tabEls.map(function (t) { return t.innerText; }).join(","));
+          clearInterval(iv);
+        }
+        return;
+      }
+      clearInterval(iv);
+      var before = titleEl.innerText;
+      docs.click();
+      setTimeout(function () {
+        var after = doc.querySelector(".--page-title").innerText;
+        st(before === "PAGE-UNSET" && after === "docs" ? "TABS-OK unset->docs"
+          : before === "docs" ? "STUCK-at-docs"
+          : "UNEXPECTED " + JSON.stringify(before) + " -> " + JSON.stringify(after));
+      }, 800);
+    }, 400);
+  };
+  ws.onerror = function () { st("WS-ERR"); };
+}
+setTimeout(step, 1500);
+</script>
+</body></html>

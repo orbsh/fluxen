@@ -1,0 +1,77 @@
+# 标签页联动（ADR 0008）：tab 栏选中的 id 不上行——整值写 local 槽
+# `page`，标题与内容区订阅同槽即时切换。纯前端往返为零：选项列表由
+# 服务端喂一次（list 槽，这是它该管的），此后每次点击都不经过 transport。
+# 形态说明：横排 select = tab 栏；同机制换渲染位置就是频道列表/走马灯。
+- action: create
+  event: ""
+  data:
+    type: case
+    attrs:
+      class:
+      - maximize
+    children:
+    - type: case
+      attrs:
+        class:
+        - --tabs
+        - nogrow
+        - shadow
+        horizontal: true
+      children:
+      - type: select
+        bind:
+          value:
+            kind: local
+            slot: page
+          options:
+            kind: source
+            source: tabs
+    - type: text
+      attrs:
+        class:
+        - --page-title
+        format: md
+      bind:
+        value:
+          kind: local
+          slot: page
+          default: "**（未打开任何页）**"
+    - type: case
+      attrs:
+        class:
+        - --content
+        - shrink
+      children:
+      - type: text
+        bind:
+          value:
+            kind: local
+            slot: page
+            default: 点上面的 tab 切换本页内容
+- action: append
+  event: tabs
+  data:
+    type: text
+    id: home
+    bind:
+      value:
+        kind: default
+        default: 首页
+- action: append
+  event: tabs
+  data:
+    type: text
+    id: docs
+    bind:
+      value:
+        kind: default
+        default: 文档
+- action: append
+  event: tabs
+  data:
+    type: text
+    id: about
+    bind:
+      value:
+        kind: default
+        default: 关于
