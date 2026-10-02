@@ -5,15 +5,18 @@ Steps (each waits for one Enter):
   1  send 00.main.yaml     skeleton + the home/about pages
   2  send 00.chat.yaml     the chat page joins the menu
   3  inject `page`=chat    switch the visible page remotely (ADR 0011)
-  4  send 00.radar.yaml    line chart (15 days) + summary placeholder + radars
+  4  send 00.radar.yaml    append the row (line chart slot + radars + summary
+                           slot), then seed the two data slots
   5  x15  patch-append one day per Enter (one frame = three appends, one per dept)
   6  xN   patch-append one summary token per Enter, below the chart
 
 Frames go to the mirror's POST /send, so no WS handshake is needed and the
-stage console echoes each one. The running row is `#scoreboard` in the `chat`
-list — patches are only addressable by row id (ADR 0005): the trend data sits at
-<row>/children/0/bind/value/default/data, the radar block at <row>/children/1
-and the summary text at <row>/children/2/bind/value/default.
+stage console echoes each one. Everything streamed (the trend data and the
+summary text) lives in a DATA slot, not in the layout: a patch into `trend`
+(/bind/value/default/data) or `summary` (/bind/value/default) notifies only that
+slot's subscriber. The row carries no id — nothing patches it — so the file can
+be re-sent as often as you like. Writing a layout node instead would re-render
+the whole row and remount every module host in it (see docs/PLAN.md).
 
 Usage:
   python3 examples/walkthrough.py [--host 127.0.0.1] [--port 3002] [--auto]
@@ -29,10 +32,10 @@ import time
 import urllib.error
 import urllib.request
 
-ROW = "scoreboard"          # row id in the chat list (00.radar.yaml)
-LIST = "chat"               # list slot carrying the row
-TREND = "/children/0/bind/value/default/data"
-SUMMARY = "/children/2/bind/value/default"
+TREND = "trend"             # data slot: the line-chart spec (00.radar.yaml set frame)
+SUMMARY = "summary"         # data slot: the summary text
+TREND_DATA = "/bind/value/default/data"   # pointer into the trend slot node (wire shape)
+SUMMARY_TEXT = "/bind/value/default"      # pointer into the summary slot node
 
 # Days 16..30 of the simulated series — the file itself ships days 1..15
 # (09-03..09-17); these are the values the chart grows with, one day per Enter.
@@ -68,8 +71,9 @@ SUMMARY_TOKENS = [
 ]
 
 
-def frame_patch(path, value):
-    return {"action": "patch", "event": LIST, "id": ROW, "path": path, "op": "append", "value": value}
+def frame_patch(slot, path, value):
+    """Patch into a data slot (no row id: slots are addressed by name)."""
+    return {"action": "patch", "event": slot, "path": path, "op": "append", "value": value}
 
 
 class Mirror:
@@ -85,18 +89,6 @@ class Mirror:
             return f"HTTP {e.code}: {e.read().decode().strip()}"
         except urllib.error.URLError as e:
             return f"unreachable ({e.reason}) — is `stage serve` running?"
-
-
-# 00.radar.yaml carries no row id: a manual /send of it can be repeated (no id =
-# positional row, no duplicate-id rejection). Patches are addressable only by row
-# id, so the demo's own push injects one — the file stays reusable.
-ROW_ANCHOR = "    type: case\n    attrs:\n"
-
-
-def inject_row_id(body):
-    if body.count(ROW_ANCHOR) != 1:
-        sys.exit(f"00.radar.yaml: expected exactly 1 {ROW_ANCHOR!r} anchor, found {body.count(ROW_ANCHOR)}")
-    return body.replace(ROW_ANCHOR, f"    type: case\n    id: {ROW}\n    attrs:\n", 1)
 
 
 def send_json(mirror, payload):
@@ -133,10 +125,7 @@ def main():
     print("fluxen walkthrough — 打开 UI（如 http://localhost:3002?codec=json）后开始。")
 
     def push_file(fname):
-        body = open(f"examples/yaml/{fname}", encoding="utf-8").read()
-        if fname == "00.radar.yaml":
-            body = inject_row_id(body)
-        return mirror.send(body)
+        return mirror.send(open(f"examples/yaml/{fname}", encoding="utf-8").read())
 
     step.wait("发送 00.main.yaml")
     print(f"    send → {push_file('00.main.yaml')}")
@@ -156,14 +145,14 @@ def main():
     for i, (day, rd, mkt, ops) in enumerate(TAIL_DAYS, start=1):
         if i > 1:
             step.wait(f"追加 {day}")
-        body = [frame_patch(TREND, {"day": day, "avg": v, "dept": d}) for v, d in zip((rd, mkt, ops), DEPTS)]
+        body = [frame_patch(TREND, TREND_DATA, {"day": day, "avg": v, "dept": d}) for v, d in zip((rd, mkt, ops), DEPTS)]
         print(f"    [{i}/{len(TAIL_DAYS)}] {day} → {send_json(mirror, body)}")
 
     step.wait(f"逐 token patch 追加图表下方的摘要（{len(SUMMARY_TOKENS)} 帧，每帧只带新增片段）")
     for i, tok in enumerate(SUMMARY_TOKENS, start=1):
         if i > 1:
             step.wait(f"追加 token {i}/{len(SUMMARY_TOKENS)}")
-        print(f"    {tok!r} → {send_json(mirror, frame_patch(SUMMARY, tok))}")
+        print(f"    {tok!r} → {send_json(mirror, frame_patch(SUMMARY, SUMMARY_TEXT, tok))}")
 
     print("\n完成。图表应为 30 天，摘要完整。")
 

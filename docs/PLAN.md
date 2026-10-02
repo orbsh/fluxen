@@ -205,7 +205,8 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
 ### 10. Chart 渲染器演进：G2 spec + 模块通道（ADR 0009）— done 2026-10-01
 
 - 载荷 = G2 spec（纯数据、GoG 正统）；`bind["value"]` 槽直装 spec，
-  流式更新 = 指针 patch 进 `/data` + update 重绘（ADR 0005 零新机制）。
+  流式更新 = 指针 patch 进 `/data` + 同实例 options 重设 + render 重绘
+  （ADR 0005 零新机制；v5 无 `chart.update()`，见 §13）。
 - 去 eval：薄封装 ES module（mount/update/resize/unmount 契约，内部
   动态 import g2、CBOR→spec 解码），chart.rs 复用 ADR 0007 的
   import(url) 通道；`Chart { url }` 字段 serde default 向后兼容。
@@ -293,13 +294,100 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
 - 导出（dump）= 一条上行载荷，装 layout / data / list / vals 四个平面 +
   可滚动容器的 scrollTop；回灌（restore）= 若干 inject + 滚动回填。
 - 滚动的锚点复用现有寻址元组 `(event, id?, path)`（rack 某行内的容器 =
-  `{event: "chat", id: "scoreboard", path: "/children/1"}`），不引入第二种
+  `{event: "chat", id: "<row>", path: "/children/1"}`），不引入第二种
   路径语法；滚动是渲染器私有的 DOM 状态，读写与回填都归渲染器。
 - 未定：快照的判定标准——收 Vars 全量还是只收可恢复的那部分（决定要不要
   给槽或值加持久性判据）；dump 的载荷形状；恢复的时机与幂等要求。落地前
   单独写 ADR。
 
+### 13. 流式内容走订阅槽 + 模块 update 通道修复（2026-10-02）
+
+两处实测缺陷（详见 Resolved）：
+
+1. g2chart 封装模块的 update 调 `chart.update()`——G2 v5 没有这个方法，调用抛
+   TypeError，宿主只打 warn 不重绘：源槽绑定的 chart 收到逐帧写入后完全不动
+   （实测写入前后实例数/重绘数都不变）。
+2. 写布局节点（inline default）会重渲染整行：行内模块宿主被 destroy + 重新
+   mount + render，实测 4 个 G2 实例 → 一帧后 8 → 再一帧 12，canvas 与宿主
+   div 全部换新（DOM identity 探针），而同行的 text 节点原地存活。
+
+修法（本次）：
+
+- 封装模块 update = `chart.options(spec)` + `chart.render()`（v5 的正确增量
+  路径：options() 只做 spec 树差量、不落笔，重绘必须显式 render()；增量只在
+  同实例续用下成立）。
+- 流式内容从布局平面搬进数据槽：00.radar.yaml 的折线图
+  `bind.value.kind: source → trend`、摘要 text `→ source: summary`，文件由 1 帧
+  变 3 帧（append 行 + set `trend` + set `summary`）；walkthrough 改 patch 槽
+  （trend `/bind/value/default/data`、summary `/bind/value/default`），行 id
+  注入机制随之删除（不再按行寻址，行保持无 id、文件可反复 send）。
+
+e2e（stage + headless CDP）：挂载后 4 实例；追加一天（trend 槽）→ 仅折线图
+实例 render +1、实例数与 canvas 身份不变、0 销毁、三个雷达零重绘；追加一个
+token（summary 槽）→ 零图表重绘；无 update threw 警告。整段演示
+`walkthrough.py --auto`：折线图 data 90 行（30 天 × 3 部门）、摘要完整。
+
+门槛：三门槛 + 上述 e2e。
+
+### 14. 容器子节点级 Memo（未实施，暂缓）
+
+容器内子节点没有 memo（`render_children` 直接 map dispatch）：任一子节点变化
+→ 容器 render 闭包重跑 → 模块宿主重挂。rack 有行级 `Memo<Accrete>`（未变行
+不重算），容器层没有对应物，所以"写布局节点"这条路线的重挂问题仍在（§13 只
+把流式内容搬出布局平面，没有改渲染路径）。
+
+判据：Accrete 是纯数据 + PartialEq，节点值相等即可跳过该子树——数据本身即
+虚拟树，剪枝搭在数据相等性上，不需要额外 vdom 层（diff 仍由 tachys 在 view
+树上做）。注意跳过只对"节点自身数据未变"成立：订阅驱动的更新（source/local
+槽）在组件自己的闭包里重跑，不依赖父闭包，memo 不得挡在订阅组件的更新路径上。
+
+触发条件：需要"写布局节点也不重挂模块宿主"时再实施。
+
 ## Resolved
+
+### Module update leg was dead — G2 v5 has no `chart.update()` (fixed 2026-10-02)
+
+`assets/g2chart/index.js` called `chart.update()` on every data change, but the
+pinned G2 v5 build has no such method: measured on the chart instance,
+`typeof chart.update === "undefined"` (the official `esm/api/runtime.js` shows
+`Runtime` with `render`/`options`/`changeSize`/`forceFit` and no `update`;
+`changeData` comes from the composition/mark base and does exist). The call
+threw `TypeError: v.chart.update is not a function`, the host logged
+`module host <id>: update threw: …`, and nothing repainted — a source-bound
+chart held 1 instance / 1 render before and after a data patch, so ADR 0009's
+"`chart.options(spec); chart.update()` 增量重绘" premise was false.
+
+Fixed to `chart.options(spec)` + `return chart.render()`. Measured G2 semantics
+behind that choice: `options()` alone paints nothing (render count 0); a
+re-render makes the spec tree a diff (existing marks/compositions are reused by
+key, dropped ones removed) and the canvas is repainted by G2's canvas plugin,
+which disables the engine's own dirty-check/dirty-rect and keeps its own
+dirty-object region repaint (`dirtyObjectNumThreshold` 500 /
+`dirtyObjectRatioThreshold` 0.8, full-screen clear above). Incrementality only
+holds while the instance lives — a re-render with an unchanged spec still
+repaints (731 2D calls measured), and no scene element object survives a data
+change (0/3), so destroy + rebuild throws the whole benefit away.
+
+### A write into one row node rebuilt the row and remounted every module host (fixed for streamed values 2026-10-02)
+
+Patching an inline-bound value inside a list row (the walkthrough's per-day and
+per-token appends) rewrote the row's Accrete value, so the row's render closure
+re-ran and every module host in that row was torn down and re-mounted: measured
+4 G2 instances → 8 after a day append → 12 after a summary text append, 0 of the
+4 tagged canvases (or their module-created hosts) surviving, while the row's
+plain text nodes kept DOM identity (7/7 `.box` tags alive). Per-key slots and
+the rack's per-row `Memo` isolate other keys and other rows; nothing isolates
+siblings inside one row, and a remount renders each chart twice (mount +
+ResizeObserver changeSize).
+
+Streamed values no longer live in the layout plane: the radar example's line
+chart and summary text bind `kind: source` (`trend` / `summary`) and the
+walkthrough patches those slots. Measured after the change: a day append
+re-renders only the line chart in place (instance count and canvas identity
+unchanged, 0 destroys, the three radars untouched), a summary token re-renders
+no chart at all, and the demo grows to 90 data rows (30 days × 3 departments).
+The general case — any layout-plane write still remounts module hosts — is not
+fixed; it needs the container-level memo recorded in §14.
 
 ### Emitted events carried no node id — the wrapper's `id` was always absent (fixed 2026-10-02)
 
@@ -403,3 +491,18 @@ nodes, so `case` is the substrate rack renders through. The mechanism gap is
 not constant-sized — slot subscription, per-row `Owner` + `Memo` and template
 selection versus rendering children directly — so merging them would only grow
 two unrelated code paths inside one component.
+
+### Streamed values live in a data slot, never in the layout plane
+
+Token-level content (a growing summary, a per-day data point, chat tokens) is a
+value that changes on its own schedule, so it belongs in a data slot with the
+widget bound `kind: source`; the producer then patches the slot
+(`{event: <slot>, path: …}`) and only that slot's subscriber re-renders.
+Patching the layout node instead (`…/bind/value/default`) rewrites the container
+node, so the container's render closure re-runs and every module host inside it
+is destroyed and re-mounted — measured: one sibling text append re-created all
+four charts of the row (4 → 8 → 12 G2 instances, canvases replaced) while the
+row's own text nodes kept DOM identity. Two further reasons the slot is the
+right home: a layout path is positional and dies when the tree shifts, while a
+slot is addressed by name; and a slot-bound widget owns a subscription
+independent of its parent, so it survives a parent re-render.

@@ -1,8 +1,10 @@
 # G2 多系列 + 流式追点（ADR 0009 + ADR 0005）：11 天 × 两队长格式数据，
 # color encode 分系列（原 ApexCharts 的平行 series[] 在 GoG 里是同一张表）。
 # 后两帧 op:append 数据行进 spec 的 data 数组（append 语义 = push 目标
-# 数组，指针指向数组本身）——封装模块整 spec 重设 + chart.update()
-# 增量重绘，即 token 流驱动的实时曲线。
+# 数组，指针指向数组本身）；本文件走的是按行寻址的布局平面路线——写布局节点
+# 会重渲染整行、重挂模块宿主（图重建而不是就地重绘，见 docs/PLAN.md §13），
+# 流式内容的正确落点是数据槽：封装的 update 腿 = 同实例 options + render。
+# 保留本文件是为了覆盖"按行寻址 patch 进 spec"这条协议路径。
 - action: append
   event: chat
   data:

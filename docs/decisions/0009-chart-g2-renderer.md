@@ -50,7 +50,8 @@ interval + stackY + color encode + tooltip/elementHighlight interaction
 （`{type, data, encode, transform, scale, coordinate, interaction, ...}`）。
 核心不解析、不校验内部（同 Canvas：spec 是模块私有词汇）；流式更新
 走 ADR 0005 指针（`patch path:/data/... op:append` 追数据行，
-G2 侧 `chart.options(spec); chart.update()` 增量重绘）。
+G2 侧 `chart.options(spec)` + `chart.render()` 差量重绘；v5 没有
+`chart.update()`，实测见 docs/PLAN.md §13）。
 
 组件分工不变（用户 2026-09-30 定位）：chart 仍是数据可视化专用组件，
 "数据 + 定义 → 图"的语义不变——变的是 spec 词汇（ApexCharts → GoG）
@@ -60,7 +61,8 @@ G2 侧 `chart.options(spec); chart.update()` 增量重绘）。
 
 新增薄封装 ES module `assets/g2chart/index.js`（约 40 行）：导出
 mount/update/resize/unmount 契约，内部动态 import g2 库、
-`new G2.Chart({container})` → `chart.options(spec)` → render/update；
+`new G2.Chart({container})` → `chart.options(spec)` → render（update 也是
+options + render，v5 没有 `chart.update()`）；
 spec 载荷 = 宿主推来的 CBOR（解码后即 spec 对象）。chart.rs 的挂载
 实现改为与 canvas.rs 同一条 import(url) 通道——`chart` 变体的默认
 url 指向 `/assets/g2chart/index.js`（`Chart { url }` 字段可覆盖，
@@ -92,8 +94,9 @@ url 指向 `/assets/g2chart/index.js`（`Chart { url }` 字段可覆盖，
 - chart/diagram 的渲染实现从"eval 字符串注入"迁到"0007 模块契约"，
   核心依旧零渲染知识；chart 与 Canvas 在机制上同族、语义上分工
   （封闭 GoG spec vs 自由载荷），符合组件分工裁决。
-- 流式 token 更新图表 = patch 指针进 spec 的 data 数组 + update 重绘，
-  与既有操作层零冲突。
+- 流式 token 更新图表 = patch 指针进 spec 的 data 数组 + 同实例 options
+  + render 重绘（模块 update 腿），与既有操作层零冲突。内容须落在数据槽
+  上（写布局节点会重渲染整行、重挂模块宿主），见 docs/PLAN.md §13/§Conventions。
 - wire 面：`Chart` 增加 `url` 字段（默认值 serde default 保持向后兼容
   ——旧帧不带 url 也能 decode）；spec 内容本就是 opaque Value，无 schema
   变化。
