@@ -53,9 +53,14 @@ export async function mount(el, data, _host) {
 export function update(id, data) {
   const v = views.get(id);
   if (!v) return;
-  // 流式追加（token 进 spec 的 data 数组）：整 spec 重设 + 增量重绘。
+  // 流式追加（token 进 spec 的 data 数组）：整 spec 重设 + 差量重绘。
+  // G2 v5 没有 chart.update()（实测 typeof === "undefined"，调用抛
+  // TypeError：宿主只打 warn，图不动）——options() 只做 spec 树差量、
+  // 不落笔，重绘必须显式 render()。增量只在同实例续用下成立：
+  // render() 复用已有 mark/composition，画布层由 G2 渲染插件按脏对象
+  // 区域重绘（引擎自带 dirty rect 由它接管）。
   v.chart.options(specOf(data));
-  v.chart.update();
+  return v.chart.render();
 }
 
 export function resize(id, w, h) {
