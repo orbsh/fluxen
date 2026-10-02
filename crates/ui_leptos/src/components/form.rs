@@ -1,6 +1,6 @@
 use crate::Ctx;
 use crate::ctx::render_children;
-use crate::hooks::{FormState, use_common_css};
+use crate::hooks::{FormState, node_id, use_common_css};
 use accrete::{Accrete, AccreteOps, Bind, BindVariant, Form, JsType};
 use leptos::html::*;
 use leptos::prelude::*;
@@ -53,6 +53,7 @@ fn collect_fields(
 /// 表单：收集 `Field` 字段信号，渲染子组件，`confirm` 为真时发送事件。
 pub fn form_(accrete: Form, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
+    let node_id = node_id(&accrete);
     let mut css = vec!["case", "f"];
     if let Some(id) = &accrete.id {
         css.push(id.as_str());
@@ -107,8 +108,8 @@ pub fn form_(accrete: Form, ctx: &Ctx) -> AnyView {
                     .collect();
                 let val = to_value(content).unwrap_or(Value::Null);
                 // 落点统一路由（ADR 0008）：Event 上行、Local 整张表单
-                // 记录进本地值槽。
-                ctx.emit(&event, None, val);
+                // 记录进本地值槽；`id` = 发射节点（表单）自身的 id（ADR 0010）。
+                ctx.emit(&event, node_id.clone(), val);
                 confirm.set(Value::Bool(false));
             }
         });
