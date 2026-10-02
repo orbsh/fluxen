@@ -91,10 +91,16 @@ pub enum BindVariant {
     /// 裸 Value 平面——发射侧省略 `path`（整值写入），订阅侧带 `path`
     /// 时进槽内 Value 的 JSON Pointer 提取子值（形状归生产端，
     /// 与 wire-shape 无关）。
+    /// ADR 0010：落槽载荷与上行同形（`Outflow {event, id?, data}` 包装
+    /// 对象）——事件形状由事件定义、不由落点决定，`kind: event` 改绑
+    /// `kind: local` 订阅方零改动。`event` 缺省 = 槽名（槽即频道）；
+    /// `path` 仍是订阅侧字段，发射侧忽略。
     Local {
         slot: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         path: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        event: Option<String>,
     },
     Event {
         event: String,
@@ -133,6 +139,11 @@ pub struct ClassAttr {
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
+    /// 容器自身的排布方向（同 CaseAttr 字段；ADR 0010 缺陷修复：
+    /// 此前只有 Case 认识 horizontal，select/rack 的 col 类无法被
+    /// 自己的 attrs 推翻——父 case 的 horizontal 只管父 div）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub horizontal: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -420,6 +431,38 @@ pub struct Path {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum PagesDisplay {
+    /// 只挂载命中行：切页省内存，子树状态（滚动/输入/GL）随卸载丢失。
+    #[default]
+    Render,
+    /// 所有行常驻 DOM，未命中行容器加 class `hide`（display:none）：
+    /// 状态全保，代价是全部行的渲染与内存常驻（生产端自选）。
+    Dom,
+}
+
+/// id 字典页面容器（ADR 0010）：`bind["value"]`（source，list 平面）喂
+/// 页面行——行 = 任意 Accrete 节点，其 `id` 即字典键（行身份在数据里，
+/// 同 rack 纪律）；`bind["select"]`（local 或 source，可带 `path`）是
+/// 选中信号，tracked 读、按 path 提键（path 缺省 = 整值；提出来必须是
+/// 字符串，否则 warn + 不切换）。命中键显示对应行，未命中 = warn + 空白。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+pub struct Pages {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<ClassAttr>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bind: Option<HashMap<String, Bind>>,
+    #[serde(default)]
+    pub display: PagesDisplay,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct RackAttr {
     #[serde(default)]
@@ -698,6 +741,8 @@ pub enum Accrete {
     path(Path),
     #[ui_acrete(has_id = "true")]
     rack(Rack),
+    #[ui_acrete(has_id = "true")]
+    pages(Pages),
     button(Button),
     image(Image),
     input(Input),

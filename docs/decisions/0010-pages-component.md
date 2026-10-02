@@ -1,6 +1,6 @@
 # ADR 0010: Pages 组件——id 字典 + 事件包装形状统一
 
-状态：草案（待确认）
+状态：已接受（2026-10-02 实施完毕，e2e 通过）
 日期：2026-10-01
 仓库：fluxen
 
@@ -80,6 +80,11 @@ wire tag `pages`，derive 门控照 rack 抄。bind 固定两个键：
 - `dom`：所有行常驻 DOM，未命中行容器加 class `hide`
   （`display:none`）。状态全保——chat 页滚回原处、canvas 不重建；
   代价是全部行的渲染与内存常驻，生产端自选。
+
+占满空间（实施期追加裁决 2026-10-02，同 case/rack 模式）：pages 容器
+`f` + `col`（进 use_common_css 类型表，可被自身 attrs.horizontal 推翻），
+命中页包壳 `page f` 占满剩余空间；隐藏页不带 `f`——同 div 上 `.f` 与
+`.hide` 冲突（实测 display 被算回 flex），互斥直接做进 class 切换。
 
 字典在渲染层维护（`RwSignal<HashMap<String, Accrete>>` 派生自 list
 槽，非 wire 概念），与 Ctx 槽平面无关——Ctx 平面仍是 data/list/vals

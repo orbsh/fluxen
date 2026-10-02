@@ -2,7 +2,7 @@
 //! on both source/local, `Target` retired (unknown kinds must fail),
 //! and the read-side pointer `get_at` on the WIRE shape.
 
-use accrete::{Accrete, BindVariant};
+use accrete::{Accrete, AccreteOps, BindVariant};
 use serde_json::json;
 
 fn bind(js: serde_json::Value) -> BindVariant {
@@ -12,19 +12,37 @@ fn bind(js: serde_json::Value) -> BindVariant {
 #[test]
 fn local_kind_carries_slot_and_optional_path() {
     match bind(json!({"kind": "local", "slot": "page"})) {
-        BindVariant::Local { slot, path } => {
+        BindVariant::Local { slot, path, event } => {
             assert_eq!(slot, "page");
             assert_eq!(path, None);
+            assert_eq!(event, None);
         }
         other => panic!("expected Local, got {other:?}"),
     }
     match bind(json!({"kind": "local", "slot": "chan", "path": "/id"})) {
-        BindVariant::Local { slot, path } => {
+        BindVariant::Local { slot, path, event } => {
             assert_eq!(slot, "chan");
             assert_eq!(path.as_deref(), Some("/id"));
+            assert_eq!(event, None);
         }
         other => panic!("expected Local, got {other:?}"),
     }
+}
+
+#[test]
+fn local_kind_gains_optional_event_name() {
+    // ADR 0010: emitter-side channel name; absent = slot name.
+    match bind(json!({"kind": "local", "slot": "page", "event": "channel::select"})) {
+        BindVariant::Local { slot, event, .. } => {
+            assert_eq!(slot, "page");
+            assert_eq!(event.as_deref(), Some("channel::select"));
+        }
+        other => panic!("expected Local, got {other:?}"),
+    }
+    // roundtrip: explicit event serializes back; absent stays absent
+    let v = json!({"kind": "local", "slot": "p", "event": "e"});
+    let b = bind(v.clone());
+    assert_eq!(serde_json::to_value(&b).unwrap(), v);
 }
 
 #[test]
@@ -64,6 +82,29 @@ fn get_at_walks_wire_shape() {
     assert!(a.get_at("/id").is_err());
     assert!(a.get_at("/children/9/bind").is_err());
     assert!(a.get_at("nope").is_err());
+}
+
+#[test]
+fn pages_variant_decodes_with_display_default() {
+    // ADR 0010: wire tag `pages`; `display` absent = render (serde default).
+    let p: accrete::Pages = serde_json::from_value(json!({
+        "id": "pager",
+        "bind": {
+            "value": { "kind": "source", "source": "pages" },
+            "select": { "kind": "local", "slot": "page", "path": "/data" }
+        }
+    }))
+    .unwrap();
+    assert_eq!(p.display, accrete::PagesDisplay::Render);
+    // explicit dom mode
+    let p2: accrete::Pages =
+        serde_json::from_value(json!({ "display": "dom" })).unwrap();
+    assert_eq!(p2.display, accrete::PagesDisplay::Dom);
+    // enum tag on the Accrete level round-trips
+    let a: accrete::Accrete = serde_json::from_value(json!({ "type": "pages" })).unwrap();
+    // stringify! on the match path yields spaced tokens (proc-macro behavior)
+    assert!(a.get_type().contains("pages"));
+    assert!(matches!(a, accrete::Accrete::pages(_)));
 }
 
 #[test]

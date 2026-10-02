@@ -14,6 +14,8 @@ pub mod form;
 pub use form::form_;
 pub mod popup;
 pub use popup::popup_;
+pub mod pages;
+pub use pages::pages_;
 pub mod rack;
 pub use rack::rack_;
 pub mod render;
