@@ -1,7 +1,10 @@
-# 标签页联动（ADR 0008）：tab 栏选中的 id 不上行——整值写 local 槽
-# `page`，标题与内容区订阅同槽即时切换。纯前端往返为零：选项列表由
-# 服务端喂一次（list 槽，这是它该管的），此后每次点击都不经过 transport。
-# 形态说明：横排 select = tab 栏；同机制换渲染位置就是频道列表/走马灯。
+# 标签页联动（ADR 0010 诚实形态）：两份互异的数据——菜单项（tab 栏，
+# 短标签行）与页面内容（Pages 的字典行），内容不等于被点的 id。
+# select 点击 emit 包装对象 {event, id?, data}（与上行同形）落 local 槽
+# `page`；标题与 Pages 订阅同槽、各按 /data 取件——同事件两处消费。
+# 页面字典在 Pages 私有状态里（行 id = 键），不引入任何寻址语法。
+# 纯前端往返为零：菜单与页面都由服务端喂（list 平面），此后每次点击
+# 不经过 transport。横排 tab 栏 = select 自身 attrs.horizontal: true。
 - action: create
   event: ""
   data:
@@ -19,6 +22,8 @@
         horizontal: true
       children:
       - type: select
+        attrs:
+          horizontal: true
         bind:
           value:
             kind: local
@@ -35,19 +40,23 @@
         value:
           kind: local
           slot: page
+          path: /data
           default: "**（未打开任何页）**"
-    - type: case
+    - type: pages
+      id: pager
       attrs:
         class:
         - --content
         - shrink
-      children:
-      - type: text
-        bind:
-          value:
-            kind: local
-            slot: page
-            default: 点上面的 tab 切换本页内容
+      bind:
+        value:
+          kind: source
+          source: pages
+        select:
+          kind: local
+          slot: page
+          path: /data
+# ---- 菜单行：短标签 + id（tab 栏的选项） ----
 - action: append
   event: tabs
   data:
@@ -75,3 +84,52 @@
       value:
         kind: default
         default: 关于
+# ---- 页面行：id 与菜单同键、内容互异（Pages 的字典） ----
+- action: append
+  event: pages
+  data:
+    type: text
+    id: home
+    attrs:
+      format: md
+    bind:
+      value:
+        kind: default
+        default: "# 首页\n欢迎。切 tab 不换页则本页常驻（display 模式为 render）。"
+- action: append
+  event: pages
+  data:
+    type: case
+    id: docs
+    children:
+    - type: text
+      attrs:
+        format: md
+      bind:
+        value:
+          kind: default
+          default: "## 文档页（表单）"
+    - type: form
+      children:
+      - type: input
+        bind:
+          value:
+            kind: field
+            field: doc_draft
+            default: 草稿写在切页后丢失（render 语义）
+      - type: button
+        attrs:
+          oneshot: false
+        bind:
+          value:
+            kind: submit
+            default: 保存
+- action: append
+  event: pages
+  data:
+    type: textarea
+    id: about
+    bind:
+      value:
+        kind: default
+        default: "关于页：改这里的内容后切走再切回——render 模式会丢，dom 模式保。"

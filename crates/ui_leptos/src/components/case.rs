@@ -8,15 +8,21 @@ use leptos::prelude::*;
 
 /// 容器：`case` class + grid 样式 + 公共 CSS。
 pub fn case_(accrete: Case, ctx: &Ctx) -> AnyView {
-    let mut css = vec!["case", "f"];
+    // grid 与非 grid 二选一：此前 "f" 在初值里、grid 分支又补一次，
+    // class 变成 `case f f g`（或 grid 时 `case f g`）。main.css 同一
+    // @layer 里 .f 声明在 .g 之后，display:flex 压过 display:grid，
+    // grid-template-* 全部失效——`attrs.grid` 自出生起就没生效过
+    // （全仓 grep：examples/ 里没有任何 grid 用例，所以无人踩到）。
+    // 修法=grid 时只进 "g"，否则只进 "f"。
+    let mut css = vec!["case"];
     if let Some(id) = &accrete.id {
         css.push(id.as_str());
     }
-    let mut f = true;
     let mut style = String::new();
+    let mut use_grid = false;
     if let Some(CaseAttr { grid, .. }) = &accrete.attrs {
         if let Some(g) = grid {
-            f = false;
+            use_grid = true;
             css.push("g");
             style = g
                 .iter()
@@ -24,9 +30,9 @@ pub fn case_(accrete: Case, ctx: &Ctx) -> AnyView {
                 .collect::<Vec<String>>()
                 .join("\n");
         }
-        if f {
-            css.push("f");
-        }
+    }
+    if !use_grid {
+        css.push("f");
     }
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");

@@ -41,4 +41,8 @@
     .--cart {
         border-radius: 2rem;
     }
+
+    .hide {
+        display: none;
+    }
 }

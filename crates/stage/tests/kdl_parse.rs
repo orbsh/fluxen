@@ -98,7 +98,8 @@ fn kdl_well_formed_tree() {
         paged.map(|b| b.variant),
         Some(BindVariant::Local {
             slot: "chan".into(),
-            path: None
+            path: None,
+            event: None
         })
     );
 

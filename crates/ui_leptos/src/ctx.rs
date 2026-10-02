@@ -4,7 +4,7 @@ use accrete::{Accrete, AccreteOps};
 use content::codec::ActiveCodec;
 use content::{Content, Message, PatchKind};
 use leptos::prelude::*;
-use serde_json::Value;
+use serde_json::{Value, to_value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::{LazyLock, RwLock};
@@ -122,11 +122,13 @@ impl Ctx {
             .set(Some(Arc::new(accrete)));
     }
 
-    /// emit 统一落点（ADR 0008）：`Event` 上行 transport（现状不变），
-    /// `Local` 不上行——载荷整值写入 local 平面的具名值槽
-    /// （裸 Value，与 data 的 Accrete 展示形态分平面）。发射侧忽略
-    /// 自己的 `path` 字段（写必整值——形状归生产端，指针提取是订阅侧
-    /// 的事）。其他变体返回 false，调用方保持自己的兜底。
+    /// emit 统一落点（ADR 0008，形状修订见 ADR 0010）：`Event` 上行
+    /// transport（现状不变），`Local` 不上行——写入 local 平面具名值槽
+    /// 的载荷是与上行同形的包装对象 `Outflow {event, id?, data}`：事件
+    /// 数据形状由事件定义、不由落点决定（同一事件从 event 改绑 local，
+    /// 订阅方 path/键零改动）。`event` 名取 `Local.event`，缺省 = 槽名
+    /// （槽即频道）。发射侧忽略自己的 `path` 字段（写必整值——指针提取
+    /// 是订阅侧的事）。其他变体返回 false，调用方保持自己的兜底。
     pub fn emit(&self, variant: &accrete::BindVariant, id: Option<String>, payload: Value) -> bool {
         match variant {
             accrete::BindVariant::Event { event } => {
@@ -137,8 +139,14 @@ impl Ctx {
                 });
                 true
             }
-            accrete::BindVariant::Local { slot, .. } => {
-                self.slot_for_value(slot).set(Some(payload));
+            accrete::BindVariant::Local { slot, event, .. } => {
+                let wrapped = to_value(&content::Outflow {
+                    event: event.clone().unwrap_or_else(|| slot.clone()),
+                    id,
+                    data: payload,
+                })
+                .unwrap_or(Value::Null);
+                self.slot_for_value(slot).set(Some(wrapped));
                 true
             }
             _ => false,

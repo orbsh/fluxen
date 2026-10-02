@@ -227,7 +227,7 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
   CDP 探针 CHART-OK（inline 路径 canvas 1280x960），最终由用户在
   stage 直连验证通过（图表渲染与交互目检）。
 
-### 11. Pages 组件 + 事件形状统一（ADR 0010，草案待确认）— pending
+### 11. Pages 组件 + 事件形状统一（ADR 0010）— done 2026-10-02
 
 - emit 载荷形状与落点解耦：Local 落槽改写包装对象
   `{event, id?, data}`（与 content::Outflow 同构，复用该类型）；
@@ -236,16 +236,26 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
   （id=字典键，复用行身份纪律）；bind.select→local/source + path 提键
   （tracked）。display=render（只挂命中行）| dom（全挂、未选中 hide，
   滚动/输入/GL 状态保持）。未命中键 warn+空白。
+- 占满空间（用户 2026-10-02 追加裁决，同 case/rack 模式）：pages 容器
+  带 `f` + 类型表授予 `col`（use_common_css 的列表已含 Pages），命中页
+  包壳 `page f` 占满剩余空间；隐藏页不带 `f`——同 div 上 `.f` 与
+  `.hide` 冲突（实测 display 被算回 flex），互斥做进 class 切换。
+  e2e 实测：窗口 1084 时 pages 区 1036、可见页与内层根均 1036、
+  rack 955；dom 模式切走再切回 textarea 同一节点、草稿值存活。
 - 15.tabs.yaml 重写为诚实形态（菜单标签与页面内容互异，同事件两处
   取件：标题 /data、Pages /data）；14.local_routing 示例同步包装形状。
-- 测试：emit 包装形状（Local 带/不带 event、id 透传）、Pages 键提取/
-  未命中、display dom 模式状态存活探针；三门槛 + stage 直驱 e2e。
-- 缺陷挂账（用户 2026-10-01 目检发现，实施本单元时一并排查）：
-  15.tabs.yaml 的 tab 栏 `horizontal: true` 疑似失效——包裹 select 的
-  case 设了 horizontal 但选项没横排。排查方向：attrs 映射路径
-  （YAML→serde 字段是否真落到 CaseAttr.horizontal）、CSS flex 上下文
-  （.col 与 flex-direction:row 的生成条件）、select 自身 class 组合。
-  非本单元阻塞项，修时给最小复现帧。
+- 新增 16.chat_in_pages.yaml：Pages 结构为基础 main 布局，00.chat_layout
+  的整棵聊天树作为一行（id: chat, display: dom）append 进字典——
+  chat 成为其中一个页面，切走滚动/草稿保持。
+- 测试：emit 包装形状（Local 带/不带 event、id 透传，content/tests/
+  outflow_shape.rs + accrete/tests/bind_routing.rs）、Pages 键提取/
+  未命中（components/pages.rs 单测）；三门槛 + stage 直驱 e2e 全过。
+- 缺陷已修（用户 2026-10-01 目检发现）：15.tabs.yaml 的 tab 栏
+  `horizontal: true` 失效——根因是 `ClassAttr` 没有 horizontal 字段，
+  use_common_css 无条件给 Select 加 `col`，父 case 的 horizontal 只作用
+  于父 div。修法：ClassAttr 增可选 `horizontal`（ClassifyAttrs derive
+  自动认），15.tabs 的 select 自带 `attrs: {horizontal: true}`；e2e 实测
+  select computed flex-direction=row。
 
 ## Resolved
 

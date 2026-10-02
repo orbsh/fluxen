@@ -9,7 +9,7 @@ where
     T: Classify + AccreteOps,
 {
     let t = accrete.get_type();
-    let mut v = ["Box", "Case", "Rack", "Text", "Tab", "Select"].contains(&t);
+    let mut v = ["Box", "Case", "Pages", "Rack", "Text", "Tab", "Select"].contains(&t);
     if let Some(a) = accrete.borrow_attrs() {
         if a.is_horizontal() {
             v = false;
@@ -117,7 +117,7 @@ fn resolve_bind(ctx: &Ctx, accrete: &impl AccreteOps, key: &str, tracked: bool) 
                 (None, _) => bind.and_then(|b| b.default.clone()),
             }
         }
-        Some(BindVariant::Local { slot, path }) => {
+        Some(BindVariant::Local { slot, path, .. }) => {
             let v = read_val(slot);
             match (v, path) {
                 (Some(v), Some(p)) => {
