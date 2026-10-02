@@ -1,7 +1,12 @@
-# 以 15.tabs 的 Pages 结构为基础 main 布局：tab 栏 + 标题 + pages 字典；
-# 00.chat_layout 的整棵聊天树不再是 create 布局，而是作为一行（id: chat）
-# append 进 pages 字典——成为其中一个页面。display: dom：聊天页常驻 DOM，
-# 切走再切回滚动位置与输入草稿存活（这正是 dom 语义的真实用例）。
+# 初始 main 布局（完整帧：create 骨架 + home/about 数据行）。单独发送即可起
+# 全套。tab 栏用 box 包裹出内边距；pages
+# 字典 display=dom：切走再切回，页面内滚动/输入状态保持。
+# 菜单行（tabs 槽）与页面行（pages 槽）内容互异；点击 select emit 包装
+# 对象 {event, id?, data} 落 local 槽 `page`，pages 的 select 订阅按
+# /data 取键（ADR 0010；不设标题节点——键不是展示内容）。
+# chat 页不在初始菜单——后续用 00.chat.yaml 动态加入。
+# home 主体绑定事件 home::open：页面内输入框回车即上行（stage console
+# 可见），与 tab 的 local 联动相对照——事件走 transport，联动不走。
 - action: create
   event: ""
   data:
@@ -28,17 +33,6 @@
           options:
             kind: source
             source: tabs
-    - type: text
-      attrs:
-        class:
-        - --page-title
-        format: md
-      bind:
-        value:
-          kind: local
-          slot: page
-          path: /data
-          default: "**（未打开任何页）**"
     - type: pages
       id: pager
       attrs:
@@ -54,26 +48,50 @@
           kind: local
           slot: page
           path: /data
-# ---- 菜单行：id 与页面行同键 ----
+# ---- 菜单行：id 与页面行同键；box 逐 tab 项加内边距（不是整条 tab 栏） ----
 - action: append
   event: tabs
   data:
     type: text
-    id: chat
+    id: home
+    attrs:
+      class:
+      - box
     bind:
       value:
         kind: default
-        default: 聊天
+        default: 首页
 - action: append
   event: tabs
   data:
     type: text
     id: about
+    attrs:
+      class:
+      - box
     bind:
       value:
         kind: default
         default: 关于
 # ---- 页面行 ----
+- action: append
+  event: pages
+  data:
+    type: case
+    id: home
+    children:
+    - type: text
+      attrs:
+        format: md
+      bind:
+        value:
+          kind: default
+          default: "# 首页\n主体绑定事件 `home::open`：在下面输入框回车即上行（见 stage console）。"
+    - type: input
+      bind:
+        value:
+          kind: event
+          event: home::open
 - action: append
   event: pages
   data:
@@ -83,159 +101,3 @@
       value:
         kind: default
         default: "关于页：dom 模式下切走再切回，这里的草稿不丢。"
-- action: append
-  event: pages
-  data:
-    type: case
-    id: chat
-    attrs:
-      class:
-      - shrink
-    children:
-    - type: text
-      bind:
-        value:
-          kind: source
-          default: "**chat**"
-          source: login
-      attrs:
-        class:
-        - --header
-        - nogrow
-        format: md
-    - type: case
-      attrs:
-        horizontal: true
-        class:
-        - --body
-        - shrink
-        - border
-        - round
-      children:
-      - type: case
-        attrs:
-          class:
-          - --leftside
-          - nogrow
-        children:
-        - type: text
-          attrs:
-            format: md
-            class:
-            - box
-          bind:
-            value:
-              kind: default
-              default: "**channel**"
-        - type: select
-          attrs:
-            class:
-            - --channel
-            - ji-center
-            - nogrow
-          bind:
-            value:
-              kind: event
-              event: channel::select
-              default: "2"
-            options:
-              kind: source
-              source: channel::list
-      - type: case
-        attrs:
-          class:
-          - main
-          - shrink
-        children:
-        - type: case
-          children:
-          - type: rack
-            attrs:
-              class:
-              - --message
-              - box
-              - ac-start
-              - gap
-              - scrolly
-              scroll: true
-            bind:
-              value:
-                kind: source
-                source: chat
-            item:
-            - type: case
-              attrs:
-                class:
-                - nogrow
-                - as-end
-                - accent
-                - box
-                - border
-                - round
-                - shadow
-                selector: ask
-            - type: case
-              attrs:
-                class:
-                - nogrow
-                - as-stretch
-                - box
-                - border
-                - round
-                - shadow
-          - type: float
-            attrs:
-              bottom: 0.2rem
-              left: 1rem
-            children:
-            - type: popup
-              attrs:
-                class:
-                - --cart
-                - box
-                - border
-                - shadow
-                - primary
-                direction: U
-              bind:
-                value:
-                  kind: source
-                  source: cart
-              children:
-              - type: template
-                name: cart
-                data: {}
-              - type: case
-                children:
-                - type: text
-                  bind:
-                    value:
-                      kind: default
-                      default: a
-                - type: text
-                  bind:
-                    value:
-                      kind: default
-                      default: b
-                - type: text
-                  bind:
-                    value:
-                      kind: default
-                      default: c
-        - type: case
-          attrs:
-            class:
-            - --input
-            - nogrow
-            - box
-            horizontal: true
-          children:
-          - type: case
-            attrs:
-              horizontal: true
-            children:
-            - type: input
-              bind:
-                value:
-                  kind: event
-                  event: message

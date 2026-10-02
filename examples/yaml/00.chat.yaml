@@ -1,0 +1,171 @@
+# chat 页后置加入（初始布局 00.main.yaml 只有 home/about——chat 不在菜单，
+# 运行中用本帧动态添加）：菜单行 + 页面行各 append 一条，pages 字典（dom
+# 模式）立即多出一个可切换页。骨架含在 00.main.yaml，发本文件前需先发
+# 00.main.yaml。
+# 页面内容 = 原 00.chat_layout 的整棵聊天树（rack 消息流 + 频道侧栏 +
+# 输入行 + cart 浮层），作为一行（id: chat）进 pages 字典。
+- action: append
+  event: tabs
+  data:
+    type: text
+    id: chat
+    bind:
+      value:
+        kind: default
+        default: 聊天
+- action: append
+  event: pages
+  data:
+    type: case
+    id: chat
+    attrs:
+      class:
+      - shrink
+    children:
+    - type: text
+      bind:
+        value:
+          kind: source
+          default: "**chat**"
+          source: login
+      attrs:
+        class:
+        - --header
+        - nogrow
+        format: md
+    - type: case
+      attrs:
+        horizontal: true
+        class:
+        - --body
+        - shrink
+        - border
+        - round
+      children:
+      - type: case
+        attrs:
+          class:
+          - --leftside
+          - nogrow
+        children:
+        - type: text
+          attrs:
+            format: md
+            class:
+            - box
+          bind:
+            value:
+              kind: default
+              default: "**channel**"
+        - type: select
+          attrs:
+            class:
+            - --channel
+            - ji-center
+            - nogrow
+          bind:
+            value:
+              kind: event
+              event: channel::select
+              default: "2"
+            options:
+              kind: source
+              source: channel::list
+      - type: case
+        attrs:
+          class:
+          - main
+          - shrink
+        children:
+        - type: case
+          children:
+          - type: rack
+            attrs:
+              class:
+              - --message
+              - box
+              - ac-start
+              - gap
+              - scrolly
+              scroll: true
+            bind:
+              value:
+                kind: source
+                source: chat
+            item:
+            - type: case
+              attrs:
+                class:
+                - nogrow
+                - as-end
+                - accent
+                - box
+                - border
+                - round
+                - shadow
+                selector: ask
+            - type: case
+              attrs:
+                class:
+                - nogrow
+                - as-stretch
+                - box
+                - border
+                - round
+                - shadow
+          - type: float
+            attrs:
+              bottom: 0.2rem
+              left: 1rem
+            children:
+            - type: popup
+              attrs:
+                class:
+                - --cart
+                - box
+                - border
+                - shadow
+                - primary
+                direction: U
+              bind:
+                value:
+                  kind: source
+                  source: cart
+              children:
+              - type: template
+                name: cart
+                data: {}
+              - type: case
+                children:
+                - type: text
+                  bind:
+                    value:
+                      kind: default
+                      default: a
+                - type: text
+                  bind:
+                    value:
+                      kind: default
+                      default: b
+                - type: text
+                  bind:
+                    value:
+                      kind: default
+                      default: c
+        - type: case
+          attrs:
+            class:
+            - --input
+            - nogrow
+            - box
+            horizontal: true
+          children:
+          - type: case
+            attrs:
+              horizontal: true
+            children:
+            - type: input
+              bind:
+                value:
+                  kind: event
+                  event: message
