@@ -1,17 +1,18 @@
 # Canvas 示例（ADR 0007）：3dbrowser 模块挂载 + 流式喂载荷。
 # 前置：模块产物在 crates/ui_leptos/assets/3dbrowser/（配方见
-# examples/modules/3dbrowser/Cargo.toml 头注释；stage serve 自带静态服务）。
+# examples/modules/3dbrowser/Cargo.toml 头注释；stage serve 自带静态服务）；
+# 布局侧先发 00.main.yaml + 00.chat.yaml（本文件 append 一行进 chat rack）。
 #
 # 顺序即协议演示：
-# 1) create 布局——canvas 挂 `kind: source` 指向 m3d 槽，此刻槽为空，
+# 1) append 行——canvas 挂 `kind: source` 指向 m3d 槽，此刻槽为空，
 #    宿主喂 `{}`（模块合法消费"尚无数据"，先渲染空场景）；
 # 2) set 数据槽——完整载荷进 m3d，宿主 update Effect 订阅槽变化，
 #    重序列化 CBOR 推给模块（e2e 取证：update 触发、tile.glb 被拉取）；
 # 3) patch 流式——对槽内 JSON 做指针编辑（ADR 0005）：set 里先写
 #    `sphere: {color: null}` 占位（指针只能 replace 已存在的键），
 #    逐帧 replace 成真值。
-- action: create
-  event: ""
+- action: append
+  event: chat
   data:
     type: canvas
     url: /assets/3dbrowser/index.js
