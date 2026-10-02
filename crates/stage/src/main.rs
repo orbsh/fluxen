@@ -8,7 +8,7 @@ use stage::proto;
 #[derive(Parser)]
 #[command(
     name = "stage",
-    about = "Accrete dev gateway: mirror + console + KDL send"
+    about = "Accrete dev gateway: mirror + console + YAML send"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -28,7 +28,7 @@ enum Cmd {
         #[arg(long, default_value = "crates/ui_leptos/dist")]
         dist: String,
     },
-    /// Offline: parse KDL and print the Accrete JSON tree
+    /// Offline: parse a YAML frame file and print the wire JSON
     Tojson { file: String },
     /// Print the JSON Schema (draft 2020-12) of the Accrete wire shape
     Schema,
@@ -59,20 +59,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Cmd::Tojson { file } => {
             let src = std::fs::read_to_string(&file)?;
-            // format is an explicit choice by extension — same rule as /send?fmt=
-            let is_yaml = matches!(
-                std::path::Path::new(&file)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or(""),
-                "yaml" | "yml"
-            );
-            let value = if is_yaml {
-                serde_json::to_value(proto::parse_yaml_to_frame(&src)?)?
-            } else {
-                let accretes = proto::parse_kdl_to_accretes(&src)?;
-                serde_json::to_value(&accretes)?
-            };
+            let value = serde_json::to_value(proto::parse_yaml_to_frame(&src)?)?;
             println!("{}", serde_json::to_string_pretty(&value)?);
             Ok(())
         }

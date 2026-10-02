@@ -3,11 +3,11 @@
 //! Routes:
 //!   GET  /ui | /channel — UI clients (renderers); receive accrete frames
 //!   GET  /cli           — CLI/peer clients; send frames, receive UI replies
-//!   POST /send          — batch: body is KDL; converted and broadcast to all
+//!   POST /send          — batch: body is YAML; converted and broadcast to all
 //!                         peers. No dedicated client needed — curl works.
 //!
 //! The mirror does not parse accrete/content for routing; POST /send is the one
-//! place that converts (KDL → Message<Accrete>) since its input is a file, not
+//! place that converts (YAML → Message<Accrete>) since its input is a file, not
 //! a peer.
 
 use axum::extract::ws::Message;
@@ -53,7 +53,7 @@ pub async fn serve(port: u16, trunk_port: u16, dist: std::path::PathBuf) -> anyh
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
     println!("stage listening on 0.0.0.0:{port}");
     println!("  ws   /channel (ui)  /cli (peers)");
-    println!("  http POST /send    (body: KDL)");
+    println!("  http POST /send    (body: YAML)");
     match ui.proxy {
         Some(t) => println!("  http *          -> proxy to trunk at {t}"),
         None => println!(
@@ -73,19 +73,14 @@ async fn ws_cli(ws: WebSocketUpgrade, State(ctx): State<Ctx>) -> impl IntoRespon
     ws.on_upgrade(move |socket| run_peer(socket, ctx, false))
 }
 
-/// POST /send: body is KDL (default) or YAML (`?fmt=yaml`), converted to a
+/// POST /send: body is YAML (Content item or array), converted to a
 /// Message<Accrete> frame and broadcast. Returns the wire JSON so `curl -fsS`
 /// output is inspectable.
 async fn http_send(
     State(ctx): State<Ctx>,
-    axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
     body: String,
 ) -> impl IntoResponse {
-    let frame = match q.get("fmt").map(|s| s.as_str()) {
-        Some("yaml") => crate::proto::parse_yaml_to_frame(&body),
-        // explicit selection, no content sniffing: absent or any other fmt = KDL
-        _ => crate::proto::parse_kdl_to_frame(&body),
-    };
+    let frame = crate::proto::parse_yaml_to_frame(&body);
     match frame {
         Ok(frame) => {
             let text = frame.to_string();

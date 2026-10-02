@@ -26,7 +26,9 @@ Endpoints once running (default port 3002):
 
 - `GET /channel` — UI renderer connects here (Fluxen's `WsTransport` path)
 - `GET /cli` — programmatic peers (the console, curl-ws, your own tools)
-- `POST /send` — body is KDL; parsed into a `Content::Create` frame and broadcast
+- `POST /send` — body is YAML (or JSON — YAML is a superset); parsed into a
+  frame and broadcast to all peers. The action head is honored:
+  create/set/append/patch/remove/tmpl files are all first-class
 - everything else — the UI itself: reverse-proxyed to `trunk serve` when its
   port (default 8281) is up at startup, otherwise served statically from the
   trunk dist dir (default `crates/ui_leptos/dist`). Probe is TCP-only and
@@ -46,26 +48,19 @@ only pins what the UI itself *sends* (user events) — handy for reading them
 in devtools. Default send format is CBOR.
 
 The console REPL streams every frame back (`<- {...}`), including events the
-UI emits — both sender and event monitor. Commands: `/send <file.kdl>`,
-`/raw <json>` (send a bare `Message<Accrete>` — needed for Set/Append/Patch
-frames, which KDL cannot express), `/quit`.
+UI emits — both sender and event monitor. Commands: `/send <file.yaml>`,
+`/raw <json>` (send a bare `Message<Accrete>`), `/quit`.
 
-Push layout frames from a KDL file (wraps as Create — replaces the root layout):
-
-```
-curl -X POST --data-binary @examples/kdl/chat_layout.kdl http://localhost:3002/send
-```
-
-YAML files carry full Content expressiveness (any action: create/set/append/
-patch/remove/tmpl — the action is preserved, not forced to create; see
-docs/decisions/0005-operation-layer-value-patch.md). A file is one Content item
-or an array of them; `?fmt=yaml` selects the parser (KDL stays the default):
+Push any frame batch from a YAML file — the file is one Content item or an
+array of them; the action head is preserved (create/set/append/patch/remove/
+tmpl; see docs/decisions/0005-operation-layer-value-patch.md). The KDL
+carrier was retired 2026-10-02 (maintained as YAML/JSON only):
 
 ```
-curl -X POST --data-binary @examples/yaml/02.concat.yaml "http://localhost:3002/send?fmt=yaml"
+curl -X POST --data-binary @examples/yaml/00.main.yaml http://localhost:3002/send
 ```
 
-`x.nu` (repo root) wraps both carriers for nushell (`send <file> [-p <patch>]`
+`x.nu` (repo root) wraps the carrier for nushell (`send <file> [-p <patch>]`
 by extension, plus the border-flashing / message-concat / message-replace demo
 loops), and `examples/push_demo.py` streams Set/Append/Patch frames over a raw
 `/cli` WebSocket:
@@ -92,8 +87,8 @@ Bind routing (ADR 0008): `kind: event` uplinks the action protocol;
 `kind: local { slot }` keeps the payload in-browser on the value plane
 (`ctx.vals`), and any reading widget subscribes the same slot (optionally
 extracting by `path` — `kind: source` gained the same `path` for wire-shape
-pointers). `examples/kdl/14.local_routing.kdl` / `examples/yaml/14.local_routing.yaml`
-demonstrate the menu→header channel pattern with zero transport round trip.
+pointers). `examples/yaml/14.local_routing.yaml` demonstrates the menu→header
+channel pattern with zero transport round trip.
 
 For hot rebuilds during UI development, start `trunk serve` (port 8281)
 *before* `stage serve` — the gateway will proxy to it instead of reading dist
@@ -102,7 +97,7 @@ from disk. `trunk` is an optional dev tool, not a runtime dependency.
 Offline helper (no server needed):
 
 ```
-cargo run -p stage -- tojson examples/kdl/chat_layout.kdl   # KDL -> Accrete JSON
+cargo run -p stage -- tojson examples/yaml/00.main.yaml   # YAML -> wire JSON (validate)
 cargo run -p stage -- schema                                # Accrete wire-shape JSON Schema
 ```
 
