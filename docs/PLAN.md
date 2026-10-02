@@ -257,6 +257,48 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
   自动认），15.tabs 的 select 自带 `attrs: {horizontal: true}`；e2e 实测
   select computed flex-direction=row。
 
+### 12. 远程 Vars 注入（ADR 0011）— done 2026-10-02；页面状态快照/恢复 — 暂缓（用户 2026-10-02：先不做）
+
+通道（ADR 0011，用户 2026-10-02 定名 `inject` + 字段 `slot`）：
+
+- 新 Content 变体 `Inject(InjectOp { slot, event?, id?, data })`，wire
+  `action: inject`；载荷即 ADR 0010 的 `Outflow`，逐字段落在 op 上（不套
+  value 外壳）。订阅方与浏览器自发 emit 不可分辨；`event` 缺省 = slot。
+- 该变体不泛型：vals 平面的货币是裸 Value，不是 Accrete——两个平面的差异
+  第一次落在类型上；accrete 与 `stage schema` 零改动，唯一改动点是
+  content crate 的闭词汇。
+- 写语义 = 整值覆盖 + 同值短路（写读环在第一跳终止）；每次注入打日志
+  （槽名 + 值）；操作名自带成本信号，不加 flag / 开关 / 权限位。
+- 排除的形态：合并进 data（形状与写语义结构性不同，快照无法判断可恢复
+  性）、restore-only 通道（强制视图状态是真实第二场景）、forced 子通道
+  （订阅方要区分"谁写的"，形状一致性丢失）、origin 标记（同值短路已挡住
+  常见回显环）。
+- 示例 `examples/yaml/16.inject.yaml`（骨架下 inject `page` = home，把 main
+  的当前页切过去）；单测（缺省 event = slot、id 透传、同值短路、载荷形状与
+  emit 逐字段一致）；e2e（inject `page` → pages 切到目标行；随后点一次同名
+  交互，槽值不变）；三门槛 + e2e。
+- 实施（2026-10-02）：content crate 加 `Inject(InjectOp)` 与
+  `InjectOp::outflow()`（"缺省 event = slot"因此进了 content，可单测）；
+  ctx.rs 的 `dispatch_msg` 加 inject 分支——写 `slot_for_value(slot)`，
+  同值短路抽成纯函数 `inject_writes`；info 日志经浏览器 tracing_wasm
+  （main.rs 装的是 INFO 级）可见。
+- 验证：workspace build/test 全过（content 新增 6 条、ui_leptos 新增 3 条）；
+  trunk build 出 dist；`stage tojson 16.inject.yaml` 确认 YAML 载体认识新操作
+  （event/id 缺省在 wire 上省略）；e2e 实测 pages 受控切换——注入前空白、
+  一帧 inject `page` = home 后首页出现、同值重发无变化、改值切到 about、
+  未命中的键回落空白。
+
+快照/恢复（暂缓：用户 2026-10-02 决定先不做，方案留档；骑同一条通道，尚未定案）：
+
+- 导出（dump）= 一条上行载荷，装 layout / data / list / vals 四个平面 +
+  可滚动容器的 scrollTop；回灌（restore）= 若干 inject + 滚动回填。
+- 滚动的锚点复用现有寻址元组 `(event, id?, path)`（rack 某行内的容器 =
+  `{event: "chat", id: "scoreboard", path: "/children/1"}`），不引入第二种
+  路径语法；滚动是渲染器私有的 DOM 状态，读写与回填都归渲染器。
+- 未定：快照的判定标准——收 Vars 全量还是只收可恢复的那部分（决定要不要
+  给槽或值加持久性判据）；dump 的载荷形状；恢复的时机与幂等要求。落地前
+  单独写 ADR。
+
 ## Resolved
 
 ### Enter "does nothing" — console dropped CBOR uplinks (fixed 2026-09-30)

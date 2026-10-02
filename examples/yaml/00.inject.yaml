@@ -1,0 +1,12 @@
+# 远程注入 Vars（ADR 0011）：vals 平面的受控写入口。载荷即 ADR 0010 的包装
+# 对象 Outflow——订阅方分不出"这次切换是谁写的"，与浏览器自发 emit 完全同形；
+# 缺省 event = 槽名（槽即频道）。
+# 用法：先 send examples/yaml/00.main.yaml（骨架 + home/about 菜单与页面行；
+#       page 槽此前无人写，pages 按"信号未写入 = 空白"回落），再 send 本文件：
+#       一帧 inject 把 main 布局的当前页切到 home。
+# 变体与守卫（细节见 ADR 0011）：显式事件名写成 `event: <名>`（pages 只读
+# path /data，事件名不影响取键）；同一帧连发两次时第二帧不写槽、不通知
+# （同值短路，写读环的第一跳守卫）。
+- action: inject
+  slot: page
+  data: home

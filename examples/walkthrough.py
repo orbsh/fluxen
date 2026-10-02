@@ -4,9 +4,10 @@
 Steps (each waits for one Enter):
   1  send 00.main.yaml     skeleton + the home/about pages
   2  send 00.chat.yaml     the chat page joins the menu
-  3  send 00.radar.yaml    line chart (15 days) + summary placeholder + radars
-  4  x15  patch-append one day per Enter (one frame = three appends, one per dept)
-  5  xN   patch-append one summary token per Enter, below the chart
+  3  inject `page`=chat    switch the visible page remotely (ADR 0011)
+  4  send 00.radar.yaml    line chart (15 days) + summary placeholder + radars
+  5  x15  patch-append one day per Enter (one frame = three appends, one per dept)
+  6  xN   patch-append one summary token per Enter, below the chart
 
 Frames go to the mirror's POST /send, so no WS handshake is needed and the
 stage console echoes each one. The running row is `#scoreboard` in the `chat`
@@ -131,12 +132,25 @@ def main():
     step = Step(args.auto)
     print("fluxen walkthrough — 打开 UI（如 http://localhost:3002?codec=json）后开始。")
 
-    for fname in ("00.main.yaml", "00.chat.yaml", "00.radar.yaml"):
-        step.wait(f"发送 {fname}")
+    def push_file(fname):
         body = open(f"examples/yaml/{fname}", encoding="utf-8").read()
         if fname == "00.radar.yaml":
             body = inject_row_id(body)
-        print(f"    send → {mirror.send(body)}")
+        return mirror.send(body)
+
+    step.wait("发送 00.main.yaml")
+    print(f"    send → {push_file('00.main.yaml')}")
+
+    step.wait("发送 00.chat.yaml")
+    print(f"    send → {push_file('00.chat.yaml')}")
+
+    # ADR 0011: remote write into the vals plane — the skeleton has no in-page
+    # writer for `page`, so pages stays blank until this inject lands.
+    step.wait("inject `page` = chat——远程把当前页切到 chat（vals 平面写入）")
+    print(f"    send → {send_json(mirror, {'action': 'inject', 'slot': 'page', 'data': 'chat'})}")
+
+    step.wait("发送 00.radar.yaml")
+    print(f"    send → {push_file('00.radar.yaml')}")
 
     step.wait(f"逐日 patch 追加后 {len(TAIL_DAYS)} 天（每天一帧，三个部门各一条 append）")
     for i, (day, rd, mkt, ops) in enumerate(TAIL_DAYS, start=1):

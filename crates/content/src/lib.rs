@@ -84,6 +84,14 @@ pub enum Content<T> {
     #[serde(rename = "patch")]
     Patch(PatchOp),
 
+    /// Remote write into the vals plane (ADR 0011): inject one `local` event
+    /// as if the page had emitted it. The payload shape is the ADR 0010
+    /// `Outflow`, so subscribers cannot tell a remote write from an in-page
+    /// emit. Write is whole-value; the renderer short-circuits equal values
+    /// (the write/read loop guard).
+    #[serde(rename = "inject")]
+    Inject(InjectOp),
+
     #[serde(rename = "empty")]
     #[default]
     Empty,
@@ -123,6 +131,33 @@ pub struct PatchOp {
     pub path: String,
     pub op: PatchKind,
     pub value: Value,
+}
+
+/// Remote vals-plane write (ADR 0011). Field names mirror `Outflow` — `slot`
+/// selects the channel, the rest is its payload — so the slot ends up holding
+/// exactly what an in-page `Local` emit would write. Not generic over `T`:
+/// the vals plane's currency is a bare `Value` (ADR 0008 — event data is not
+/// display form), unlike every other plane.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct InjectOp {
+    pub slot: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub event: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    pub data: Value,
+}
+
+impl InjectOp {
+    /// The wrapper the slot receives. `event` defaults to the slot name — the
+    /// same rule `BindVariant::Local` follows (the slot is the channel).
+    pub fn outflow(&self) -> Outflow {
+        Outflow {
+            event: self.event.clone().unwrap_or_else(|| self.slot.clone()),
+            id: self.id.clone(),
+            data: self.data.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
