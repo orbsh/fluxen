@@ -375,3 +375,31 @@ must set `id`; composite identity is the producer's job (e.g.
 `id "alice:m42"`) — the renderer deliberately has no key-template config,
 since the Join merge contract (`cmp_id`) is pinned to `id` and a second key
 axis would split row identity.
+
+### Navigation (and any homogeneous group) goes through data; `case` is static skeleton only
+
+A group of elements that differ one by one — a menu, a channel list, a page
+dictionary — is data in this model: it lives in a list slot and is rendered by
+a consuming component. `select` reads the `tabs` slot as its menu, `pages`
+reads the `pages` slot as its page dictionary, `rack` reads any slot as a row
+list (row identity = the data `id`, per-item differences come from the row's
+`selector` picking an `item` template). `case` is left with static skeleton:
+grouping and layout with no data source, no addressing, no streaming. The main
+skeleton (00.main.yaml) is the shape in mind — menu rows and page rows are two
+slots, not hand-written containers.
+
+The judgement is where the multiplicity comes from, not whether per-element
+styling is wanted: both primitives do per-element styling, `case` through each
+child's `attrs.class` and `rack` through the row's `selector`. Hand-written
+children pay off only when the structure is genuinely fixed — one place, never
+added to or removed from, never patched or removed by address. A `case` child
+is reachable only by its positional `/children/i` layout path, which dies when
+the tree shifts; a rack row has keyed identity, can be streamed into place, and
+can be addressed by `id`.
+
+Neither primitive is redundant. `rack` needs a list slot (with no source it
+renders an empty div) and its `item` templates are themselves `case`-shaped
+nodes, so `case` is the substrate rack renders through. The mechanism gap is
+not constant-sized — slot subscription, per-row `Owner` + `Memo` and template
+selection versus rendering children directly — so merging them would only grow
+two unrelated code paths inside one component.
