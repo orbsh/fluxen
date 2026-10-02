@@ -1,5 +1,5 @@
-# 本地联动数据帧（ADR 0008 + ADR 0010 形状修订）：给 14.local_routing.kdl
-# 的布局喂菜单。options 走 list 平面（source "menu"），服务端职责不变；
+# 本地联动数据帧（ADR 0008 + ADR 0010 形状修订）：给菜单布局喂选项。
+# options 走 list 平面（source "menu"），服务端职责不变；
 # 联动（select→chan 槽→标题）纯前端。ADR 0010：local 落槽载荷是与上行
 # 同形的包装对象 {event, id?, data}——订阅方读值因此带 path（标题取
 # /data）。选中第二项后，stage console 不应出现任何上行事件。

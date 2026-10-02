@@ -1,0 +1,755 @@
+# G2 折线趋势 + 部门雷达（ADR 0009，纯 GoG spec 直装 bind.value.default）。
+# 日记评分模拟数据：6 维度（出勤纪律/工作质量/工作量投入/协作沟通/学习成长/
+# 创新性，0–5 分），11 人 × 3 部门。
+# 一个 append 帧：外层 case 用 grid 把容器分成上下两部分（grid-template-rows
+#   minmax(0,1fr) ×2 + 固定 height——1fr 默认 minmax(auto,1fr)，auto 最小值会让
+#   画布内容撑高自己的行、两行不等分，须 minmax(0,..) 钉死；chart 无 height
+#   字段、尺寸全靠 autoFit 读容器，故必须给容器确定高度，否则子图塌成 0）。
+#   上：近 30 天部门平均分变化，三个部门同一坐标系（color = dept），
+#       shape: smooth 平滑曲线，数据为随机游走造的模拟值。
+#   下：三个独立 chart 水平排列（case horizontal，每部门一个雷达坐标系），
+#       部门内每人一个闭合多边形——area 半透明填充（fillOpacity 0.15 +
+#       lineWidth: 0，无描边边框），line 直边折线（smooth 会贝塞尔化描边、
+#       脱离直边多边形，已去掉；join/cap: round 只圆化拐角连接处，
+#       不改路径），color = name 区分人。分面方案（facetRect
+#       三格挤一图）已弃：小格内轴叠轴、整体挤压。facetRect 词法备查：
+#       顶层 composition + encode.x 分面字段；view+transform:[facetRect]
+#       嵌套写法不存在。
+# 用法：依次 send examples/yaml/00.main.yaml（骨架 + home/about）、
+#       examples/yaml/00.chat.yaml（chat 页进菜单），再 send 本文件
+#       （一帧 append 进 chat rack）。
+- action: append
+  event: chat
+  data:
+    type: case
+    attrs:
+      class:
+      - gap
+      grid:
+        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr)
+        height: 70vh
+    children:
+    - type: chart
+      id: dept-trend
+      attrs:
+        class:
+        - f
+      bind:
+        value:
+          kind: default
+          default:
+            type: line
+            data:
+            - day: 09-03
+              avg: 4.07
+              dept: 研发部
+            - day: 09-03
+              avg: 3.95
+              dept: 市场部
+            - day: 09-03
+              avg: 4.18
+              dept: 运营部
+            - day: 09-04
+              avg: 3.86
+              dept: 研发部
+            - day: 09-04
+              avg: 3.97
+              dept: 市场部
+            - day: 09-04
+              avg: 4.11
+              dept: 运营部
+            - day: 09-05
+              avg: 3.64
+              dept: 研发部
+            - day: 09-05
+              avg: 3.97
+              dept: 市场部
+            - day: 09-05
+              avg: 3.88
+              dept: 运营部
+            - day: 09-06
+              avg: 3.61
+              dept: 研发部
+            - day: 09-06
+              avg: 3.75
+              dept: 市场部
+            - day: 09-06
+              avg: 3.67
+              dept: 运营部
+            - day: 09-07
+              avg: 3.57
+              dept: 研发部
+            - day: 09-07
+              avg: 3.92
+              dept: 市场部
+            - day: 09-07
+              avg: 3.48
+              dept: 运营部
+            - day: 09-08
+              avg: 3.43
+              dept: 研发部
+            - day: 09-08
+              avg: 3.98
+              dept: 市场部
+            - day: 09-08
+              avg: 3.71
+              dept: 运营部
+            - day: 09-09
+              avg: 3.47
+              dept: 研发部
+            - day: 09-09
+              avg: 3.93
+              dept: 市场部
+            - day: 09-09
+              avg: 3.95
+              dept: 运营部
+            - day: 09-10
+              avg: 3.24
+              dept: 研发部
+            - day: 09-10
+              avg: 4.11
+              dept: 市场部
+            - day: 09-10
+              avg: 3.84
+              dept: 运营部
+            - day: 09-11
+              avg: 3.2
+              dept: 研发部
+            - day: 09-11
+              avg: 3.92
+              dept: 市场部
+            - day: 09-11
+              avg: 3.75
+              dept: 运营部
+            - day: 09-12
+              avg: 3.36
+              dept: 研发部
+            - day: 09-12
+              avg: 3.76
+              dept: 市场部
+            - day: 09-12
+              avg: 3.79
+              dept: 运营部
+            - day: 09-13
+              avg: 3.43
+              dept: 研发部
+            - day: 09-13
+              avg: 3.69
+              dept: 市场部
+            - day: 09-13
+              avg: 3.81
+              dept: 运营部
+            - day: 09-14
+              avg: 3.21
+              dept: 研发部
+            - day: 09-14
+              avg: 3.47
+              dept: 市场部
+            - day: 09-14
+              avg: 3.66
+              dept: 运营部
+            - day: 09-15
+              avg: 3.3
+              dept: 研发部
+            - day: 09-15
+              avg: 3.44
+              dept: 市场部
+            - day: 09-15
+              avg: 3.57
+              dept: 运营部
+            - day: 09-16
+              avg: 3.34
+              dept: 研发部
+            - day: 09-16
+              avg: 3.41
+              dept: 市场部
+            - day: 09-16
+              avg: 3.47
+              dept: 运营部
+            - day: 09-17
+              avg: 3.49
+              dept: 研发部
+            - day: 09-17
+              avg: 3.51
+              dept: 市场部
+            - day: 09-17
+              avg: 3.34
+              dept: 运营部
+            - day: 09-18
+              avg: 3.53
+              dept: 研发部
+            - day: 09-18
+              avg: 3.53
+              dept: 市场部
+            - day: 09-18
+              avg: 3.53
+              dept: 运营部
+            - day: 09-19
+              avg: 3.64
+              dept: 研发部
+            - day: 09-19
+              avg: 3.42
+              dept: 市场部
+            - day: 09-19
+              avg: 3.77
+              dept: 运营部
+            - day: 09-20
+              avg: 3.45
+              dept: 研发部
+            - day: 09-20
+              avg: 3.38
+              dept: 市场部
+            - day: 09-20
+              avg: 3.9
+              dept: 运营部
+            - day: 09-21
+              avg: 3.28
+              dept: 研发部
+            - day: 09-21
+              avg: 3.37
+              dept: 市场部
+            - day: 09-21
+              avg: 3.67
+              dept: 运营部
+            - day: 09-22
+              avg: 3.36
+              dept: 研发部
+            - day: 09-22
+              avg: 3.51
+              dept: 市场部
+            - day: 09-22
+              avg: 3.7
+              dept: 运营部
+            - day: 09-23
+              avg: 3.55
+              dept: 研发部
+            - day: 09-23
+              avg: 3.41
+              dept: 市场部
+            - day: 09-23
+              avg: 3.8
+              dept: 运营部
+            - day: 09-24
+              avg: 3.6
+              dept: 研发部
+            - day: 09-24
+              avg: 3.45
+              dept: 市场部
+            - day: 09-24
+              avg: 3.78
+              dept: 运营部
+            - day: 09-25
+              avg: 3.77
+              dept: 研发部
+            - day: 09-25
+              avg: 3.68
+              dept: 市场部
+            - day: 09-25
+              avg: 3.77
+              dept: 运营部
+            - day: 09-26
+              avg: 3.85
+              dept: 研发部
+            - day: 09-26
+              avg: 3.46
+              dept: 市场部
+            - day: 09-26
+              avg: 3.87
+              dept: 运营部
+            - day: 09-27
+              avg: 3.92
+              dept: 研发部
+            - day: 09-27
+              avg: 3.7
+              dept: 市场部
+            - day: 09-27
+              avg: 4.03
+              dept: 运营部
+            - day: 09-28
+              avg: 3.81
+              dept: 研发部
+            - day: 09-28
+              avg: 3.65
+              dept: 市场部
+            - day: 09-28
+              avg: 4.11
+              dept: 运营部
+            - day: 09-29
+              avg: 3.57
+              dept: 研发部
+            - day: 09-29
+              avg: 3.63
+              dept: 市场部
+            - day: 09-29
+              avg: 3.95
+              dept: 运营部
+            - day: 09-30
+              avg: 3.38
+              dept: 研发部
+            - day: 09-30
+              avg: 3.41
+              dept: 市场部
+            - day: 09-30
+              avg: 4.08
+              dept: 运营部
+            - day: 10-01
+              avg: 3.2
+              dept: 研发部
+            - day: 10-01
+              avg: 3.28
+              dept: 市场部
+            - day: 10-01
+              avg: 4.03
+              dept: 运营部
+            - day: 10-02
+              avg: 3.39
+              dept: 研发部
+            - day: 10-02
+              avg: 3.2
+              dept: 市场部
+            - day: 10-02
+              avg: 4.0
+              dept: 运营部
+            encode:
+              x: day
+              y: avg
+              color: dept
+              shape: smooth
+            style:
+              lineWidth: 2
+            scale:
+              y:
+                domain:
+                - 3.0
+                - 5.0
+            interaction:
+              tooltip:
+                crosshairs: true
+    - type: case
+      id: radar-row
+      attrs:
+        class:
+        - f
+        horizontal: true
+      children:
+      - type: chart
+        id: radar-rd
+        attrs:
+          class:
+          - f
+        bind:
+          value:
+            kind: default
+            default:
+              type: view
+              data:
+              - dept: 研发部
+                name: 张伟
+                dim: 出勤纪律
+                value: 4.4
+              - dept: 研发部
+                name: 张伟
+                dim: 工作质量
+                value: 4.1
+              - dept: 研发部
+                name: 张伟
+                dim: 工作量投入
+                value: 3.6
+              - dept: 研发部
+                name: 张伟
+                dim: 协作沟通
+                value: 4.7
+              - dept: 研发部
+                name: 张伟
+                dim: 学习成长
+                value: 4.0
+              - dept: 研发部
+                name: 张伟
+                dim: 创新性
+                value: 3.5
+              - dept: 研发部
+                name: 李娜
+                dim: 出勤纪律
+                value: 3.9
+              - dept: 研发部
+                name: 李娜
+                dim: 工作质量
+                value: 4.6
+              - dept: 研发部
+                name: 李娜
+                dim: 工作量投入
+                value: 4.2
+              - dept: 研发部
+                name: 李娜
+                dim: 协作沟通
+                value: 3.6
+              - dept: 研发部
+                name: 李娜
+                dim: 学习成长
+                value: 4.4
+              - dept: 研发部
+                name: 李娜
+                dim: 创新性
+                value: 4.8
+              - dept: 研发部
+                name: 王强
+                dim: 出勤纪律
+                value: 4.6
+              - dept: 研发部
+                name: 王强
+                dim: 工作质量
+                value: 4.9
+              - dept: 研发部
+                name: 王强
+                dim: 工作量投入
+                value: 4.5
+              - dept: 研发部
+                name: 王强
+                dim: 协作沟通
+                value: 3.2
+              - dept: 研发部
+                name: 王强
+                dim: 学习成长
+                value: 3.6
+              - dept: 研发部
+                name: 王强
+                dim: 创新性
+                value: 4.1
+              - dept: 研发部
+                name: 刘洋
+                dim: 出勤纪律
+                value: 3.6
+              - dept: 研发部
+                name: 刘洋
+                dim: 工作质量
+                value: 3.8
+              - dept: 研发部
+                name: 刘洋
+                dim: 工作量投入
+                value: 4.8
+              - dept: 研发部
+                name: 刘洋
+                dim: 协作沟通
+                value: 4.0
+              - dept: 研发部
+                name: 刘洋
+                dim: 学习成长
+                value: 4.6
+              - dept: 研发部
+                name: 刘洋
+                dim: 创新性
+                value: 4.4
+              coordinate:
+                type: polar
+              padding: auto
+              scale:
+                x:
+                  type: point
+                  paddingOuter: 1
+                y:
+                  domain:
+                  - 0
+                  - 5
+                  tickCount: 5
+              axis:
+                x:
+                  grid: true
+                  title: null
+                y: false
+              legend:
+                color:
+                  layout:
+                    justContent: true
+              children:
+              - type: area
+                encode:
+                  x: dim
+                  y: value
+                  color: name
+                style:
+                  fillOpacity: 0.15
+                  lineWidth: 0
+              - type: line
+                encode:
+                  x: dim
+                  y: value
+                  color: name
+                style:
+                  lineWidth: 2
+                  join: round
+                  cap: round
+              interaction:
+                tooltip: {}
+      - type: chart
+        id: radar-mkt
+        attrs:
+          class:
+          - f
+        bind:
+          value:
+            kind: default
+            default:
+              type: view
+              data:
+              - dept: 市场部
+                name: 陈静
+                dim: 出勤纪律
+                value: 4.2
+              - dept: 市场部
+                name: 陈静
+                dim: 工作质量
+                value: 3.7
+              - dept: 市场部
+                name: 陈静
+                dim: 工作量投入
+                value: 4.8
+              - dept: 市场部
+                name: 陈静
+                dim: 协作沟通
+                value: 4.5
+              - dept: 市场部
+                name: 陈静
+                dim: 学习成长
+                value: 3.4
+              - dept: 市场部
+                name: 陈静
+                dim: 创新性
+                value: 3.9
+              - dept: 市场部
+                name: 杨帆
+                dim: 出勤纪律
+                value: 4.6
+              - dept: 市场部
+                name: 杨帆
+                dim: 工作质量
+                value: 4.2
+              - dept: 市场部
+                name: 杨帆
+                dim: 工作量投入
+                value: 3.8
+              - dept: 市场部
+                name: 杨帆
+                dim: 协作沟通
+                value: 4.1
+              - dept: 市场部
+                name: 杨帆
+                dim: 学习成长
+                value: 4.5
+              - dept: 市场部
+                name: 杨帆
+                dim: 创新性
+                value: 4.9
+              - dept: 市场部
+                name: 赵磊
+                dim: 出勤纪律
+                value: 3.8
+              - dept: 市场部
+                name: 赵磊
+                dim: 工作质量
+                value: 4.0
+              - dept: 市场部
+                name: 赵磊
+                dim: 工作量投入
+                value: 4.2
+              - dept: 市场部
+                name: 赵磊
+                dim: 协作沟通
+                value: 4.8
+              - dept: 市场部
+                name: 赵磊
+                dim: 学习成长
+                value: 3.2
+              - dept: 市场部
+                name: 赵磊
+                dim: 创新性
+                value: 3.6
+              coordinate:
+                type: polar
+              padding: auto
+              scale:
+                x:
+                  type: point
+                  paddingOuter: 1
+                y:
+                  domain:
+                  - 0
+                  - 5
+                  tickCount: 5
+              axis:
+                x:
+                  grid: true
+                  title: null
+                y: false
+              legend:
+                color:
+                  layout:
+                    justContent: true
+              children:
+              - type: area
+                encode:
+                  x: dim
+                  y: value
+                  color: name
+                style:
+                  fillOpacity: 0.15
+                  lineWidth: 0
+              - type: line
+                encode:
+                  x: dim
+                  y: value
+                  color: name
+                style:
+                  lineWidth: 2
+                  join: round
+                  cap: round
+              interaction:
+                tooltip: {}
+      - type: chart
+        id: radar-ops
+        attrs:
+          class:
+          - f
+        bind:
+          value:
+            kind: default
+            default:
+              type: view
+              data:
+              - dept: 运营部
+                name: 孙悦
+                dim: 出勤纪律
+                value: 4.8
+              - dept: 运营部
+                name: 孙悦
+                dim: 工作质量
+                value: 4.1
+              - dept: 运营部
+                name: 孙悦
+                dim: 工作量投入
+                value: 4.5
+              - dept: 运营部
+                name: 孙悦
+                dim: 协作沟通
+                value: 4.3
+              - dept: 运营部
+                name: 孙悦
+                dim: 学习成长
+                value: 3.5
+              - dept: 运营部
+                name: 孙悦
+                dim: 创新性
+                value: 3.2
+              - dept: 运营部
+                name: 周军
+                dim: 出勤纪律
+                value: 5.0
+              - dept: 运营部
+                name: 周军
+                dim: 工作质量
+                value: 3.9
+              - dept: 运营部
+                name: 周军
+                dim: 工作量投入
+                value: 4.4
+              - dept: 运营部
+                name: 周军
+                dim: 协作沟通
+                value: 4.0
+              - dept: 运营部
+                name: 周军
+                dim: 学习成长
+                value: 3.7
+              - dept: 运营部
+                name: 周军
+                dim: 创新性
+                value: 3.4
+              - dept: 运营部
+                name: 吴敏
+                dim: 出勤纪律
+                value: 4.1
+              - dept: 运营部
+                name: 吴敏
+                dim: 工作质量
+                value: 4.3
+              - dept: 运营部
+                name: 吴敏
+                dim: 工作量投入
+                value: 4.6
+              - dept: 运营部
+                name: 吴敏
+                dim: 协作沟通
+                value: 4.9
+              - dept: 运营部
+                name: 吴敏
+                dim: 学习成长
+                value: 4.0
+              - dept: 运营部
+                name: 吴敏
+                dim: 创新性
+                value: 3.6
+              - dept: 运营部
+                name: 郑华
+                dim: 出勤纪律
+                value: 4.5
+              - dept: 运营部
+                name: 郑华
+                dim: 工作质量
+                value: 4.0
+              - dept: 运营部
+                name: 郑华
+                dim: 工作量投入
+                value: 4.2
+              - dept: 运营部
+                name: 郑华
+                dim: 协作沟通
+                value: 4.1
+              - dept: 运营部
+                name: 郑华
+                dim: 学习成长
+                value: 3.8
+              - dept: 运营部
+                name: 郑华
+                dim: 创新性
+                value: 3.5
+              coordinate:
+                type: polar
+              padding: auto
+              scale:
+                x:
+                  type: point
+                  paddingOuter: 1
+                y:
+                  domain:
+                  - 0
+                  - 5
+                  tickCount: 5
+              axis:
+                x:
+                  grid: true
+                  title: null
+                y: false
+              legend:
+                color:
+                  layout:
+                    justContent: true
+              children:
+              - type: area
+                encode:
+                  x: dim
+                  y: value
+                  color: name
+                style:
+                  fillOpacity: 0.15
+                  lineWidth: 0
+              - type: line
+                encode:
+                  x: dim
+                  y: value
+                  color: name
+                style:
+                  lineWidth: 2
+                  join: round
+                  cap: round
+              interaction:
+                tooltip: {}
+
