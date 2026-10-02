@@ -47,8 +47,9 @@ major type = CBOR), so the gateway can mix encodings freely; `?codec=json`
 only pins what the UI itself *sends* (user events) — handy for reading them
 in devtools. Default send format is CBOR.
 
-The console REPL streams every frame back (`<- {...}`), including events the
-UI emits — both sender and event monitor. Commands: `/send <file.yaml>`,
+The console REPL streams every frame back as YAML — a bare `<-` line, then the
+indented body — for both JSON and CBOR uplinks, including events the UI emits:
+both sender and event monitor. Commands: `/send <file.yaml>`,
 `/raw <json>` (send a bare `Message<Accrete>`), `/quit`.
 
 Push any frame batch from a YAML file — the file is one Content item or an

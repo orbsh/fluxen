@@ -40,7 +40,7 @@ UI 的 WS 地址默认取页面 origin，无需配置。接收侧逐帧自适应
 `{` = JSON，CBOR map 主类型 = CBOR），网关可混发两种格式；`?codec=json` 只
 决定 UI 自身*发送*（用户事件）的格式——方便在 devtools 里读。发送默认为 CBOR。
 
-console REPL 会把每一帧回显出来（`<- {...}`），包括 UI 上报的事件——既是发送端也是事件监视器。命令：`/send <file.yaml>`、`/raw <json>`（发送裸 `Message<Accrete>`）、`/quit`。
+console REPL 把每一帧回显成 YAML——单独一行 `<-`，其后是缩进正文，JSON 与 CBOR 上行皆然——包括 UI 上报的事件：既是发送端也是事件监视器。命令：`/send <file.yaml>`、`/raw <json>`（发送裸 `Message<Accrete>`）、`/quit`。
 
 推送任意帧批次（YAML 文件 = 一个 Content 项或其数组；action 头被保留：create/set/append/patch/remove/tmpl，见 docs/decisions/0005-operation-layer-value-patch.md。KDL 载体已于 2026-10-02 退役，只维护 YAML/JSON）：
 

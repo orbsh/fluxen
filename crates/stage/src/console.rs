@@ -17,17 +17,23 @@ pub async fn run(port: u16) -> anyhow::Result<()> {
 
     // Background task: print everything coming back from the mirror (UI event
     // frames, peer chatter) so the console doubles as an event monitor.
+    // 回显用 YAML 而不是单行 JSON（2026-10-02 用户裁决）：`<-` 后换行、
+    // 结构化缩进——事件流是给人读的，与 /send 载体同形。
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
     tokio::spawn(async move {
         while let Some(Ok(msg)) = stream.next().await {
             // UI 默认以 CBOR 上行：Binary 帧解码回 JSON 再打印，否则事件流
             // 在默认配置下静默消失（auto-detect 首字节，无需 pin 编解码）。
             let text = match &msg {
-                Message::Text(t) => Some(t.clone()),
+                Message::Text(t) => serde_json::from_str::<serde_json::Value>(t)
+                    .ok()
+                    .and_then(|v| serde_yaml::to_string(&v).ok())
+                    // 非 JSON 的文本帧按原样显示
+                    .or_else(|| Some(t.clone())),
                 Message::Binary(b) => content::codec::ActiveCodec::Cbor
                     .decode_auto::<serde_json::Value>(b)
                     .ok()
-                    .map(|v| v.to_string()),
+                    .and_then(|v| serde_yaml::to_string(&v).ok()),
                 _ => None,
             };
             if let Some(t) = text {
@@ -39,7 +45,7 @@ pub async fn run(port: u16) -> anyhow::Result<()> {
     });
     let printer = tokio::spawn(async move {
         while let Some(t) = rx.recv().await {
-            println!("<- {t}");
+            println!("<-\n{}", t.trim_end());
         }
     });
 
