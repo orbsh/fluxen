@@ -1,13 +1,20 @@
 # G2 折线趋势 + 部门雷达（ADR 0009，纯 GoG spec 直装 bind.value.default）。
 # 日记评分模拟数据：6 维度（出勤纪律/工作质量/工作量投入/协作沟通/学习成长/
 # 创新性，0–5 分），11 人 × 3 部门。
-# 一个 append 帧：外层 case 用 grid 把容器分成上下两部分（grid-template-rows
-#   minmax(0,1fr) ×2 + 固定 height——1fr 默认 minmax(auto,1fr)，auto 最小值会让
-#   画布内容撑高自己的行、两行不等分，须 minmax(0,..) 钉死；chart 无 height
-#   字段、尺寸全靠 autoFit 读容器，故必须给容器确定高度，否则子图塌成 0）。
-#   上：近 30 天部门平均分变化，三个部门同一坐标系（color = dept），
-#       shape: smooth 平滑曲线，数据为随机游走造的模拟值。
-#   下：三个独立 chart 水平排列（case horizontal，每部门一个雷达坐标系），
+# 一个 append 帧：外层 case 用 grid 把容器分成三条轨道——折线图 / 雷达图 / 摘要
+#   （grid-template-rows: minmax(160px, 1fr) minmax(360px, 2fr) auto + 固定
+#   height——min 值给雷达那条钉住下限：polar 半径受 min(宽,高)/2 限制，行高掉下来
+#   图就跟着小；1fr 默认 minmax(auto,1fr)，auto 最小值会让画布内容撑高自己的行、
+#   行间不等分，须给 min；摘要那条留 auto，逐 token 长高时挤的是两条带 min 的
+#   轨道；chart 无 height 字段、尺寸全靠 autoFit 读容器，故必须给容器确定高度，
+#   否则子图塌成 0）。
+#   雷达行自己是三列 grid（repeat(3, minmax(0,1fr))）——不用 flex + .f：.f 是
+#   flex:1 0 auto（基准取内容），三个 canvas 的基准不等 → 宽窄不一（实测
+#   531/531/402）；等分列宽与内容无关。
+#   上：部门平均分变化，三个部门同一坐标系（color = dept），shape: smooth 平
+#       滑曲线，数据为随机游走造的模拟值。本文件只带前 15 天（09-03…09-17），
+#       后 15 天（09-18…10-02）由演示脚本逐日 patch 追加（见下）。
+#   中：三个独立 chart 并排三等分（三列 grid，每部门一个雷达坐标系），
 #       部门内每人一个闭合多边形——area 半透明填充（fillOpacity 0.15 +
 #       lineWidth: 0，无描边边框），line 直边折线（smooth 会贝塞尔化描边、
 #       脱离直边多边形，已去掉；join/cap: round 只圆化拐角连接处，
@@ -15,9 +22,21 @@
 #       三格挤一图）已弃：小格内轴叠轴、整体挤压。facetRect 词法备查：
 #       顶层 composition + encode.x 分面字段；view+transform:[facetRect]
 #       嵌套写法不存在。
+#       雷达首尾轴不重合的写法（实测 2026-10-02，量的是坐标变换后的像素）：
+#       point 标度默认把 6 个维度摊在 0…1，polar 下 0 与 1 是同一角度——
+#       首尾两轴像素完全相同（重合）；paddingOuter 对本版 point 标度无效
+#       （paddingOuter 1/2 映射都不变，实测），必须显式给 range
+#       （[-1/6, 2/3]）＝六轴各隔 60°、留一处 60° 缺口。
+#   下：摘要行（text，空串起步），演示脚本逐 token patch 追加。
+# 行 id 不写在本文件里：手动 /send 本文件可反复推送（无 id = 位置行，重复推
+#   不冲突）。patch 只按行 id 寻址，故演示脚本推送时自行补 `id: scoreboard`
+#   （见 walkthrough.py），追加落在 /children/0/bind/value/default/data（折线
+#   图数据）、/children/1（雷达块）、/children/2/bind/value/default（摘要）。
 # 用法：依次 send examples/yaml/00.main.yaml（骨架 + home/about）、
 #       examples/yaml/00.chat.yaml（chat 页进菜单），再 send 本文件
-#       （一帧 append 进 chat rack）。
+#       （一帧 append 进 chat rack）；或跑交互演示 python3
+#       examples/walkthrough.py（回车一步：发前三个文件 → 逐日 patch 追加
+#       后 15 天 → 逐 token 追加摘要）。
 - action: append
   event: chat
   data:
@@ -26,7 +45,7 @@
       class:
       - gap
       grid:
-        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr)
+        grid-template-rows: minmax(160px, 1fr) minmax(360px, 2fr) auto
         height: 70vh
     children:
     - type: chart
@@ -175,141 +194,6 @@
             - day: 09-17
               avg: 3.34
               dept: 运营部
-            - day: 09-18
-              avg: 3.53
-              dept: 研发部
-            - day: 09-18
-              avg: 3.53
-              dept: 市场部
-            - day: 09-18
-              avg: 3.53
-              dept: 运营部
-            - day: 09-19
-              avg: 3.64
-              dept: 研发部
-            - day: 09-19
-              avg: 3.42
-              dept: 市场部
-            - day: 09-19
-              avg: 3.77
-              dept: 运营部
-            - day: 09-20
-              avg: 3.45
-              dept: 研发部
-            - day: 09-20
-              avg: 3.38
-              dept: 市场部
-            - day: 09-20
-              avg: 3.9
-              dept: 运营部
-            - day: 09-21
-              avg: 3.28
-              dept: 研发部
-            - day: 09-21
-              avg: 3.37
-              dept: 市场部
-            - day: 09-21
-              avg: 3.67
-              dept: 运营部
-            - day: 09-22
-              avg: 3.36
-              dept: 研发部
-            - day: 09-22
-              avg: 3.51
-              dept: 市场部
-            - day: 09-22
-              avg: 3.7
-              dept: 运营部
-            - day: 09-23
-              avg: 3.55
-              dept: 研发部
-            - day: 09-23
-              avg: 3.41
-              dept: 市场部
-            - day: 09-23
-              avg: 3.8
-              dept: 运营部
-            - day: 09-24
-              avg: 3.6
-              dept: 研发部
-            - day: 09-24
-              avg: 3.45
-              dept: 市场部
-            - day: 09-24
-              avg: 3.78
-              dept: 运营部
-            - day: 09-25
-              avg: 3.77
-              dept: 研发部
-            - day: 09-25
-              avg: 3.68
-              dept: 市场部
-            - day: 09-25
-              avg: 3.77
-              dept: 运营部
-            - day: 09-26
-              avg: 3.85
-              dept: 研发部
-            - day: 09-26
-              avg: 3.46
-              dept: 市场部
-            - day: 09-26
-              avg: 3.87
-              dept: 运营部
-            - day: 09-27
-              avg: 3.92
-              dept: 研发部
-            - day: 09-27
-              avg: 3.7
-              dept: 市场部
-            - day: 09-27
-              avg: 4.03
-              dept: 运营部
-            - day: 09-28
-              avg: 3.81
-              dept: 研发部
-            - day: 09-28
-              avg: 3.65
-              dept: 市场部
-            - day: 09-28
-              avg: 4.11
-              dept: 运营部
-            - day: 09-29
-              avg: 3.57
-              dept: 研发部
-            - day: 09-29
-              avg: 3.63
-              dept: 市场部
-            - day: 09-29
-              avg: 3.95
-              dept: 运营部
-            - day: 09-30
-              avg: 3.38
-              dept: 研发部
-            - day: 09-30
-              avg: 3.41
-              dept: 市场部
-            - day: 09-30
-              avg: 4.08
-              dept: 运营部
-            - day: 10-01
-              avg: 3.2
-              dept: 研发部
-            - day: 10-01
-              avg: 3.28
-              dept: 市场部
-            - day: 10-01
-              avg: 4.03
-              dept: 运营部
-            - day: 10-02
-              avg: 3.39
-              dept: 研发部
-            - day: 10-02
-              avg: 3.2
-              dept: 市场部
-            - day: 10-02
-              avg: 4.0
-              dept: 运营部
             encode:
               x: day
               y: avg
@@ -329,8 +213,9 @@
       id: radar-row
       attrs:
         class:
-        - f
-        horizontal: true
+        - gap
+        grid:
+          grid-template-columns: repeat(3, minmax(0, 1fr))
       children:
       - type: chart
         id: radar-rd
@@ -445,7 +330,9 @@
               scale:
                 x:
                   type: point
-                  paddingOuter: 1
+                  range:
+                  - -0.1666667
+                  - 0.6666667
                 y:
                   domain:
                   - 0
@@ -569,7 +456,9 @@
               scale:
                 x:
                   type: point
-                  paddingOuter: 1
+                  range:
+                  - -0.1666667
+                  - 0.6666667
                 y:
                   domain:
                   - 0
@@ -717,7 +606,9 @@
               scale:
                 x:
                   type: point
-                  paddingOuter: 1
+                  range:
+                  - -0.1666667
+                  - 0.6666667
                 y:
                   domain:
                   - 0
@@ -753,3 +644,12 @@
               interaction:
                 tooltip: {}
 
+    - type: text
+      attrs:
+        class:
+        - box
+        format: md
+      bind:
+        value:
+          kind: default
+          default: ""

@@ -9,6 +9,9 @@
   data:
     type: text
     id: chat
+    attrs:
+      class:
+      - box
     bind:
       value:
         kind: default
