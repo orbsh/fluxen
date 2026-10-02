@@ -40,24 +40,15 @@ UI 的 WS 地址默认取页面 origin，无需配置。接收侧逐帧自适应
 `{` = JSON，CBOR map 主类型 = CBOR），网关可混发两种格式；`?codec=json` 只
 决定 UI 自身*发送*（用户事件）的格式——方便在 devtools 里读。发送默认为 CBOR。
 
-console REPL 会把每一帧回显出来（`<- {...}`），包括 UI 上报的事件——既是发送端也是事件监视器。命令：`/send <file.kdl>`、`/raw <json>`（发送裸 `Message<Accrete>`——发 Set/Append/Patch 帧必须走这条，KDL 表达不了）、`/quit`。
+console REPL 会把每一帧回显出来（`<- {...}`），包括 UI 上报的事件——既是发送端也是事件监视器。命令：`/send <file.yaml>`、`/raw <json>`（发送裸 `Message<Accrete>`）、`/quit`。
 
-从任意位置推送内容（KDL 一律包装成 Create——替换整个根布局）：
-
-```
-curl -X POST --data-binary @examples/kdl/chat_layout.kdl http://localhost:3002/send
-```
-
-YAML 文件承载完整 Content 表达力（action 可为 create/set/append/patch/remove/
-tmpl——不再被强制包成 create；见 docs/decisions/0005-operation-layer-value-patch.md）。
-文件内容 = 一个 Content 项或其数组；`?fmt=yaml` 显式选择解析器
-（默认仍是 KDL）：
+推送任意帧批次（YAML 文件 = 一个 Content 项或其数组；action 头被保留：create/set/append/patch/remove/tmpl，见 docs/decisions/0005-operation-layer-value-patch.md。KDL 载体已于 2026-10-02 退役，只维护 YAML/JSON）：
 
 ```
-curl -X POST --data-binary @examples/yaml/02.concat.yaml "http://localhost:3002/send?fmt=yaml"
+curl -X POST --data-binary @examples/yaml/00.main.yaml http://localhost:3002/send
 ```
 
-`x.nu`（仓库根）是两种载体的 nushell 封装（`send <file> [-p <patch>]` 按扩展名
+`x.nu`（仓库根）是该载体的 nushell 封装（`send <file> [-p <patch>]` 按扩展名
 分派，另有 border-flashing / message-concat / message-replace 演示循环），
 `examples/push_demo.py` 经裸 `/cli` WebSocket 流式推 Set/Append/Patch 帧：
 

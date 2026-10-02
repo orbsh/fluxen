@@ -7,7 +7,7 @@
 
 use futures::{SinkExt, StreamExt};
 use rustyline::DefaultEditor;
-use stage::proto::parse_kdl_to_frame;
+use stage::proto::parse_yaml_to_frame;
 use tokio_tungstenite::tungstenite::Message;
 
 pub async fn run(port: u16) -> anyhow::Result<()> {
@@ -44,7 +44,7 @@ pub async fn run(port: u16) -> anyhow::Result<()> {
     });
 
     let rl = std::sync::Arc::new(tokio::sync::Mutex::new(DefaultEditor::new()?));
-    println!("console — /send <file.kdl> /raw <text> /quit; UI replies stream below");
+    println!("console — /send <file.yaml> /raw <text> /quit; UI replies stream below");
     loop {
         // readline blocks; spawn_blocking keeps the async runtime free.
         let rl = rl.clone();
@@ -79,7 +79,7 @@ pub async fn run(port: u16) -> anyhow::Result<()> {
             let file = file.trim();
             match std::fs::read_to_string(file)
                 .map_err(|e| e.to_string())
-                .and_then(|src| parse_kdl_to_frame(&src).map_err(|e| e.msg))
+                .and_then(|src| parse_yaml_to_frame(&src).map_err(|e| e.msg))
             {
                 Ok(frame) => frame.to_string(),
                 Err(e) => {

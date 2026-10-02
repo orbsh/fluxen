@@ -1,5 +1,5 @@
-//! YAML carrier tests: /send?fmt=yaml shape contract (Content item or array,
-//! action preserved — NOT forced to create like the KDL path).
+//! YAML carrier tests: /send shape contract (Content item or array,
+//! action preserved end-to-end).
 
 #[test]
 fn yaml_single_content_item_keeps_action() {

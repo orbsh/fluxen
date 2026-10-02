@@ -20,7 +20,6 @@ tokio-tungstenite = "0.24"
 rustyline = "14"
 clap = { version = "4", features = ["derive"] }
 axum = { version = "0.8", features = ["ws"] }
-kdl = "6.7.1"
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 http-body-util = "0.1"
 serde_yaml = "0.9"
