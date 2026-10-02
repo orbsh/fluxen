@@ -1,0 +1,224 @@
+# G2 雷达图 + 部门平均分趋势（ADR 0009，纯 GoG spec 直装 bind.value.default）。
+# 日记评分模拟数据：6 维度（出勤纪律/工作质量/工作量投入/协作沟通/学习成长/
+# 创新性，0–5 分），11 人 × 3 部门。
+# 帧1：单个 chart 节点内 facetRect 按 dept 分面——三个部门水平排列在同一张
+#   图里、各自独立雷达坐标系（encode.facet = dept），部门内一人一条线
+#   （color = name，line+area+point 三个 child mark），折点 join/cap: round。
+# 帧2：近 30 天部门平均分变化，三个部门同一坐标系（color = dept），
+#   shape: smooth 平滑曲线，数据为随机游走造的模拟值。
+# 用法：先 send 00.chat_layout.yaml，再 send 本文件（两帧 append 进 chat rack）。
+- action: append
+  event: chat
+  data:
+    type: chart
+    id: radar-dept
+    attrs:
+      class: [f]
+    bind:
+      value:
+        kind: default
+        default:
+          type: view
+          data:
+          - {dept: 研发部, name: 张伟, dim: 出勤纪律, value: 4.4}
+          - {dept: 研发部, name: 张伟, dim: 工作质量, value: 4.1}
+          - {dept: 研发部, name: 张伟, dim: 工作量投入, value: 3.6}
+          - {dept: 研发部, name: 张伟, dim: 协作沟通, value: 4.7}
+          - {dept: 研发部, name: 张伟, dim: 学习成长, value: 4.0}
+          - {dept: 研发部, name: 张伟, dim: 创新性, value: 3.5}
+          - {dept: 研发部, name: 李娜, dim: 出勤纪律, value: 3.9}
+          - {dept: 研发部, name: 李娜, dim: 工作质量, value: 4.6}
+          - {dept: 研发部, name: 李娜, dim: 工作量投入, value: 4.2}
+          - {dept: 研发部, name: 李娜, dim: 协作沟通, value: 3.6}
+          - {dept: 研发部, name: 李娜, dim: 学习成长, value: 4.4}
+          - {dept: 研发部, name: 李娜, dim: 创新性, value: 4.8}
+          - {dept: 研发部, name: 王强, dim: 出勤纪律, value: 4.6}
+          - {dept: 研发部, name: 王强, dim: 工作质量, value: 4.9}
+          - {dept: 研发部, name: 王强, dim: 工作量投入, value: 4.5}
+          - {dept: 研发部, name: 王强, dim: 协作沟通, value: 3.2}
+          - {dept: 研发部, name: 王强, dim: 学习成长, value: 3.6}
+          - {dept: 研发部, name: 王强, dim: 创新性, value: 4.1}
+          - {dept: 研发部, name: 刘洋, dim: 出勤纪律, value: 3.6}
+          - {dept: 研发部, name: 刘洋, dim: 工作质量, value: 3.8}
+          - {dept: 研发部, name: 刘洋, dim: 工作量投入, value: 4.8}
+          - {dept: 研发部, name: 刘洋, dim: 协作沟通, value: 4.0}
+          - {dept: 研发部, name: 刘洋, dim: 学习成长, value: 4.6}
+          - {dept: 研发部, name: 刘洋, dim: 创新性, value: 4.4}
+          - {dept: 市场部, name: 陈静, dim: 出勤纪律, value: 4.2}
+          - {dept: 市场部, name: 陈静, dim: 工作质量, value: 3.7}
+          - {dept: 市场部, name: 陈静, dim: 工作量投入, value: 4.8}
+          - {dept: 市场部, name: 陈静, dim: 协作沟通, value: 4.5}
+          - {dept: 市场部, name: 陈静, dim: 学习成长, value: 3.4}
+          - {dept: 市场部, name: 陈静, dim: 创新性, value: 3.9}
+          - {dept: 市场部, name: 杨帆, dim: 出勤纪律, value: 4.6}
+          - {dept: 市场部, name: 杨帆, dim: 工作质量, value: 4.2}
+          - {dept: 市场部, name: 杨帆, dim: 工作量投入, value: 3.8}
+          - {dept: 市场部, name: 杨帆, dim: 协作沟通, value: 4.1}
+          - {dept: 市场部, name: 杨帆, dim: 学习成长, value: 4.5}
+          - {dept: 市场部, name: 杨帆, dim: 创新性, value: 4.9}
+          - {dept: 市场部, name: 赵磊, dim: 出勤纪律, value: 3.8}
+          - {dept: 市场部, name: 赵磊, dim: 工作质量, value: 4.0}
+          - {dept: 市场部, name: 赵磊, dim: 工作量投入, value: 4.2}
+          - {dept: 市场部, name: 赵磊, dim: 协作沟通, value: 4.8}
+          - {dept: 市场部, name: 赵磊, dim: 学习成长, value: 3.2}
+          - {dept: 市场部, name: 赵磊, dim: 创新性, value: 3.6}
+          - {dept: 运营部, name: 孙悦, dim: 出勤纪律, value: 4.8}
+          - {dept: 运营部, name: 孙悦, dim: 工作质量, value: 4.1}
+          - {dept: 运营部, name: 孙悦, dim: 工作量投入, value: 4.5}
+          - {dept: 运营部, name: 孙悦, dim: 协作沟通, value: 4.3}
+          - {dept: 运营部, name: 孙悦, dim: 学习成长, value: 3.5}
+          - {dept: 运营部, name: 孙悦, dim: 创新性, value: 3.2}
+          - {dept: 运营部, name: 周军, dim: 出勤纪律, value: 5.0}
+          - {dept: 运营部, name: 周军, dim: 工作质量, value: 3.9}
+          - {dept: 运营部, name: 周军, dim: 工作量投入, value: 4.4}
+          - {dept: 运营部, name: 周军, dim: 协作沟通, value: 4.0}
+          - {dept: 运营部, name: 周军, dim: 学习成长, value: 3.7}
+          - {dept: 运营部, name: 周军, dim: 创新性, value: 3.4}
+          - {dept: 运营部, name: 吴敏, dim: 出勤纪律, value: 4.1}
+          - {dept: 运营部, name: 吴敏, dim: 工作质量, value: 4.3}
+          - {dept: 运营部, name: 吴敏, dim: 工作量投入, value: 4.6}
+          - {dept: 运营部, name: 吴敏, dim: 协作沟通, value: 4.9}
+          - {dept: 运营部, name: 吴敏, dim: 学习成长, value: 4.0}
+          - {dept: 运营部, name: 吴敏, dim: 创新性, value: 3.6}
+          - {dept: 运营部, name: 郑华, dim: 出勤纪律, value: 4.5}
+          - {dept: 运营部, name: 郑华, dim: 工作质量, value: 4.0}
+          - {dept: 运营部, name: 郑华, dim: 工作量投入, value: 4.2}
+          - {dept: 运营部, name: 郑华, dim: 协作沟通, value: 4.1}
+          - {dept: 运营部, name: 郑华, dim: 学习成长, value: 3.8}
+          - {dept: 运营部, name: 郑华, dim: 创新性, value: 3.5}
+          transform:
+          - type: facetRect
+            padding: [10, 10]
+          coordinate:
+          - {type: polar}
+          encode: {x: dim, y: value, color: name, facet: dept}
+          scale:
+            x: {type: point}
+            y:
+              domain: [0, 5]
+              tickCount: 5
+          axis:
+            x: {grid: true}
+            y: {grid: true, title: null}
+          legend:
+            color:
+              layout: {justContent: true}
+          children:
+          - type: area
+            style: {fillOpacity: 0.12}
+          - type: line
+            encode: {shape: smooth}
+            style: {lineWidth: 2, join: round, cap: round}
+          - {type: point, size: 2.5}
+          interaction:
+            tooltip: {}
+- action: append
+  event: chat
+  data:
+    type: chart
+    id: dept-trend
+    attrs:
+      class: [f]
+    bind:
+      value:
+        kind: default
+        default:
+          type: line
+          data:
+          - {day: 09-03, avg: 4.07, dept: 研发部}
+          - {day: 09-03, avg: 3.95, dept: 市场部}
+          - {day: 09-03, avg: 4.18, dept: 运营部}
+          - {day: 09-04, avg: 3.86, dept: 研发部}
+          - {day: 09-04, avg: 3.97, dept: 市场部}
+          - {day: 09-04, avg: 4.11, dept: 运营部}
+          - {day: 09-05, avg: 3.64, dept: 研发部}
+          - {day: 09-05, avg: 3.97, dept: 市场部}
+          - {day: 09-05, avg: 3.88, dept: 运营部}
+          - {day: 09-06, avg: 3.61, dept: 研发部}
+          - {day: 09-06, avg: 3.75, dept: 市场部}
+          - {day: 09-06, avg: 3.67, dept: 运营部}
+          - {day: 09-07, avg: 3.57, dept: 研发部}
+          - {day: 09-07, avg: 3.92, dept: 市场部}
+          - {day: 09-07, avg: 3.48, dept: 运营部}
+          - {day: 09-08, avg: 3.43, dept: 研发部}
+          - {day: 09-08, avg: 3.98, dept: 市场部}
+          - {day: 09-08, avg: 3.71, dept: 运营部}
+          - {day: 09-09, avg: 3.47, dept: 研发部}
+          - {day: 09-09, avg: 3.93, dept: 市场部}
+          - {day: 09-09, avg: 3.95, dept: 运营部}
+          - {day: 09-10, avg: 3.24, dept: 研发部}
+          - {day: 09-10, avg: 4.11, dept: 市场部}
+          - {day: 09-10, avg: 3.84, dept: 运营部}
+          - {day: 09-11, avg: 3.2, dept: 研发部}
+          - {day: 09-11, avg: 3.92, dept: 市场部}
+          - {day: 09-11, avg: 3.75, dept: 运营部}
+          - {day: 09-12, avg: 3.36, dept: 研发部}
+          - {day: 09-12, avg: 3.76, dept: 市场部}
+          - {day: 09-12, avg: 3.79, dept: 运营部}
+          - {day: 09-13, avg: 3.43, dept: 研发部}
+          - {day: 09-13, avg: 3.69, dept: 市场部}
+          - {day: 09-13, avg: 3.81, dept: 运营部}
+          - {day: 09-14, avg: 3.21, dept: 研发部}
+          - {day: 09-14, avg: 3.47, dept: 市场部}
+          - {day: 09-14, avg: 3.66, dept: 运营部}
+          - {day: 09-15, avg: 3.3, dept: 研发部}
+          - {day: 09-15, avg: 3.44, dept: 市场部}
+          - {day: 09-15, avg: 3.57, dept: 运营部}
+          - {day: 09-16, avg: 3.34, dept: 研发部}
+          - {day: 09-16, avg: 3.41, dept: 市场部}
+          - {day: 09-16, avg: 3.47, dept: 运营部}
+          - {day: 09-17, avg: 3.49, dept: 研发部}
+          - {day: 09-17, avg: 3.51, dept: 市场部}
+          - {day: 09-17, avg: 3.34, dept: 运营部}
+          - {day: 09-18, avg: 3.53, dept: 研发部}
+          - {day: 09-18, avg: 3.53, dept: 市场部}
+          - {day: 09-18, avg: 3.53, dept: 运营部}
+          - {day: 09-19, avg: 3.64, dept: 研发部}
+          - {day: 09-19, avg: 3.42, dept: 市场部}
+          - {day: 09-19, avg: 3.77, dept: 运营部}
+          - {day: 09-20, avg: 3.45, dept: 研发部}
+          - {day: 09-20, avg: 3.38, dept: 市场部}
+          - {day: 09-20, avg: 3.9, dept: 运营部}
+          - {day: 09-21, avg: 3.28, dept: 研发部}
+          - {day: 09-21, avg: 3.37, dept: 市场部}
+          - {day: 09-21, avg: 3.67, dept: 运营部}
+          - {day: 09-22, avg: 3.36, dept: 研发部}
+          - {day: 09-22, avg: 3.51, dept: 市场部}
+          - {day: 09-22, avg: 3.7, dept: 运营部}
+          - {day: 09-23, avg: 3.55, dept: 研发部}
+          - {day: 09-23, avg: 3.41, dept: 市场部}
+          - {day: 09-23, avg: 3.8, dept: 运营部}
+          - {day: 09-24, avg: 3.6, dept: 研发部}
+          - {day: 09-24, avg: 3.45, dept: 市场部}
+          - {day: 09-24, avg: 3.78, dept: 运营部}
+          - {day: 09-25, avg: 3.77, dept: 研发部}
+          - {day: 09-25, avg: 3.68, dept: 市场部}
+          - {day: 09-25, avg: 3.77, dept: 运营部}
+          - {day: 09-26, avg: 3.85, dept: 研发部}
+          - {day: 09-26, avg: 3.46, dept: 市场部}
+          - {day: 09-26, avg: 3.87, dept: 运营部}
+          - {day: 09-27, avg: 3.92, dept: 研发部}
+          - {day: 09-27, avg: 3.7, dept: 市场部}
+          - {day: 09-27, avg: 4.03, dept: 运营部}
+          - {day: 09-28, avg: 3.81, dept: 研发部}
+          - {day: 09-28, avg: 3.65, dept: 市场部}
+          - {day: 09-28, avg: 4.11, dept: 运营部}
+          - {day: 09-29, avg: 3.57, dept: 研发部}
+          - {day: 09-29, avg: 3.63, dept: 市场部}
+          - {day: 09-29, avg: 3.95, dept: 运营部}
+          - {day: 09-30, avg: 3.38, dept: 研发部}
+          - {day: 09-30, avg: 3.41, dept: 市场部}
+          - {day: 09-30, avg: 4.08, dept: 运营部}
+          - {day: 10-01, avg: 3.2, dept: 研发部}
+          - {day: 10-01, avg: 3.28, dept: 市场部}
+          - {day: 10-01, avg: 4.03, dept: 运营部}
+          - {day: 10-02, avg: 3.39, dept: 研发部}
+          - {day: 10-02, avg: 3.2, dept: 市场部}
+          - {day: 10-02, avg: 4.0, dept: 运营部}
+          encode: {x: day, y: avg, color: dept, shape: smooth}
+          style: {lineWidth: 2}
+          scale:
+            y:
+              domain: [3.0, 5.0]
+          interaction:
+            tooltip: {crosshairs: true}
