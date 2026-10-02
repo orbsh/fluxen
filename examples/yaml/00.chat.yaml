@@ -168,6 +168,7 @@
               horizontal: true
             children:
             - type: input
+              id: test
               bind:
                 value:
                   kind: event

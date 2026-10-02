@@ -168,18 +168,30 @@ pub fn use_target<'a>(
         .and_then(|x| x.get(key))
         .map(|b| b.variant.clone())?;
     match variant {
-        BindVariant::Event { .. } | BindVariant::Local { .. } => Some(move |val| {
-            let ctx = ctx.clone();
-            ctx.emit(&variant, None, val);
-        }),
+        BindVariant::Event { .. } | BindVariant::Local { .. } => {
+            // 发射节点自身的 id 随事件走（ADR 0010 的 `id`）——闭包按值捕获，
+            // 故在这里算好。
+            let id = node_id(accrete);
+            Some(move |val| {
+                let ctx = ctx.clone();
+                ctx.emit(&variant, id.clone(), val);
+            })
+        }
         _ => None,
     }
+}
+
+/// 发射节点自身的 id（ADR 0010：包装对象的 `id` = 发射节点 id）。
+/// 空串按无身份处理——与行身份同一约定（`''` 不构成 id）。
+pub(crate) fn node_id(accrete: &impl AccreteOps) -> Option<String> {
+    accrete.get_id().clone().filter(|s| !s.is_empty())
 }
 
 /// `use_target(ctx, accrete, "value")`。
 pub fn use_target_value(ctx: Ctx, accrete: &impl AccreteOps) -> Option<impl Fn(Value)> {
     use_target(ctx, accrete, "value")
 }
+
 /// 表单信号共享：`form_` 构建本结构后注入 `Ctx.form` 并克隆下传，
 /// `input_`/`button_` 从自己拿到的 ctx 读取——归属沿克隆链传播，
 /// 不依赖渲染时序。
@@ -187,4 +199,33 @@ pub fn use_target_value(ctx: Ctx, accrete: &impl AccreteOps) -> Option<impl Fn(V
 pub struct FormState {
     pub fields: std::collections::HashMap<String, RwSignal<Value>>,
     pub confirm: RwSignal<Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::node_id;
+    use accrete::Accrete;
+    use serde_json::{Value, json};
+
+    fn accrete(v: Value) -> Accrete {
+        serde_json::from_value(v).expect("valid accrete")
+    }
+
+    #[test]
+    fn node_id_is_the_emitting_nodes_own_id() {
+        let n = accrete(json!({"type": "input", "id": "in1"}));
+        assert_eq!(node_id(&n).as_deref(), Some("in1"));
+    }
+
+    #[test]
+    fn node_id_is_absent_without_an_id() {
+        let n = accrete(json!({"type": "input"}));
+        assert_eq!(node_id(&n), None);
+    }
+
+    #[test]
+    fn node_id_treats_an_empty_id_as_absent() {
+        let n = accrete(json!({"type": "input", "id": ""}));
+        assert_eq!(node_id(&n), None);
+    }
 }

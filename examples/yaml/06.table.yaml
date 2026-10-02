@@ -195,7 +195,7 @@ data:
     value:
       kind: event
       event: confirm
-  id: null
+  id: table-form
   type: form
 event: chat
 

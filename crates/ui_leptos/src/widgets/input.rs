@@ -1,5 +1,5 @@
 use crate::Ctx;
-use crate::hooks::use_common_css;
+use crate::hooks::{node_id, use_common_css};
 use accrete::{AccreteOps, Bind, BindVariant, Input, JsType};
 use leptos::ev;
 use leptos::html::*;
@@ -17,6 +17,7 @@ fn default_option_jskind(v: &Option<JsType>) -> Value {
 /// emit（落点由 Ctx::emit 路由，ADR 0008）。
 pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
+    let node_id = node_id(&accrete);
     let mut css = vec!["input", "f", "shadow"];
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
@@ -72,6 +73,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
         let ctx = ctx.clone();
         let k2 = kind.clone();
         let variant_emit = variant.clone();
+        let nid = node_id.clone();
         move |ev: web_sys::KeyboardEvent| {
             if ev.key() == "Enter" {
                 match bind_type {
@@ -99,8 +101,9 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
                         {
                             el.set_value("");
                         }
-                        // 落点统一路由（ADR 0008）：Event 上行、Local 写槽。
-                        ctx.emit(&variant_emit, None, val);
+                        // 落点统一路由（ADR 0008）：Event 上行、Local 写槽；
+                        // `id` = 本输入节点自身的 id（ADR 0010 的发射节点 id）。
+                        ctx.emit(&variant_emit, nid.clone(), val);
                     }
                     _ => {}
                 }

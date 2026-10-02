@@ -301,6 +301,21 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
 
 ## Resolved
 
+### Emitted events carried no node id — the wrapper's `id` was always absent (fixed 2026-10-02)
+
+ADR 0010 defines the wrapper's `id` as the emitting node's id, but every emit
+site passed `None`: `use_target` (select, textarea), `input_`'s Enter path and
+`form_`'s submit path. Only the canvas host uplink passed one. So a producer
+could not tell which node fired, and — since the vals plane carries the same
+wrapper — a slot subscriber could not tell which component wrote a value. All
+three sites now pass the node's own id via `node_id` (an empty-string id is
+normalized to absent, the rule row identity already uses).
+
+Verified on the default CBOR page: a probe layout with an id-bearing input, an
+id-less one and an empty-id one, Enter in each — the stage console echo shows
+`id: probe-input` on the first uplink and no `id` field on the other two.
+Unit tests: `node_id` in hooks.rs (own id / absent / empty).
+
 ### Enter "does nothing" — console dropped CBOR uplinks (fixed 2026-09-30)
 
 Typing + Enter in the chat input sends the event frame and clears the box, yet
