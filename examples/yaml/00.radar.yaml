@@ -35,8 +35,8 @@
 # 用法：依次 send examples/yaml/00.main.yaml（骨架 + home/about）、
 #       examples/yaml/00.chat.yaml（chat 页进菜单），再 send 本文件
 #       （一帧 append 进 chat rack）；或跑交互演示 python3
-#       examples/walkthrough.py（回车一步：发前三个文件 → 逐日 patch 追加
-#       后 15 天 → 逐 token 追加摘要）。
+#       examples/walkthrough.py（回车一步：发前两个文件 → inject 把当前页
+#       切到 chat → 发本文件 → 逐日 patch 追加后 15 天 → 逐 token 追加摘要）。
 - action: append
   event: chat
   data:
