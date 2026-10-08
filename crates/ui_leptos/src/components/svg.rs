@@ -20,7 +20,7 @@ pub fn svg_(accrete: Svg, ctx: &Ctx) -> AnyView {
         .children
         .as_deref()
         .map(|s| render_children(ctx, s))
-        .unwrap_or_else(|| ().into_any());
+        .unwrap_or_default();
     svg::svg()
         .class(css.as_str())
         .style(style)
@@ -47,7 +47,7 @@ pub fn group_(accrete: Group, ctx: &Ctx) -> AnyView {
         .children
         .as_deref()
         .map(|s| render_children(ctx, s))
-        .unwrap_or_else(|| ().into_any());
+        .unwrap_or_default();
     svg::g()
         .class(css.as_str())
         .style(style)

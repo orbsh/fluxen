@@ -11,3 +11,5 @@ crates/ui_leptos/assets/3dbrowser/
 # Chart 封装模块 + G2 库（ADR 0009）：从 crates/ui_leptos/modules/g2chart 拷入，
 # g2.min.js 来自 npmmirror tarball（版本固定 5.4.8），不入 git
 crates/ui_leptos/assets/g2chart/
+*.glb
+*.ksplat

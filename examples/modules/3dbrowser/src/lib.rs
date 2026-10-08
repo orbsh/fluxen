@@ -51,16 +51,41 @@ fn decode(data: &JsValue) -> Result<Spec, JsError> {
 struct State {
     context: Context,
     camera: Camera,
+    /// 三灯布光：key 主光（带 shadow map 投影）+ fill 补光 + rim 轮廓光，
+    /// 再配低强度 ambient 兜底——单灯直射是原示例"塑料感"的主因。
     ambient: AmbientLight,
-    directional: DirectionalLight,
+    key_light: DirectionalLight,
+    fill_light: DirectionalLight,
+    rim_light: DirectionalLight,
+    /// 地面接影平面（PBR，微粗糙；位置跟随模型包围盒底面）。
+    ground: Option<Gm<Mesh, PhysicalMaterial>>,
     /// 内置几何（无光材质；与 gltf 分两趟 render，材质类型不同）。
     color_objs: Vec<Gm<Mesh, ColorMaterial>>,
     /// 已加载的 gltf 模型（PBR，吃灯光）。
     models: Vec<Model<PhysicalMaterial>>,
     seen: HashSet<String>,
     pending: VecDeque<(String, String)>,
+    /// 当前已装载的资产 URL 集（展示语义 = 一次一件：spec 的 assets 集变化
+    /// 时整体替换模型，而非追加堆叠）。
+    current_assets: Vec<String>,
     dirty: bool,
     size: (u32, u32),
+}
+
+/// 地面网格：20x20 的单位平面，绕 X 转 90° 平铺。
+fn ground_mesh(context: &Context) -> Gm<Mesh, PhysicalMaterial> {
+    let mut cpu = CpuMesh::square();
+    cpu.transform(Mat4::from_angle_x(degrees(-90.0)))
+        .ok();
+    Gm::new(
+        Mesh::new(context, &cpu),
+        PhysicalMaterial {
+            albedo: Srgba::new_opaque(225, 228, 233),
+            roughness: 0.85,
+            metallic: 0.0,
+            ..Default::default()
+        },
+    )
 }
 
 impl State {
@@ -92,6 +117,13 @@ impl State {
             let Some(url) = url else { continue };   // null 占位 = 还没到
             let id = format!("{key}:{url}");
             if self.seen.insert(id.clone()) {
+                // 展示语义 = 一次一件：资产集变化即整体替换。旧模型、旧
+                // pending、旧地面一并清掉，只让最新声明的资产进装载队列。
+                self.models.clear();
+                self.current_assets.clear();
+                self.ground = None;
+                self.pending.clear();
+                self.current_assets.push(id.clone());
                 self.pending.push_back((id, url));
             }
         }
@@ -122,7 +154,33 @@ impl State {
         for m in model.iter_mut() {
             m.set_transformation(Mat4::from_translation(c) * Mat4::from_scale(s));
         }
+        // 模型归一化后的底面高度：缩放后的 min.y。地面/相机锚点按它落位，
+        // 模型不再悬浮；同帧多模型以最新一次为准（示例语义：一次展示一件）。
+        let bottom = (aabb.min().y + c.y) * s;
+        let mut ground = ground_mesh(&self.context);
+        ground.set_transformation(Mat4::from_translation(vec3(0.0, bottom, 0.0)));
+        self.ground = Some(ground);
+        // 相机绕底面中心上方取景，首帧即对准主体
+        let cam_target = vec3(0.0, bottom + 1.0, 0.0);
+        let pos = cam_target + vec3(2.8, 1.6, 7.0);
+        self.camera.set_view(pos, cam_target, vec3(0.0, 1.0, 0.0));
+        // 主光 shadow map 每次场景内容变化后重建（地面 + 模型都参与投影）
+        self.relight();
         self.models.push(model);
+        self.dirty = true;
+    }
+
+    /// 用当前场景几何重建主光 shadow map。
+    fn relight(&mut self) {
+        let geoms = self
+            .ground
+            .iter()
+            .map(|g| g as &dyn Geometry)
+            .chain(self.models.iter().flat_map(|m| m.iter().map(|p| p as &dyn Geometry)))
+            .collect::<Vec<_>>();
+        if !geoms.is_empty() {
+            self.key_light.generate_shadow_map(2048, geoms).ok();
+        }
         self.dirty = true;
     }
 
@@ -132,8 +190,16 @@ impl State {
             return;
         }
         let rt = RenderTarget::screen(&self.context, w, h);
-        rt.clear(ClearState::color_and_depth(0.93, 0.95, 0.97, 1.0, 1.0));
-        let lights: [&dyn Light; 2] = [&self.ambient, &self.directional];
+        rt.clear(ClearState::color_and_depth(0.90, 0.92, 0.96, 1.0, 1.0));
+        let lights: [&dyn Light; 4] = [
+            &self.ambient,
+            &self.key_light,
+            &self.fill_light,
+            &self.rim_light,
+        ];
+        if let Some(g) = &self.ground {
+            rt.render(&self.camera, std::iter::once(g), &lights);
+        }
         rt.render(&self.camera, &self.color_objs, &lights);
         rt.render(
             &self.camera,
@@ -181,14 +247,20 @@ pub fn mount(canvas: web_sys::HtmlCanvasElement, data: JsValue, _host: JsValue) 
         100.0,
     );
     let state = Rc::new(RefCell::new(State {
-        ambient: AmbientLight::new(&context, 0.5, Srgba::WHITE),
-        directional: DirectionalLight::new(&context, 2.0, Srgba::WHITE, vec3(-0.4, -1.0, -0.5)),
+        // 三灯布光：key 从左上前方打（后续带 shadow map），fill 从右前弱补，
+        // rim 从后上方勾轮廓，ambient 兜底防死黑。
+        ambient: AmbientLight::new(&context, 0.35, Srgba::WHITE),
+        key_light: DirectionalLight::new(&context, 2.2, Srgba::WHITE, vec3(-0.5, -0.9, -0.4)),
+        fill_light: DirectionalLight::new(&context, 0.6, Srgba::new(190, 205, 255, 255), vec3(0.7, -0.2, -0.3)),
+        rim_light: DirectionalLight::new(&context, 1.1, Srgba::new(255, 245, 230, 255), vec3(0.1, -0.5, 0.9)),
         context,
         camera,
+        ground: None,
         color_objs: Vec::new(),
         models: Vec::new(),
         seen: HashSet::new(),
         pending: VecDeque::new(),
+        current_assets: Vec::new(),
         dirty: true,
         size,
     }));

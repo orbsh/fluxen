@@ -88,7 +88,7 @@ pub fn form_(accrete: Form, ctx: &Ctx) -> AnyView {
         .children
         .as_deref()
         .map(|s| render_children(&ctx, s))
-        .unwrap_or_else(|| ().into_any());
+        .unwrap_or_default();
 
     // confirm 为真时发送
     if let Some(event) = event {
