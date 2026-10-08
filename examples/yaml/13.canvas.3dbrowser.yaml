@@ -1,45 +1,113 @@
-# Canvas 示例（ADR 0007）：3dbrowser 模块挂载 + 流式喂载荷。
+# Canvas 示例（ADR 0007）：3dbrowser 多实例 + 流式喂载荷。
 # 前置：模块产物在 crates/ui_leptos/assets/3dbrowser/（配方见
 # examples/modules/3dbrowser/Cargo.toml 头注释；stage serve 自带静态服务）；
 # 布局侧先发 00.main.yaml + 00.chat.yaml（本文件 append 一行进 chat rack）。
 #
-# 顺序即协议演示：
-# 1) append 行——canvas 挂 `kind: source` 指向 m3d 槽，此刻槽为空，
-#    宿主喂 `{}`（模块合法消费"尚无数据"，先渲染空场景）；
-# 2) set 数据槽——完整载荷进 m3d，宿主 update Effect 订阅槽变化，
-#    重序列化 CBOR 推给模块（e2e 取证：update 触发、tile.glb 被拉取）；
-# 3) patch 流式——对槽内 JSON 做指针编辑（ADR 0005）：set 里先写
-#    `sphere: {color: null}` 占位（指针只能 replace 已存在的键），
-#    逐帧 replace 成真值。
+# 数据槽是单值的：同一槽被多个 canvas 订阅时，后写的 set 覆盖先写的，
+# 订阅方全体收到同一份最终载荷。所以多实例各挂各的槽（m3d_car /
+# m3d_helmet / ...），每槽 set 一次，互不覆盖。
+#
+# 素材均为 CC0（Khronos glTF-Sample-Assets），下载地址见
+# crates/ui_leptos/assets/3dbrowser/README.md。
 - action: append
   event: chat
   data:
-    type: canvas
-    url: /assets/3dbrowser/index.js
+    type: case
     attrs:
-      width: 600px
-      height: 400px
-    bind:
-      value:
-        kind: source
-        source: m3d
+      horizontal: true
+    children:
+      - type: canvas
+        url: /assets/3dbrowser/index.js
+        attrs:
+          width: 300px
+          height: 260px
+        bind:
+          value:
+            kind: source
+            source: m3d_car
+      - type: canvas
+        url: /assets/3dbrowser/index.js
+        attrs:
+          width: 300px
+          height: 260px
+        bind:
+          value:
+            kind: source
+            source: m3d_helmet
+      - type: canvas
+        url: /assets/3dbrowser/index.js
+        attrs:
+          width: 300px
+          height: 260px
+        bind:
+          value:
+            kind: source
+            source: m3d_sofa
+      - type: canvas
+        url: /assets/3dbrowser/index.js
+        attrs:
+          width: 300px
+          height: 260px
+        bind:
+          value:
+            kind: source
+            source: m3d_shoe
+      - type: canvas
+        url: /assets/3dbrowser/index.js
+        attrs:
+          width: 300px
+          height: 260px
+        bind:
+          value:
+            kind: source
+            source: m3d_watch
 - action: set
-  event: m3d
+  event: m3d_car
   data:
     type: group
     bind:
       value:
         kind: default
         default:
-          primitives:
-            cube:
-              color: [200, 60, 60]
-            sphere:
-              color: null
           assets:
-            tile: /assets/3dbrowser/tile.glb
-- action: patch
-  event: m3d
-  path: /bind/value/default/primitives/sphere/color
-  op: replace
-  value: [60, 160, 90]
+            car: /assets/3dbrowser/ToyCar.glb
+- action: set
+  event: m3d_helmet
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          assets:
+            helmet: /assets/3dbrowser/DamagedHelmet.glb
+- action: set
+  event: m3d_sofa
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          assets:
+            sofa: /assets/3dbrowser/GlamVelvetSofa.glb
+- action: set
+  event: m3d_shoe
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          assets:
+            shoe: /assets/3dbrowser/MaterialsVariantsShoe.glb
+- action: set
+  event: m3d_watch
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          assets:
+            watch: /assets/3dbrowser/ChronographWatch.glb

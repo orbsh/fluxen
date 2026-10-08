@@ -19,7 +19,7 @@ pub fn float_(accrete: Float, ctx: &Ctx) -> AnyView {
         .children
         .as_deref()
         .map(|s| render_children(ctx, s))
-        .unwrap_or_else(|| ().into_any());
+        .unwrap_or_default();
     div()
         .class(css.as_str())
         .style(style)

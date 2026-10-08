@@ -1,0 +1,41 @@
+# Canvas 示例（ADR 0007）：splatviewer 模块——高斯泼溅场景展示。
+# 前置：模块在 crates/ui_leptos/assets/splatviewer/（纯 JS，无构建，配方见
+# examples/modules/splatviewer/index.js 头注释）；布局侧先发 00.main.yaml +
+# 00.chat.yaml。泼溅素材 truck.ksplat / bonsai.ksplat 来自
+# GaussianSplats3D 官方演示数据（INRIA 3DGS 数据集场景，演示用途随仓库分发，
+# 许可同源场景——研究/演示用途，商用需自行核实）。
+#
+# 协议演示与 13.canvas.3dbrowser.yaml 同构：append 空挂载 → set 换场景；
+# 同 URL 幂等跳过，换 URL 切场景。
+- action: append
+  event: chat
+  data:
+    type: canvas
+    url: /assets/splatviewer/index.js
+    attrs:
+      width: 600px
+      height: 400px
+    bind:
+      value:
+        kind: source
+        source: splat
+- action: set
+  event: splat
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          assets:
+            scene: /assets/splatviewer/truck.ksplat
+- action: set
+  event: splat
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          assets:
+            scene: /assets/splatviewer/bonsai.ksplat

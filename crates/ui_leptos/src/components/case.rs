@@ -41,7 +41,7 @@ pub fn case_(accrete: Case, ctx: &Ctx) -> AnyView {
         .children
         .as_deref()
         .map(|s| render_children(ctx, s))
-        .unwrap_or_else(|| ().into_any());
+        .unwrap_or_default();
     div()
         .class(css.as_str())
         .style(style)
@@ -88,7 +88,7 @@ pub fn placeholder_(accrete: Placeholder, ctx: &Ctx, id: String) -> AnyView {
                 .children
                 .as_deref()
                 .map(|s| render_children(&ctx, s))
-                .unwrap_or_else(|| ().into_any());
+                .unwrap_or_default();
             div()
                 .id(id_.as_str())
                 .class(css.as_str())
