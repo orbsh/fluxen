@@ -52,7 +52,7 @@ pub fn fold_(accrete: Fold, ctx: &Ctx, id: String) -> AnyView {
                 .children
                 .as_deref()
                 .map(|x| render_children(&ctx, x))
-                .unwrap_or_default();
+                .unwrap_or_else(|| ().into_any());
             div().child(children).into_any()
         } else {
             div().into_any()

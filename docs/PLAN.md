@@ -144,8 +144,9 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
 相对 asset URL 在 frame() 泵里按 document.baseURI 归一化（reqwest
 只吃绝对 URL）。
 
-后续单元（本地联动：bind 路由机制，统一协议而非 Canvas 专属）：
-- [ ] 需求：点击频道列表切频道、点菜单切页面——组件间纯前端联动，不走
+后续单元（本地联动：bind 路由机制，统一协议而非 Canvas 专属）
+— done 2026-10-01，落地记录见 §9 / ADR 0008：
+- [x] 需求：点击频道列表切频道、点菜单切页面——组件间纯前端联动，不走
       transport 往返。现状所有 emit（button/select/form/input 的
       `kind: event`）一律上行；接收侧（`kind: source` 读 data/list 槽）
       机制已存在且组件无关。缺的只是路由：把某个事件的落点从服务端改成
@@ -153,14 +154,14 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
 - [x] 命名裁决（用户 2026-10-01）：事件类本地落点用 `Local { signal }`
       新变体；历史死变体 `Target { target }` 太模糊、删除（不复活）。
       kind 集合改动是 wire 面——同步 schema/示例/生产端。
-- [ ] 方案：bind 的事件类 kind 增加本地目标 `Local { signal }`：
+- [x] 方案：bind 的事件类 kind 增加本地目标 `Local { signal }`：
       emit 组件命中本地目标 → 直接写 Ctx 具名 data 槽，不上行。接收侧
       零改动：case/placeholder 渲染 source 槽 = 切页面；rack 订阅 list
       槽 = 切内容。Canvas 只是新增的一个 emit 方（host.send 同样可路由
       本地），机制对它无特判。
-- [ ] wire 面影响：kind 集合改动需同步 schema/examples/生产端；布局帧
+- [x] wire 面影响：kind 集合改动需同步 schema/examples/生产端；布局帧
       由 AI 生产者声明连线（事件名→槽名），UI 核心不预设任何业务联动。
-- [ ] bind 现状核对（2026-09-30）：kind 标签是 serde 统一形态的产物——
+- [x] bind 现状核对（2026-09-30）：kind 标签是 serde 统一形态的产物——
       早期组件类型隐式决定方向（输入框=发送、纯展示=接收），加字段后
       历史 `Target { target }` 变体全仓无消费者（ui 不读、stage/examples
       不产，死变体）。注意 kind 集合改动是 wire 面（schema/示例/生产端同扫）。
@@ -245,7 +246,8 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
   rack 955；dom 模式切走再切回 textarea 同一节点、草稿值存活。
 - 15.tabs.yaml 重写为诚实形态（菜单标签与页面内容互异，同事件两处
   取件：标题 /data、Pages /data）；14.local_routing 示例同步包装形状。
-- 新增 16.chat_in_pages.yaml：Pages 结构为基础 main 布局，00.chat_layout
+- 00.chat.yaml（原 16.chat_in_pages.yaml 的内容，落地时归入 00.* 系列）：
+  Pages 结构为基础 main 布局，00.chat_layout
   的整棵聊天树作为一行（id: chat, display: dom）append 进字典——
   chat 成为其中一个页面，切走滚动/草稿保持。
 - 测试：emit 包装形状（Local 带/不带 event、id 透传，content/tests/
@@ -274,7 +276,7 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
   性）、restore-only 通道（强制视图状态是真实第二场景）、forced 子通道
   （订阅方要区分"谁写的"，形状一致性丢失）、origin 标记（同值短路已挡住
   常见回显环）。
-- 示例 `examples/yaml/16.inject.yaml`（骨架下 inject `page` = home，把 main
+- 示例 `examples/yaml/00.inject.yaml`（骨架下 inject `page` = home，把 main
   的当前页切过去）；单测（缺省 event = slot、id 透传、同值短路、载荷形状与
   emit 逐字段一致）；e2e（inject `page` → pages 切到目标行；随后点一次同名
   交互，槽值不变）；三门槛 + e2e。
@@ -284,7 +286,7 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
   同值短路抽成纯函数 `inject_writes`；info 日志经浏览器 tracing_wasm
   （main.rs 装的是 INFO 级）可见。
 - 验证：workspace build/test 全过（content 新增 6 条、ui_leptos 新增 3 条）；
-  trunk build 出 dist；`stage tojson 16.inject.yaml` 确认 YAML 载体认识新操作
+  trunk build 出 dist；`stage tojson 00.inject.yaml` 确认 YAML 载体认识新操作
   （event/id 缺省在 wire 上省略）；e2e 实测 pages 受控切换——注入前空白、
   一帧 inject `page` = home 后首页出现、同值重发无变化、改值切到 about、
   未命中的键回落空白。

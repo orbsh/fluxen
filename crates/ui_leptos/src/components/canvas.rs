@@ -108,6 +108,15 @@ fn mount_module(
     let url = url.to_string();
     nr.on_load(move |el| {
         let el: web_sys::HtmlElement = el.dyn_into().expect("div is element");
+        // 幂等护栏：原地 rebuild（兄弟节点 patch 引发的行 effect 重跑）会再次
+        // 触发 NodeRef 的 load → on_load 重跑 → 模块被无谓地 unmount + mount
+        // （canvas 换新、GL 状态丢失）。宿主 div 数据未变，已有本模块的挂载
+        // 标记时直接跳过；真正的新挂载（节点新建）无标记，正常走 mount。
+        if el.get_attribute("data-module-mounted").is_some() {
+            return;
+        }
+        el.set_attribute("data-module-mounted", "true")
+            .expect("set mounted marker");
         let id = el_id.clone();
         let url = url.clone();
         let ctx2 = ctx2.clone();
