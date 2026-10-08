@@ -55,10 +55,10 @@ pub struct InjectOp {
 
 ### 5. 示例与验证
 
-- 示例 `examples/yaml/16.inject.yaml`：在 00.main.yaml 骨架下发一帧 inject，把 main 布局的当前页切到 home（骨架本地无人写 `page` 槽，注入前按"信号未写入 = 空白"回落，注入后首页出现）。
+- 示例 `examples/yaml/00.inject.yaml`：在 00.main.yaml 骨架下发一帧 inject，把 main 布局的当前页切到 home（骨架本地无人写 `page` 槽，注入前按"信号未写入 = 空白"回落，注入后首页出现）。
 - 单测 `crates/content/tests/inject_op.rs`：只带 slot+data 的解码、显式 event/id 透传、缺省 event = slot、缺 event/id 时 wire 上省略、结构型载荷不被重塑、以及"不携带 T"（`Content<u8>` 也能装）。
 - 单测 `crates/ui_leptos/src/ctx.rs`（同值短路的纯函数 `inject_writes`）：空槽写、同值不写、异值写。真写路径要反应式运行时，故抽纯函数测判定。
-- e2e（stage 直驱，headless chromium 读 DOM）：00.main.yaml 后 pages 空白（`page` 槽未写，符合"信号未写入 = 空白"）；16.inject.yaml 一帧后 visible = home；同值帧重发无变化（短路，DOM 看不出"没通知"，那部分由单测覆盖）；改值 inject `page=about` → 切到 about（textarea 行，innerText 为空，以容器 class 判定）；未命中的键 → 回落空白。
+- e2e（stage 直驱，headless chromium 读 DOM）：00.main.yaml 后 pages 空白（`page` 槽未写，符合"信号未写入 = 空白"）；00.inject.yaml 一帧后 visible = home；同值帧重发无变化（短路，DOM 看不出"没通知"，那部分由单测覆盖）；改值 inject `page=about` → 切到 about（textarea 行，innerText 为空，以容器 class 判定）；未命中的键 → 回落空白。
 - 三门槛：workspace build/test、wasm（trunk build）全过。
 
 ## Why Not（排除的通道形态）
