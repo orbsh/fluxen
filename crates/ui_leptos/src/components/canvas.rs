@@ -110,12 +110,22 @@ fn mount_module(
         let el: web_sys::HtmlElement = el.dyn_into().expect("div is element");
         // 幂等护栏：原地 rebuild（兄弟节点 patch 引发的行 effect 重跑）会再次
         // 触发 NodeRef 的 load → on_load 重跑 → 模块被无谓地 unmount + mount
-        // （canvas 换新、GL 状态丢失）。宿主 div 数据未变，已有本模块的挂载
-        // 标记时直接跳过；真正的新挂载（节点新建）无标记，正常走 mount。
-        if el.get_attribute("data-module-mounted").is_some() {
+        // （canvas 换新、GL 状态丢失）。
+        //
+        // 状态机写在元素属性上：无 → "pending" → "true"，护栏只认 "true" 且
+        // **容器里还有本模块写进去的内容**。只看标记会漏掉一类失效：行视图
+        // 原地重建时会把宿主 div 的子节点按视图（空）重写，把模块挂进去的
+        // canvas 抹掉（重建后 div 里只剩 tachys 的占位注释），此时标记若还
+        // 在，护栏就直接跳过 → 永久空白。splatviewer 这类 CDN 模块 import
+        // 慢，行重建必然落在挂载窗口内，所以只有它暴露；3dbrowser 是本地
+        // wasm、毫秒级，重建落在挂载之后，从未踩到。
+        // 内容没了就当没挂过，重新挂（模块 mount 自己会 replaceChildren）。
+        let mounted_ok = el.get_attribute("data-module-mounted").as_deref() == Some("true")
+            && el.child_element_count() > 0;
+        if mounted_ok {
             return;
         }
-        el.set_attribute("data-module-mounted", "true")
+        el.set_attribute("data-module-mounted", "pending")
             .expect("set mounted marker");
         let id = el_id.clone();
         let url = url.clone();
@@ -156,6 +166,7 @@ fn mount_module(
                 Some(m) => m,
                 None => {
                     tracing::warn!("module host {id}: import {url:?} failed");
+                    el.remove_attribute("data-module-mounted").ok();
                     return;
                 }
             };
@@ -168,6 +179,7 @@ fn mount_module(
             }
             let [Some(mount), Some(update), Some(resize), Some(unmount)] = contract else {
                 tracing::warn!("module host {id}: module {url:?} misses contract exports");
+                el.remove_attribute("data-module-mounted").ok();
                 return;
             };
 
@@ -180,6 +192,7 @@ fn mount_module(
                 Ok(r) => r,
                 Err(e) => {
                     tracing::warn!("module host {id}: mount threw: {e:?}");
+                    el.remove_attribute("data-module-mounted").ok();
                     return;
                 }
             };
@@ -188,12 +201,16 @@ fn mount_module(
                     Ok(v) => v,
                     Err(e) => {
                         tracing::warn!("module host {id}: mount rejected: {e:?}");
+                        el.remove_attribute("data-module-mounted").ok();
                         return;
                     }
                 }
             } else {
                 ret
             };
+            // 挂载真正成功后才置 "true"（护栏只认它）；此前是 "pending" ——
+            // 进行中的挂载不会被 rebuild 触发的 on_load 重复发起。
+            el.set_attribute("data-module-mounted", "true").ok();
 
             // 数据区变化 → update(cid, cbor)：Effect 订阅源槽，比对载荷。
             {
