@@ -44,16 +44,22 @@ export async function mount(el, data, host) {
 
   canvas.addEventListener("pointerdown", (ev) => {
     canvas.setPointerCapture(ev.pointerId);
-    view.drag = { x: ev.clientX, y: ev.clientY };
+    // 右键 = 平移（与 three.js OrbitControls 一致），左键 = 绕 target 旋转
+    view.drag = { x: ev.clientX, y: ev.clientY, pan: ev.button === 2 };
   });
   canvas.addEventListener("pointermove", (ev) => {
     if (!view.drag) return;
-    wasm.push_drag(view.ctx, ev.clientX - view.drag.x, ev.clientY - view.drag.y);
+    const dx = ev.clientX - view.drag.x;
+    const dy = ev.clientY - view.drag.y;
+    if (view.drag.pan) wasm.push_pan(view.ctx, dx, dy);
+    else wasm.push_drag(view.ctx, dx, dy);
     view.drag = { x: ev.clientX, y: ev.clientY };
   });
   const endDrag = () => (view.drag = null);
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
+  // 右键不弹系统菜单，否则平移拖拽会被上下文菜单打断
+  canvas.addEventListener("contextmenu", (ev) => ev.preventDefault());
   // 上行走 host 通道（ADR 0007 留口的最小验证）：payload 是 CBOR 字节，
   // 0xA0 = 空 map，宿主 ActiveCodec::Cbor 解成 `{}` 后交 ctx.send 上行。
   canvas.addEventListener("dblclick", () => {
