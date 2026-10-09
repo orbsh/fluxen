@@ -51,7 +51,10 @@ export async function mount(el, data, host) {
     if (!view.drag) return;
     const dx = ev.clientX - view.drag.x;
     const dy = ev.clientY - view.drag.y;
-    if (view.drag.pan) wasm.push_pan(view.ctx, dx, dy);
+    // 平移判定不只看 pointerdown 那一下的 button：pointermove 的 buttons
+    // 是按位掩码（bit1=左、bit2=右），右键按住期间恒为 2 —— 更贴近真实输入
+    const pan = view.drag.pan || (ev.buttons & 2) !== 0;
+    if (pan) wasm.push_pan(view.ctx, dx, dy);
     else wasm.push_drag(view.ctx, dx, dy);
     view.drag = { x: ev.clientX, y: ev.clientY };
   });
