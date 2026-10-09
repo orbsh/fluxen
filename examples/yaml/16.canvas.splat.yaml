@@ -5,8 +5,13 @@
 # GaussianSplats3D 官方演示数据（INRIA 3DGS 数据集场景，演示用途随仓库分发，
 # 许可同源场景——研究/演示用途，商用需自行核实）。
 #
-# 协议演示与 13.canvas.3dbrowser.yaml 同构：append 空挂载 → set 换场景；
-# 同 URL 幂等跳过，换 URL 切场景。
+# 每个场景一条独立消息（每 box 一个 canvas）：数据槽是单值的，两个 canvas
+# 若订阅同一槽只有后写的 set 生效，所以各挂各的槽（splat_truck /
+# splat_bonsai），两份载荷都到得了各自模块。
+#
+# camera 三件套取自 GaussianSplats3D 官方 demo 对应页面（demo/truck.html、
+# demo/bonsai.html）——3DGS 数据集的坐标系朝向各异，不给就是 GS3D 的默认
+# 相机（[0,10,15] 看向原点、up=[0,1,0]），视角是歪的。
 - action: append
   event: chat
   data:
@@ -18,9 +23,21 @@
     bind:
       value:
         kind: source
-        source: splat
+        source: splat_truck
+- action: append
+  event: chat
+  data:
+    type: canvas
+    url: /assets/splatviewer/index.js
+    attrs:
+      width: 600px
+      height: 400px
+    bind:
+      value:
+        kind: source
+        source: splat_bonsai
 - action: set
-  event: splat
+  event: splat_truck
   data:
     type: group
     bind:
@@ -29,8 +46,12 @@
         default:
           assets:
             scene: /assets/splatviewer/truck.ksplat
+          camera:
+            up: [0, -1, -0.17]
+            position: [-5, -1, -1]
+            lookAt: [-1.72477, 0.05395, -0.00147]
 - action: set
-  event: splat
+  event: splat_bonsai
   data:
     type: group
     bind:
@@ -39,3 +60,7 @@
         default:
           assets:
             scene: /assets/splatviewer/bonsai.ksplat
+          camera:
+            up: [0.01933, -0.75830, -0.65161]
+            position: [1.54163, 2.68515, -6.37228]
+            lookAt: [0.45622, 1.95338, 1.51278]
