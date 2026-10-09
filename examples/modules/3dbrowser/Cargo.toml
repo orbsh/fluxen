@@ -1,9 +1,11 @@
 # 示例：3D 浏览器能力模块（ADR 0007 模块契约的第一个实现）。
 # 构建：
-#   cargo build --release                       # 产物在 workspace target 下
-#   wasm-bindgen gen --target web -o pkg pkg/3dbrowser.wasm   # pkg/ 即 CDN 单元
-# pkg/ 目录内容（3dbrowser.js + 3dbrowser_bg.wasm）整体上传 CDN，
-# Canvas 组件的 url 指向 3dbrowser.js。
+#   cargo build --release --target wasm32-unknown-unknown
+#   wasm-bindgen --target web --out-dir pkg \
+#     target/wasm32-unknown-unknown/release/browser3d.wasm
+# pkg/ 目录内容（browser3d.js + browser3d_bg.wasm）与本目录的 index.js 一起
+# 拷进 crates/ui_leptos/assets/3dbrowser/（该目录不入 git），Canvas 组件的
+# url 指向 index.js。
 [workspace]
 
 [package]
@@ -16,7 +18,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 three-d = { version = "0.19", default-features = false }
-three-d-asset = { version = "0.10", features = ["gltf", "http"] }
+three-d-asset = { version = "0.10", features = ["gltf", "http", "image"] }
 ciborium = "0.2"
 glow = "0.17"
 js-sys = "0.3"
@@ -38,3 +40,6 @@ web-sys = { version = "0.3", features = [
 [profile.release]
 opt-level = "s"
 lto = "fat"
+# panic=unwind（wasm 默认 abort 会吞掉 panic 消息，只剩裸 unreachable）：
+# 让 std panic hook 能把它打到 console.error，便于诊断；wasm 边界仍会 abort。
+panic = "unwind"

@@ -48,6 +48,19 @@ fn decode(data: &JsValue) -> Result<Spec, JsError> {
     Ok(spec)
 }
 
+/// panic 消息透传到 console.error：wasm 默认（panic=abort）只给 JS 一个裸
+/// `unreachable`，连"哪个模型、为什么"都看不到——本模块踩过一次
+/// shader link 失败（glb 缺 tangent），全靠这条消息才定位。
+fn install_panic_hook() {
+    use std::sync::Once;
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        std::panic::set_hook(Box::new(|info| {
+            web_sys::console::error_1(&format!("3dbrowser panic: {info}").into());
+        }));
+    });
+}
+
 struct State {
     context: Context,
     camera: Camera,
@@ -135,6 +148,20 @@ impl State {
     }
 
     fn add_model(&mut self, cpu: three_d_asset::Model) {
+        // 补算切线：很多 glb 带法线贴图（normal texture）却不含 tangent 属性，
+        // 而 three-d 的 PhysicalMaterial 在有 normal_texture 时会在 fragment
+        // shader 里声明 `in vec3 tang/bitang`，对应的 vertex shader 只有几何带
+        // tangents 时才输出它们——缺了就是 shader link 失败
+        // （"FRAGMENT varying tang does not match any VERTEX varying"）后 panic。
+        // 有 normals + uvs 就能补算；缺前提的几何保持原样（其材质也无贴图）。
+        let mut cpu = cpu;
+        for p in cpu.geometries.iter_mut() {
+            if let three_d_asset::Geometry::Triangles(mesh) = &mut p.geometry {
+                if mesh.tangents.is_none() && mesh.normals.is_some() && mesh.uvs.is_some() {
+                    mesh.compute_tangents();
+                }
+            }
+        }
         // 居中、归一到 ~2 格半径，避免外部 gltf 尺度五花八门
         let mut model = match Model::<PhysicalMaterial>::new(&self.context, &cpu) {
             Ok(m) => m,
@@ -212,21 +239,31 @@ impl State {
 
 thread_local! {
     static CTXS: RefCell<Vec<Option<Rc<RefCell<State>>>>> = const { RefCell::new(Vec::new()) };
+    /// 异步加载完成的模型暂存：回调里绝不碰 CTXS（frame() 的 borrow_mut
+    /// 正在进行中，直接借会 RefCell 冲突 panic）；留给下一次 frame 取走。
+    static LOADED: RefCell<Vec<(u32, String, three_d_asset::Model)>> = const { RefCell::new(Vec::new()) };
 }
 
 fn with_ctx<T>(ctx: u32, f: impl FnOnce(&mut State) -> T) -> Result<T, JsError> {
-    CTXS.with(|c| {
+    // 关键：CTXS 的 borrow_mut 只覆盖"取 Rc"一步，绝不能覆盖 f 的执行——
+    // f 里的 render/GPU 调用可能重入 JS（事件、rAF 里再进 mount/frame），
+    // 借着 CTXS 时被撞上就是 panic_already_borrowed。窄借窗口后，
+    // 并发安全只落在 State 自己的 RefCell 上，f 期间其他 ctx 仍可进出。
+    let rc = CTXS.with(|c| {
         c.borrow_mut()
-            .get_mut(ctx as usize)
-            .and_then(Option::as_mut)
-            .map(|rc| f(&mut rc.borrow_mut()))
+            .get(ctx as usize)
+            .and_then(|slot| slot.as_ref())
+            .cloned()
             .ok_or_else(|| JsError::new("3dbrowser: stale ctx"))
-    })
+    })?;
+    let mut s = rc.borrow_mut();
+    Ok(f(&mut s))
 }
 
 /// 契约 mount：canvas + 自定义数据区（CBOR）+ 宿主通道（本示例不用，留口）。
 #[wasm_bindgen]
 pub fn mount(canvas: web_sys::HtmlCanvasElement, data: JsValue, _host: JsValue) -> Result<u32, JsError> {
+    install_panic_hook();
     let gl = canvas
         .get_context("webgl2")
         .map_err(|_| JsError::new("3dbrowser: webgl2 unavailable"))?
@@ -307,6 +344,23 @@ pub fn unmount(ctx: u32) {
 /// 宿主 rAF 驱动的一帧：先泵异步 asset，再按脏位重绘。
 #[wasm_bindgen]
 pub fn frame(ctx: u32) -> Result<(), JsError> {
+    // 上一次异步加载的成果先落场景（在本次 borrow 窗口内，无跨域借用冲突）
+    let mut arrived: Vec<three_d_asset::Model> = Vec::new();
+    LOADED.with(|q| {
+        let mut rest = Vec::new();
+        for (c, id, cpu) in q.borrow_mut().drain(..) {
+            if c == ctx {
+                arrived.push(cpu);
+                forget(&id); // 装载闭环，撤掉失败重试占位语义
+            } else {
+                rest.push((c, id, cpu));
+            }
+        }
+        *q.borrow_mut() = rest;
+    });
+    for cpu in arrived {
+        with_ctx(ctx, |s| s.add_model(cpu))?;
+    }
     let job = with_ctx(ctx, |s| s.pump())?;
     if let Some((id, url)) = job {
         // reqwest 只吃绝对 URL：相对 url 按 document.baseURI 归一化
@@ -318,20 +372,21 @@ pub fn frame(ctx: u32) -> Result<(), JsError> {
         let url = web_sys::Url::new_with_base(&url, &base)
             .map(|u| u.href())
             .unwrap_or(url);
-        // 异步加载：成功后回注 state；失败的 asset 不回 seen，下次 update 可重试
+        // 异步加载：成功后回注 LOADED，下一次 frame 在借用窗口内落场景；
+        // 失败的 asset 不回 seen，下次 update 可重试
         wasm_bindgen_futures::spawn_local(async move {
             match three_d_asset::io::load_async(&[&url]).await {
                 Ok(mut loaded) => {
-                    let cpu: Option<three_d_asset::Model> = loaded.deserialize(&url).ok();
-                    if let Some(cpu) = cpu {
-                        CTXS.with(|c| {
-                            if let Some(Some(rc)) = c.borrow().get(ctx as usize) {
-                                rc.borrow_mut().add_model(cpu);
-                            }
-                        });
-                    } else {
-                        web_sys::console::warn_1(&format!("3dbrowser: deserialize failed: {url}").into());
-                        forget(&id);
+                    // 失败原因必须落到 console：`.ok()` 吞掉它，缺 feature /
+                    // 未知扩展这类问题会表现成"模型静默不显示"
+                    match loaded.deserialize(&url) {
+                        Ok(cpu) => LOADED.with(|q| q.borrow_mut().push((ctx, id, cpu))),
+                        Err(e) => {
+                            web_sys::console::warn_1(
+                                &format!("3dbrowser: deserialize failed: {e:?} {url}").into(),
+                            );
+                            forget(&id);
+                        }
                     }
                 }
                 Err(e) => {
