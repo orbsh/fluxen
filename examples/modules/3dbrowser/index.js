@@ -34,7 +34,8 @@ export async function mount(el, data, host) {
     try {
       wasm.frame(view.ctx);
     } catch (e) {
-      console.warn("3dbrowser frame stopped:", e);
+      // wasm panic 在 JS 侧只有裸 `unreachable`，消息与栈必须一起打出来
+      console.warn("3dbrowser frame stopped:", e && (e.message || e.toString()), e && e.stack);
       return;
     }
     view.raf = requestAnimationFrame(loop);

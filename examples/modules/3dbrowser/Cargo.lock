@@ -1176,6 +1176,7 @@ dependencies = [
  "cgmath",
  "gltf",
  "half",
+ "image",
  "reqwest",
  "thiserror",
  "web-sys",
