@@ -449,10 +449,12 @@ within one key comes from rack's per-row Owner + `Memo<Accrete>` (untouched rows
 recompute to an equal value and never re-render).
 
 Residual tail, not a defect: a frame touching key K still runs every row's
-Memo for K's racks — O(rows) cheap recomputes (Arc clone + linear id find),
-no DOM work. If row counts reach the thousands, add a per-rack row index
-(`HashMap<id, position>` maintained alongside the list) to make the lookup
-O(1). Deferred until scale demands it.
+Memo for K's racks — O(rows) cheap recomputes (Arc clone), no DOM work. The
+row lookup itself is a table: `rack_` builds one
+`Memo<Arc<HashMap<key, position>>>` per list value, outside the outer dynamic
+closure, and every row Memo resolves its row by key — O(rows) per write
+instead of O(rows²); the key convention is shared with the keyed key set
+(`row_key`), so id rows and `#{idx}` positional rows take the same path.
 
 ## Conventions (not code)
 
