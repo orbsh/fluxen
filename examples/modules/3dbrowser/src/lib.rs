@@ -22,7 +22,8 @@ use wasm_bindgen::prelude::*;
 /// ```json
 /// {
 ///   "primitives": { "cube": {}, "sphere": {"color": [200,60,60]} },
-///   "assets": { "duck": null, "fox": "https://cdn/fox.glb" }
+///   "assets": { "duck": null, "fox": "https://cdn/fox.glb" },
+///   "clear": [0.9, 0.92, 0.96, 1.0]
 /// }
 /// ```
 /// null = 占位（ADR 0005 指针只能 replace 已存在的键，流式喂 URL 时先以
@@ -33,6 +34,10 @@ struct Spec {
     primitives: HashMap<String, PrimSpec>,
     #[serde(default)]
     assets: HashMap<String, Option<String>>,
+    /// 清屏色 `[r, g, b, a]`（0..1）。缺省 = 全透明（alpha 0），画布透出宿主
+    /// 页面背景；要固定底色就在数据区里显式给四元组。
+    #[serde(default)]
+    clear: Option<[f32; 4]>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -81,6 +86,8 @@ struct State {
     /// 当前已装载的资产 URL 集（展示语义 = 一次一件：spec 的 assets 集变化
     /// 时整体替换模型，而非追加堆叠）。
     current_assets: Vec<String>,
+    /// 清屏色（默认全透明，见 `Spec::clear`）。
+    clear: [f32; 4],
     dirty: bool,
     size: (u32, u32),
 }
@@ -103,6 +110,10 @@ fn ground_mesh(context: &Context) -> Gm<Mesh, PhysicalMaterial> {
 
 impl State {
     fn apply(&mut self, spec: Spec) {
+        if let Some(c) = spec.clear {
+            self.clear = c;
+            self.dirty = true;
+        }
         let mut next = 0u32;
         for (name, ps) in spec.primitives {
             if self.seen.insert(name.clone()) {
@@ -217,7 +228,8 @@ impl State {
             return;
         }
         let rt = RenderTarget::screen(&self.context, w, h);
-        rt.clear(ClearState::color_and_depth(0.90, 0.92, 0.96, 1.0, 1.0));
+        let [r, g, b, a] = self.clear;
+        rt.clear(ClearState::color_and_depth(r, g, b, a, 1.0));
         let lights: [&dyn Light; 4] = [
             &self.ambient,
             &self.key_light,
@@ -298,6 +310,8 @@ pub fn mount(canvas: web_sys::HtmlCanvasElement, data: JsValue, _host: JsValue) 
         seen: HashSet::new(),
         pending: VecDeque::new(),
         current_assets: Vec::new(),
+        // 默认全透明：画布不画底色，透出宿主页面（要底色走数据区 clear）
+        clear: [0.0, 0.0, 0.0, 0.0],
         dirty: true,
         size,
     }));
@@ -426,6 +440,22 @@ pub fn push_drag(ctx: u32, dx: f32, dy: f32) {
 pub fn push_wheel(ctx: u32, delta: f32) {
     with_ctx(ctx, |s| {
         s.camera.zoom(delta, 0.3, 60.0);
+        s.dirty = true;
+    })
+    .ok();
+}
+
+/// 右键拖拽 = 平移（与 three.js OrbitControls 的 pan 同感）：相机连同 target
+/// 沿相机的 right/up 平面移动。步长按视距缩放——屏幕上同样一段拖拽，近处
+/// 移动的世界单位少、远处多，手感和轨道控制器一致。
+#[wasm_bindgen]
+pub fn push_pan(ctx: u32, dx: f32, dy: f32) {
+    with_ctx(ctx, |s| {
+        let dist = (s.camera.position() - s.camera.target()).magnitude();
+        let k = dist * 0.0015;
+        let right = s.camera.right_direction();
+        let up = right.cross(s.camera.view_direction());
+        s.camera.translate(-right * (dx * k) + up * (dy * k));
         s.dirty = true;
     })
     .ok();
