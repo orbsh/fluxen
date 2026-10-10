@@ -1,6 +1,9 @@
-@import url("custom.css") layer(custom);
-
 @layer theme, base, layout, element, custom, style;
+
+/* 层序必须先声明、再 import。层序由**首次出现**决定：import 写在前面的话
+   `custom` 会成为第一个（最弱）层，custom.css 里所有与 layout/element/style
+   同属性的声明全部被盖掉（老坑 `.hide` 打不过 `.f` 的根因，见 docs/PLAN.md §19）。 */
+@import url("custom.css") layer(custom);
 
 @layer theme {
     :root {
