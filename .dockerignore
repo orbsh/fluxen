@@ -1,7 +1,15 @@
 target/
 crates/*/target/
+examples/modules/*/target/
 crates/*/dist/
 .git/
 docs/
-examples/
+examples/*
+!examples/modules
 README*.md
+
+# Upstream media is fetched inside the build (see the Dockerfile): the context
+# stays small and the image deterministic.
+**/*.ksplat
+**/*.glb
+crates/ui_leptos/assets/g2chart/
