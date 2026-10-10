@@ -144,11 +144,26 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
         if scroll {
             let id_ = id.clone();
             leptos::task::spawn_local(async move {
+                // 自动滚动 = "开启 + 在底部"才跟随（ADR/PLAN §17）：旧判据
+                // "离底部不到一个视口高"会把手动上滚一点的人拽回底部。
+                // 旗标由只装一次的 scroll 监听维护（我们自己的滚动也保持它为
+                // true）；上拖即停，拖回底部恢复。
                 crate::dom::eval(&format!(
                     r#"
                     var e = document.getElementById("{id_extra}");
-                    if (e && Math.abs(e.scrollHeight - e.offsetHeight - e.scrollTop) < e.offsetHeight) {{
-                        e.scrollTop = e.scrollHeight;
+                    if (e) {{
+                        if (!e.dataset.scrollInit) {{
+                            e.dataset.scrollInit = "1";
+                            var atBottom = function () {{
+                                e.dataset.atBottom =
+                                    (e.scrollHeight - e.scrollTop - e.clientHeight <= 2) ? "1" : "0";
+                            }};
+                            e.addEventListener("scroll", atBottom, {{ passive: true }});
+                            atBottom();
+                        }}
+                        if (e.dataset.atBottom !== "0") {{
+                            e.scrollTop = e.scrollHeight;
+                        }}
                     }}
                     "#,
                     id_extra = id_
