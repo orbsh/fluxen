@@ -1,9 +1,12 @@
-# G2 折线趋势 + 部门雷达（ADR 0009，纯 GoG spec；折线 spec 走数据槽 `trend`，
-# 雷达 spec 直装 bind.value.default）。
+# G2 折线趋势 + 部门雷达（ADR 0009，纯 GoG spec；折线 spec 走数据槽 `trend`，三个雷达 spec 走
+# 数据槽 `radar_rd` / `radar_mkt` / `radar_ops`——四个图表 spec 全部走槽：
+# 空载荷的模块宿主不占位（ADR 0012），所以"先发行、后发数据"能看到图表依次
+# 撑开；四个 spec 同帧发送时行为与从前一致）。
 # 日记评分模拟数据：6 维度（出勤纪律/工作质量/工作量投入/协作沟通/学习成长/
 # 创新性，0–5 分），11 人 × 3 部门。
-# 三个帧：append 一行（外层 case 用 grid 把容器分成三条轨道——折线图 / 雷达图 /
-#   摘要）+ set `trend`（折线 spec）+ set `summary`（摘要 text）。
+# 六个帧：append 一行（外层 case 用 grid 把容器分成三条轨道——折线图 / 雷达图 /
+#   摘要）+ set `trend`（折线 spec）+ set `summary`（摘要 text）+ set 三个
+#   雷达 spec（set 帧可整体发、也可只发它要的那几个）。
 #   （grid-template-rows: minmax(160px, 1fr) minmax(360px, 2fr) auto + 固定
 #   height——min 值给雷达那条钉住下限：polar 半径受 min(宽,高)/2 限制，行高掉下来
 #   图就跟着小；1fr 默认 minmax(auto,1fr)，auto 最小值会让画布内容撑高自己的行、
@@ -17,7 +20,8 @@
 #       滑曲线，数据为随机游走造的模拟值。本文件只带前 15 天（09-03…09-17），
 #       后 15 天（09-18…10-02）由演示脚本逐日 patch 进 `trend` 槽
 #       （/bind/value/default/data）追加（见下）。
-#   中：三个独立 chart 并排三等分（三列 grid，每部门一个雷达坐标系），
+#   中：三个独立 chart 并排三等分（三列 grid，每部门一个雷达坐标系；各自绑
+#       radar_* 槽，spec 见文件末的 set 帧），
 #       部门内每人一个闭合多边形——area 半透明填充（fillOpacity 0.15 +
 #       lineWidth: 0，无描边边框），line 直边折线（smooth 会贝塞尔化描边、
 #       脱离直边多边形，已去掉；join/cap: round 只圆化拐角连接处，
@@ -37,9 +41,9 @@
 #   本文件可反复 /send（无 id = 位置行，重复推不冲突），追加不按行寻址。
 # 用法：依次 send examples/yaml/00.main.yaml（骨架 + home/about）、
 #       examples/yaml/00.chat.yaml（chat 页进菜单），再 send 本文件
-#       （append 行进 chat rack + set 两个槽）；或跑交互演示 python3
-#       examples/walkthrough.py（回车一步：发前两个文件 → inject 把当前页
-#       切到 chat → 发本文件 → 逐日 patch 追加 trend 槽 → 逐 token 追加 summary 槽）。
+#       （append 行进 chat rack + set 五个槽）。合并演示
+#       python3 examples/walkthrough.py 搭自己的一行，只把本文件的 set 帧
+#       当作图表数据的唯一来源（发整份会多开一个 box），再逐段流式填充。
 - action: append
   event: chat
   data:
@@ -75,149 +79,8 @@
           - f
         bind:
           value:
-            kind: default
-            default:
-              type: view
-              data:
-              - dept: 研发部
-                name: 张伟
-                dim: 出勤纪律
-                value: 4.4
-              - dept: 研发部
-                name: 张伟
-                dim: 工作质量
-                value: 4.1
-              - dept: 研发部
-                name: 张伟
-                dim: 工作量投入
-                value: 3.6
-              - dept: 研发部
-                name: 张伟
-                dim: 协作沟通
-                value: 4.7
-              - dept: 研发部
-                name: 张伟
-                dim: 学习成长
-                value: 4.0
-              - dept: 研发部
-                name: 张伟
-                dim: 创新性
-                value: 3.5
-              - dept: 研发部
-                name: 李娜
-                dim: 出勤纪律
-                value: 3.9
-              - dept: 研发部
-                name: 李娜
-                dim: 工作质量
-                value: 4.6
-              - dept: 研发部
-                name: 李娜
-                dim: 工作量投入
-                value: 4.2
-              - dept: 研发部
-                name: 李娜
-                dim: 协作沟通
-                value: 3.6
-              - dept: 研发部
-                name: 李娜
-                dim: 学习成长
-                value: 4.4
-              - dept: 研发部
-                name: 李娜
-                dim: 创新性
-                value: 4.8
-              - dept: 研发部
-                name: 王强
-                dim: 出勤纪律
-                value: 4.6
-              - dept: 研发部
-                name: 王强
-                dim: 工作质量
-                value: 4.9
-              - dept: 研发部
-                name: 王强
-                dim: 工作量投入
-                value: 4.5
-              - dept: 研发部
-                name: 王强
-                dim: 协作沟通
-                value: 3.2
-              - dept: 研发部
-                name: 王强
-                dim: 学习成长
-                value: 3.6
-              - dept: 研发部
-                name: 王强
-                dim: 创新性
-                value: 4.1
-              - dept: 研发部
-                name: 刘洋
-                dim: 出勤纪律
-                value: 3.6
-              - dept: 研发部
-                name: 刘洋
-                dim: 工作质量
-                value: 3.8
-              - dept: 研发部
-                name: 刘洋
-                dim: 工作量投入
-                value: 4.8
-              - dept: 研发部
-                name: 刘洋
-                dim: 协作沟通
-                value: 4.0
-              - dept: 研发部
-                name: 刘洋
-                dim: 学习成长
-                value: 4.6
-              - dept: 研发部
-                name: 刘洋
-                dim: 创新性
-                value: 4.4
-              coordinate:
-                type: polar
-              padding: auto
-              scale:
-                x:
-                  type: point
-                  range:
-                  - -0.1666667
-                  - 0.6666667
-                y:
-                  domain:
-                  - 0
-                  - 5
-                  tickCount: 5
-              axis:
-                x:
-                  grid: true
-                  title: null
-                y: false
-              legend:
-                color:
-                  layout:
-                    justContent: true
-              children:
-              - type: area
-                encode:
-                  x: dim
-                  y: value
-                  color: name
-                style:
-                  fillOpacity: 0.15
-                  lineWidth: 0
-              - type: line
-                encode:
-                  x: dim
-                  y: value
-                  color: name
-                style:
-                  lineWidth: 2
-                  join: round
-                  cap: round
-              interaction:
-                tooltip: {}
+            kind: source
+            source: radar_rd
       - type: chart
         id: radar-mkt
         attrs:
@@ -225,125 +88,8 @@
           - f
         bind:
           value:
-            kind: default
-            default:
-              type: view
-              data:
-              - dept: 市场部
-                name: 陈静
-                dim: 出勤纪律
-                value: 4.2
-              - dept: 市场部
-                name: 陈静
-                dim: 工作质量
-                value: 3.7
-              - dept: 市场部
-                name: 陈静
-                dim: 工作量投入
-                value: 4.8
-              - dept: 市场部
-                name: 陈静
-                dim: 协作沟通
-                value: 4.5
-              - dept: 市场部
-                name: 陈静
-                dim: 学习成长
-                value: 3.4
-              - dept: 市场部
-                name: 陈静
-                dim: 创新性
-                value: 3.9
-              - dept: 市场部
-                name: 杨帆
-                dim: 出勤纪律
-                value: 4.6
-              - dept: 市场部
-                name: 杨帆
-                dim: 工作质量
-                value: 4.2
-              - dept: 市场部
-                name: 杨帆
-                dim: 工作量投入
-                value: 3.8
-              - dept: 市场部
-                name: 杨帆
-                dim: 协作沟通
-                value: 4.1
-              - dept: 市场部
-                name: 杨帆
-                dim: 学习成长
-                value: 4.5
-              - dept: 市场部
-                name: 杨帆
-                dim: 创新性
-                value: 4.9
-              - dept: 市场部
-                name: 赵磊
-                dim: 出勤纪律
-                value: 3.8
-              - dept: 市场部
-                name: 赵磊
-                dim: 工作质量
-                value: 4.0
-              - dept: 市场部
-                name: 赵磊
-                dim: 工作量投入
-                value: 4.2
-              - dept: 市场部
-                name: 赵磊
-                dim: 协作沟通
-                value: 4.8
-              - dept: 市场部
-                name: 赵磊
-                dim: 学习成长
-                value: 3.2
-              - dept: 市场部
-                name: 赵磊
-                dim: 创新性
-                value: 3.6
-              coordinate:
-                type: polar
-              padding: auto
-              scale:
-                x:
-                  type: point
-                  range:
-                  - -0.1666667
-                  - 0.6666667
-                y:
-                  domain:
-                  - 0
-                  - 5
-                  tickCount: 5
-              axis:
-                x:
-                  grid: true
-                  title: null
-                y: false
-              legend:
-                color:
-                  layout:
-                    justContent: true
-              children:
-              - type: area
-                encode:
-                  x: dim
-                  y: value
-                  color: name
-                style:
-                  fillOpacity: 0.15
-                  lineWidth: 0
-              - type: line
-                encode:
-                  x: dim
-                  y: value
-                  color: name
-                style:
-                  lineWidth: 2
-                  join: round
-                  cap: round
-              interaction:
-                tooltip: {}
+            kind: source
+            source: radar_mkt
       - type: chart
         id: radar-ops
         attrs:
@@ -351,149 +97,8 @@
           - f
         bind:
           value:
-            kind: default
-            default:
-              type: view
-              data:
-              - dept: 运营部
-                name: 孙悦
-                dim: 出勤纪律
-                value: 4.8
-              - dept: 运营部
-                name: 孙悦
-                dim: 工作质量
-                value: 4.1
-              - dept: 运营部
-                name: 孙悦
-                dim: 工作量投入
-                value: 4.5
-              - dept: 运营部
-                name: 孙悦
-                dim: 协作沟通
-                value: 4.3
-              - dept: 运营部
-                name: 孙悦
-                dim: 学习成长
-                value: 3.5
-              - dept: 运营部
-                name: 孙悦
-                dim: 创新性
-                value: 3.2
-              - dept: 运营部
-                name: 周军
-                dim: 出勤纪律
-                value: 5.0
-              - dept: 运营部
-                name: 周军
-                dim: 工作质量
-                value: 3.9
-              - dept: 运营部
-                name: 周军
-                dim: 工作量投入
-                value: 4.4
-              - dept: 运营部
-                name: 周军
-                dim: 协作沟通
-                value: 4.0
-              - dept: 运营部
-                name: 周军
-                dim: 学习成长
-                value: 3.7
-              - dept: 运营部
-                name: 周军
-                dim: 创新性
-                value: 3.4
-              - dept: 运营部
-                name: 吴敏
-                dim: 出勤纪律
-                value: 4.1
-              - dept: 运营部
-                name: 吴敏
-                dim: 工作质量
-                value: 4.3
-              - dept: 运营部
-                name: 吴敏
-                dim: 工作量投入
-                value: 4.6
-              - dept: 运营部
-                name: 吴敏
-                dim: 协作沟通
-                value: 4.9
-              - dept: 运营部
-                name: 吴敏
-                dim: 学习成长
-                value: 4.0
-              - dept: 运营部
-                name: 吴敏
-                dim: 创新性
-                value: 3.6
-              - dept: 运营部
-                name: 郑华
-                dim: 出勤纪律
-                value: 4.5
-              - dept: 运营部
-                name: 郑华
-                dim: 工作质量
-                value: 4.0
-              - dept: 运营部
-                name: 郑华
-                dim: 工作量投入
-                value: 4.2
-              - dept: 运营部
-                name: 郑华
-                dim: 协作沟通
-                value: 4.1
-              - dept: 运营部
-                name: 郑华
-                dim: 学习成长
-                value: 3.8
-              - dept: 运营部
-                name: 郑华
-                dim: 创新性
-                value: 3.5
-              coordinate:
-                type: polar
-              padding: auto
-              scale:
-                x:
-                  type: point
-                  range:
-                  - -0.1666667
-                  - 0.6666667
-                y:
-                  domain:
-                  - 0
-                  - 5
-                  tickCount: 5
-              axis:
-                x:
-                  grid: true
-                  title: null
-                y: false
-              legend:
-                color:
-                  layout:
-                    justContent: true
-              children:
-              - type: area
-                encode:
-                  x: dim
-                  y: value
-                  color: name
-                style:
-                  fillOpacity: 0.15
-                  lineWidth: 0
-              - type: line
-                encode:
-                  x: dim
-                  y: value
-                  color: name
-                style:
-                  lineWidth: 2
-                  join: round
-                  cap: round
-              interaction:
-                tooltip: {}
+            kind: source
+            source: radar_ops
 
     - type: text
       attrs:
@@ -675,3 +280,426 @@
       value:
         kind: default
         default: ""
+- action: set
+  event: radar_rd
+  data:
+    type: chart
+    bind:
+      value:
+        kind: default
+        default:
+          type: view
+          data:
+          - dept: 研发部
+            name: 张伟
+            dim: 出勤纪律
+            value: 4.4
+          - dept: 研发部
+            name: 张伟
+            dim: 工作质量
+            value: 4.1
+          - dept: 研发部
+            name: 张伟
+            dim: 工作量投入
+            value: 3.6
+          - dept: 研发部
+            name: 张伟
+            dim: 协作沟通
+            value: 4.7
+          - dept: 研发部
+            name: 张伟
+            dim: 学习成长
+            value: 4.0
+          - dept: 研发部
+            name: 张伟
+            dim: 创新性
+            value: 3.5
+          - dept: 研发部
+            name: 李娜
+            dim: 出勤纪律
+            value: 3.9
+          - dept: 研发部
+            name: 李娜
+            dim: 工作质量
+            value: 4.6
+          - dept: 研发部
+            name: 李娜
+            dim: 工作量投入
+            value: 4.2
+          - dept: 研发部
+            name: 李娜
+            dim: 协作沟通
+            value: 3.6
+          - dept: 研发部
+            name: 李娜
+            dim: 学习成长
+            value: 4.4
+          - dept: 研发部
+            name: 李娜
+            dim: 创新性
+            value: 4.8
+          - dept: 研发部
+            name: 王强
+            dim: 出勤纪律
+            value: 4.6
+          - dept: 研发部
+            name: 王强
+            dim: 工作质量
+            value: 4.9
+          - dept: 研发部
+            name: 王强
+            dim: 工作量投入
+            value: 4.5
+          - dept: 研发部
+            name: 王强
+            dim: 协作沟通
+            value: 3.2
+          - dept: 研发部
+            name: 王强
+            dim: 学习成长
+            value: 3.6
+          - dept: 研发部
+            name: 王强
+            dim: 创新性
+            value: 4.1
+          - dept: 研发部
+            name: 刘洋
+            dim: 出勤纪律
+            value: 3.6
+          - dept: 研发部
+            name: 刘洋
+            dim: 工作质量
+            value: 3.8
+          - dept: 研发部
+            name: 刘洋
+            dim: 工作量投入
+            value: 4.8
+          - dept: 研发部
+            name: 刘洋
+            dim: 协作沟通
+            value: 4.0
+          - dept: 研发部
+            name: 刘洋
+            dim: 学习成长
+            value: 4.6
+          - dept: 研发部
+            name: 刘洋
+            dim: 创新性
+            value: 4.4
+          coordinate:
+            type: polar
+          padding: auto
+          scale:
+            x:
+              type: point
+              range:
+              - -0.1666667
+              - 0.6666667
+            y:
+              domain:
+              - 0
+              - 5
+              tickCount: 5
+          axis:
+            x:
+              grid: true
+              title: null
+            y: false
+          legend:
+            color:
+              layout:
+                justContent: true
+          children:
+          - type: area
+            encode:
+              x: dim
+              y: value
+              color: name
+            style:
+              fillOpacity: 0.15
+              lineWidth: 0
+          - type: line
+            encode:
+              x: dim
+              y: value
+              color: name
+            style:
+              lineWidth: 2
+              join: round
+              cap: round
+          interaction:
+            tooltip: {}
+- action: set
+  event: radar_mkt
+  data:
+    type: chart
+    bind:
+      value:
+        kind: default
+        default:
+          type: view
+          data:
+          - dept: 市场部
+            name: 陈静
+            dim: 出勤纪律
+            value: 4.2
+          - dept: 市场部
+            name: 陈静
+            dim: 工作质量
+            value: 3.7
+          - dept: 市场部
+            name: 陈静
+            dim: 工作量投入
+            value: 4.8
+          - dept: 市场部
+            name: 陈静
+            dim: 协作沟通
+            value: 4.5
+          - dept: 市场部
+            name: 陈静
+            dim: 学习成长
+            value: 3.4
+          - dept: 市场部
+            name: 陈静
+            dim: 创新性
+            value: 3.9
+          - dept: 市场部
+            name: 杨帆
+            dim: 出勤纪律
+            value: 4.6
+          - dept: 市场部
+            name: 杨帆
+            dim: 工作质量
+            value: 4.2
+          - dept: 市场部
+            name: 杨帆
+            dim: 工作量投入
+            value: 3.8
+          - dept: 市场部
+            name: 杨帆
+            dim: 协作沟通
+            value: 4.1
+          - dept: 市场部
+            name: 杨帆
+            dim: 学习成长
+            value: 4.5
+          - dept: 市场部
+            name: 杨帆
+            dim: 创新性
+            value: 4.9
+          - dept: 市场部
+            name: 赵磊
+            dim: 出勤纪律
+            value: 3.8
+          - dept: 市场部
+            name: 赵磊
+            dim: 工作质量
+            value: 4.0
+          - dept: 市场部
+            name: 赵磊
+            dim: 工作量投入
+            value: 4.2
+          - dept: 市场部
+            name: 赵磊
+            dim: 协作沟通
+            value: 4.8
+          - dept: 市场部
+            name: 赵磊
+            dim: 学习成长
+            value: 3.2
+          - dept: 市场部
+            name: 赵磊
+            dim: 创新性
+            value: 3.6
+          coordinate:
+            type: polar
+          padding: auto
+          scale:
+            x:
+              type: point
+              range:
+              - -0.1666667
+              - 0.6666667
+            y:
+              domain:
+              - 0
+              - 5
+              tickCount: 5
+          axis:
+            x:
+              grid: true
+              title: null
+            y: false
+          legend:
+            color:
+              layout:
+                justContent: true
+          children:
+          - type: area
+            encode:
+              x: dim
+              y: value
+              color: name
+            style:
+              fillOpacity: 0.15
+              lineWidth: 0
+          - type: line
+            encode:
+              x: dim
+              y: value
+              color: name
+            style:
+              lineWidth: 2
+              join: round
+              cap: round
+          interaction:
+            tooltip: {}
+- action: set
+  event: radar_ops
+  data:
+    type: chart
+    bind:
+      value:
+        kind: default
+        default:
+          type: view
+          data:
+          - dept: 运营部
+            name: 孙悦
+            dim: 出勤纪律
+            value: 4.8
+          - dept: 运营部
+            name: 孙悦
+            dim: 工作质量
+            value: 4.1
+          - dept: 运营部
+            name: 孙悦
+            dim: 工作量投入
+            value: 4.5
+          - dept: 运营部
+            name: 孙悦
+            dim: 协作沟通
+            value: 4.3
+          - dept: 运营部
+            name: 孙悦
+            dim: 学习成长
+            value: 3.5
+          - dept: 运营部
+            name: 孙悦
+            dim: 创新性
+            value: 3.2
+          - dept: 运营部
+            name: 周军
+            dim: 出勤纪律
+            value: 5.0
+          - dept: 运营部
+            name: 周军
+            dim: 工作质量
+            value: 3.9
+          - dept: 运营部
+            name: 周军
+            dim: 工作量投入
+            value: 4.4
+          - dept: 运营部
+            name: 周军
+            dim: 协作沟通
+            value: 4.0
+          - dept: 运营部
+            name: 周军
+            dim: 学习成长
+            value: 3.7
+          - dept: 运营部
+            name: 周军
+            dim: 创新性
+            value: 3.4
+          - dept: 运营部
+            name: 吴敏
+            dim: 出勤纪律
+            value: 4.1
+          - dept: 运营部
+            name: 吴敏
+            dim: 工作质量
+            value: 4.3
+          - dept: 运营部
+            name: 吴敏
+            dim: 工作量投入
+            value: 4.6
+          - dept: 运营部
+            name: 吴敏
+            dim: 协作沟通
+            value: 4.9
+          - dept: 运营部
+            name: 吴敏
+            dim: 学习成长
+            value: 4.0
+          - dept: 运营部
+            name: 吴敏
+            dim: 创新性
+            value: 3.6
+          - dept: 运营部
+            name: 郑华
+            dim: 出勤纪律
+            value: 4.5
+          - dept: 运营部
+            name: 郑华
+            dim: 工作质量
+            value: 4.0
+          - dept: 运营部
+            name: 郑华
+            dim: 工作量投入
+            value: 4.2
+          - dept: 运营部
+            name: 郑华
+            dim: 协作沟通
+            value: 4.1
+          - dept: 运营部
+            name: 郑华
+            dim: 学习成长
+            value: 3.8
+          - dept: 运营部
+            name: 郑华
+            dim: 创新性
+            value: 3.5
+          coordinate:
+            type: polar
+          padding: auto
+          scale:
+            x:
+              type: point
+              range:
+              - -0.1666667
+              - 0.6666667
+            y:
+              domain:
+              - 0
+              - 5
+              tickCount: 5
+          axis:
+            x:
+              grid: true
+              title: null
+            y: false
+          legend:
+            color:
+              layout:
+                justContent: true
+          children:
+          - type: area
+            encode:
+              x: dim
+              y: value
+              color: name
+            style:
+              fillOpacity: 0.15
+              lineWidth: 0
+          - type: line
+            encode:
+              x: dim
+              y: value
+              color: name
+            style:
+              lineWidth: 2
+              join: round
+              cap: round
+          interaction:
+            tooltip: {}
