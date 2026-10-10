@@ -402,6 +402,77 @@ e2e（实测 2026-10-10）：
 - 门槛：`cargo build --workspace` / `cargo test --workspace` 全过（29 组
   `test result: ok`、0 FAILED）、`trunk build` 过。
 
+### 16. Float overlay：背景模糊 + 不可操作（ADR 0013）— done 2026-10-10
+
+形态：登录模态框要"挡住并模糊后面的页面"，而 Float 只有绝对定位 + Popup 的
+hover 展开。做法：`PositionAttr` 加 `overlay` / `dismiss` 两个可选字段（该结构
+只被 Float 用，爆炸半径一个组件），`float.rs` 在 overlay 模式加类，几何
+（`position: fixed; inset: 0; height: 100vh; z-index: 100` + flex 居中）**内联**。
+两处实测教训：① 几何不能写在 custom 层——该层因 main.css 的 `@import` 定序实际
+排在最前（见 §19），写那儿会被 element 层的 `.float{position:absolute}` 盖掉；
+② 本机 headless chromium 上 `position: fixed` + `inset: 0` 的 div 高度**不撑开**
+（干净 div 实测 20px；同一元素给 `height: 100vh` 才是满视口），所以高度显式给。
+CSS 只留 `::before` 的模糊/色调（`backdrop-filter`，写法同 `--tooltip`）与把内容
+压层。不可操作由铺满视口本身保证（点模糊区 = 点在浮层上），dismiss 是本地瞬时
+状态（`e.target === el` → `display:none`），不上线协议。
+
+门槛：全过。`cargo test --workspace` 绿（含 `crates/accrete/tests/float_overlay.rs`
+的两类形状 codec 往返）+ wasm 目标构建 + trunk 落进 dist。e2e（stage + headless
+CDP，跑 `examples/yaml/17.login.yaml`）：`::before` 的 `backdrop-filter` 计算值为
+`blur(6px)`；浮层矩形 = 视口（1200×900）；视口角落 `elementFromPoint` 命中的是
+浮层自身（= 背后页面点不到）；卡片居中；点卡片不关闭（display 仍 flex）、点模糊区
+关闭（display:none）。0 console error。
+
+### 17. 聊天框自动滚动：在底部 + 开启才跟随 — done 2026-10-10
+
+形态：`RackAttr.scroll` 这个选项本来就在（用户 2026-10-10：「修行为，不动 chat
+页面」——不加应用层开关）。旧判据是"离底部不到一个视口高"（rack.rs 注入的那段
+JS），于是手动往上拖一点的人会被下一次追加**拽回底部**，这就是"手动拖动后还自动
+滚"的来源。改成严格到底（`scrollHeight - scrollTop - clientHeight <= 2`）+ 每元素
+一个"是否在底部"的旗标，由只装一次的 scroll 监听维护（我们自己的滚动也保持它为
+true）：开启且在底部才跟随，上拖即停，拖回底部恢复。
+
+门槛：全过。e2e 的 `scrollTop` 数值三连（探针自建 `scroll:true` 的 rack 布局 +
+逐行 append）：在底部追加 → top 601→621 = max（跟随）；`scrollTop=0`（手动上滚）
+后追加 → top 仍 0、旗标 `"0"`（位置不动）；再滚回底部后追加 → top = max 661
+（恢复跟随）。
+
+### 18. Canvas 模块的加载过渡 — done 2026-10-10
+
+形态：泼溅那件早就显式关掉了 GS3D 自带的加载 UI（`showLoadingUI: false`，
+examples/modules/splatviewer/index.js 两处），翻成 `true` 即得进度/取消 UI（用户：
+「用自带的」）。three-d 那边（.glb）没有自带进度可用，模块在自己的容器里放一层
+DOM 加载动画（`.browser3d-loading`，样式随模块自带、不依赖宿主页面 CSS；容器设成
+定位祖先），装载队列空了才收（多资产时中途不闪）；失败路径下 asset 不进 seen，
+下次重试会再建。
+
+门槛：全过。e2e 用 CDP `Network.emulateNetworkConditions`（150 KB/s）放大加载
+窗口——注意限速必须放在应用启动**之后**（dev 的 UI wasm 有 7.7MB，先限速的话应用
+一分钟才挂载、帧发在它渲染之前，探针第一版就栽在这里）。实测：限速下 t=12s 两个
+3dbrowser 宿主 `data-module-mounted="true"` 且 `.browser3d-loading` 在（截图
+loading_3d.png）；放开限速后过渡层消失、canvas 300×260、像素分类仍是鞋的暗色轮廓。
+泼溅侧：首版断言（容器子节点 > 2）**太弱**——GS3D 的常规 DOM 本来就有 67 个节点，
+UI 关着也能过；改用"节点名里带 loading/progress/spinner"判定重验，限速下 t=3s
+容器里出现 `div.progressBarOuterContainer` / `div.spinnerOuterContainer0` /
+`div.spinner0.spinnerPrimary0` / `div.messageContainer0…`（GS3D 自带加载 UI，截图
+loading_splat2.png）。这次重验还抓到一处真漏：模块的**源文件**改了，但应用服务的是
+`crates/ui_leptos/assets/splatviewer/index.js`（tracked 的部署副本）——不同步的话
+`showLoadingUI: true` 根本不生效，上一轮读到的 67 节点因此毫无意义（模块头注释
+「本文件复制到 …assets/ 即可」就是这条部署约定）。
+
+### 19. custom CSS 层实际排在最前（发现，未修）
+
+实测：main.css 第 1 行是 `@import url("custom.css") layer(custom);`，第 3 行才是
+`@layer theme, base, layout, element, custom, style;` 的顺序声明。层序由**首次
+出现**决定，于是 `custom` 被那行 import 定成第一个（最弱）层，custom.css 里与
+layout/element/style 层同属性的声明全部被盖掉——这也是老坑"`.hide` 打不过 `.f`"
+（`display:none` 被 layout 层 `.f{display:flex}` 盖掉）的根因。ADR 0013 的 overlay
+几何因此改走内联（见 §16），CSS 只留没有竞争者的伪元素规则。
+
+影响面是 custom.css 里所有同类声明，不止 `hide`。修法就是把两行对调（先声明层序、
+再 import），但那会一次性改变多处既有渲染，是独立单元，故记录不修（用户规则：
+别的活里发现的缺陷记进 PLAN，不顺手改）。
+
 ## Resolved
 
 ### Module update leg was dead — G2 v5 has no `chart.update()` (fixed 2026-10-02)

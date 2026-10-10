@@ -1,0 +1,56 @@
+# Float overlay 示例（ADR 0013）：模态登录框——铺满视口、背景模糊、背后页面
+# 不可操作；`dismiss: true` 时点模糊区（浮层自身，而不是卡片内容）本地关闭。
+# 字段经 `event: login` 上行到 stage 控制台。前置：先发 00.main.yaml +
+# 00.chat.yaml；本文件 append 进 chat 流的那一行。
+action: append
+event: chat
+data:
+  type: float
+  attrs:
+    overlay: true
+    dismiss: true
+  children:
+  - type: form
+    bind:
+      value:
+        kind: event
+        event: login
+    children:
+    - type: case
+      attrs:
+        class:
+        - border
+        - round
+        - shadow
+        grid:
+          width: 26rem
+          flex: 0 0 auto
+      children:
+      - type: text
+        attrs:
+          format: md
+        bind:
+          value:
+            kind: default
+            default: "**登录（示例）**\n\n任意账号密码即可：回车或点按钮把字段上行到 stage 控制台；点卡片外的模糊区关闭。"
+      - type: input
+        bind:
+          value:
+            kind: field
+            field: user
+            type: text
+            default: ""
+      - type: input
+        bind:
+          value:
+            kind: field
+            field: pass
+            type: password
+            default: ""
+      - type: button
+        attrs:
+          oneshot: false
+        bind:
+          value:
+            kind: submit
+            default: "登录"

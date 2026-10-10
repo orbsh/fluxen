@@ -190,6 +190,14 @@ pub struct PositionAttr {
     pub h: Option<PosH>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     pub v: Option<PosV>,
+    /// overlay（ADR 0013）：模态形态——铺满视口、背景模糊、背后页面不可操作。
+    /// 置位时位置偏移（h/v）无意义并被忽略。只在 Float 上用。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overlay: Option<bool>,
+    /// dismiss（ADR 0013）：点浮层自身（模糊区，而非模态内容）本地隐藏。
+    /// 只在 overlay 下有意义；是本页瞬时状态，不上线协议。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dismiss: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
