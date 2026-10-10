@@ -31,22 +31,23 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY examples/modules ./examples/modules
 
-# Three build inputs the repo does not carry — all gitignored (media addresses
-# in assets/3dbrowser/README.md, module recipes in the Cargo.toml / module
-# headers):
+# Four build inputs the repo does not carry — all gitignored (media addresses in
+# assets/*/README.md, module recipes in the Cargo.toml / module headers):
 #
 #  * the glTF models the examples point at (`/assets/3dbrowser/*.glb`), taken
 #    from the Khronos sample set at a pinned commit and sha256-checked, so a
 #    moved upstream file fails the build instead of shipping silently;
 #  * the 3dbrowser module (wasm + bindgen glue + index.js), built here rather
 #    than shipped as an artifact;
-#  * the g2chart module's deployed copy plus its runtime library g2.min.js.
+#  * the g2chart module's deployed copy plus its runtime library g2.min.js;
+#  * the truck splat scene, served from this repo's own `assets` release — the
+#    scene's upstream home is a 590 MB zip, so the 29 MB file is mirrored there.
 #
 # `trunk build` then copies crates/ui_leptos/assets/** into the served dist
-# (index.html: `<link data-trunk rel="copy-dir" href="/assets">`), so all three
-# must land before that step. The splat scenes are deliberately NOT fetched:
-# their only upstream source is a 590 MB zip, so a container serves the mesh and
-# chart examples and leaves /assets/splatviewer/*.ksplat absent.
+# (index.html: `<link data-trunk rel="copy-dir" href="/assets">`), so all four
+# must land before that step. The second splat scene (bonsai) is NOT fetched: a
+# container serves the mesh, chart and truck demos and leaves
+# /assets/splatviewer/bonsai.ksplat absent.
 ARG GLTF_SAMPLE_ASSETS_COMMIT=edc7c9e67c639d230715049ee31f9a96a6babbbe
 RUN set -eu; \
     base="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/${GLTF_SAMPLE_ASSETS_COMMIT}/Models"; \
@@ -77,6 +78,14 @@ RUN mkdir -p crates/ui_leptos/assets/g2chart \
     && curl -fsSL "https://unpkg.com/@antv/g2@${G2_VERSION}/dist/g2.min.js" \
          -o crates/ui_leptos/assets/g2chart/g2.min.js \
     && echo "7e7d346cab68c002a889dc6145bfc1f9ae1391be82ce8d514fb106ef3a6e6412  crates/ui_leptos/assets/g2chart/g2.min.js" | sha256sum -c -
+
+# The truck scene, mirrored in this repo's own `assets` release (why: the scene's
+# upstream home is a 590 MB multi-scene zip — see assets/splatviewer/README.md).
+ARG FLUXEN_ASSETS_RELEASE=assets
+RUN curl -fsSL \
+      "https://github.com/orbsh/fluxen/releases/download/${FLUXEN_ASSETS_RELEASE}/truck.ksplat" \
+      -o crates/ui_leptos/assets/splatviewer/truck.ksplat \
+    && echo "e8ed0a5cc03fe7d91c5cea7a53c72e0f3a8bdd805157bee24def1ab059b23654  crates/ui_leptos/assets/splatviewer/truck.ksplat" | sha256sum -c -
 
 # Dev gateway binary.
 RUN cargo build --release -p stage
