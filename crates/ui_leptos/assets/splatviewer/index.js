@@ -47,7 +47,7 @@ async function loadScene(ctx, url) {
     }
     await s.viewer.addSplatScene(abs, {
       splatAlphaRemovalThreshold: 5,
-      showLoadingUI: false,
+      showLoadingUI: true,
     });
     s.count += 1;
     // selfDrivenMode 的渲染循环必须显式 start()：init() 不启动它，漏掉
@@ -85,7 +85,7 @@ export async function mount(el, data /* ArrayBuffer(CBOR) */, _host) {
     // 像"空白"）。改 CPU 排序（sort worker）后立刻正常出图。
     gpuAcceleratedSort: false,
     antialiased: false,
-    showLoadingUI: false,
+    showLoadingUI: true,
     dynamicScene: false,
     sharedMemoryForWorkers: false,
   });
