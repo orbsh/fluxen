@@ -4,8 +4,12 @@
 // 标签自举加载——onload 门控，浏览器按 URL 缓存，多实例/重复挂载共享
 // 一次下载。spec 载荷 = bind["value"] 的 CBOR 字节（宿主统一编码），
 // 解码用 ./cbor.js（最小 RFC 8949 实现，覆盖 ciborium 产出子集）。
-// 部署：同目录放 g2.min.js（tarball dist，版本固定）；本目录整体
+// 部署：同目录放 g2.min.js（tarball dist）——@antv/g2 5.4.8，
+// https://unpkg.com/@antv/g2@5.4.8/dist/g2.min.js
+// sha256 7e7d346cab68c002a889dc6145bfc1f9ae1391be82ce8d514fb106ef3a6e6412
+// （2026-10-10 由本机那份文件反查补记：仓库原先没记版本）；本目录整体
 // 拷入 crates/ui_leptos/assets/g2chart/（.gitignore，配方在此注释）。
+// 容器镜像按这条配方自动装配（Dockerfile：ENV G2_VERSION + sha256sum -c）。
 import { decode } from "./cbor.js";
 
 // UMD 只能 script 标签加载；src 必须按【本模块的 URL】解析

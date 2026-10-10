@@ -73,10 +73,11 @@ url 指向 `/assets/g2chart/index.js`（`Chart { url }` 字段可覆盖，
 
 ### 3. 资产与体积
 
-- `g2.min.js`（1058 KB raw / 321 KB gz）+ 封装模块进
+- `g2.min.js`（1058 KB raw / 321 KB gz，`@antv/g2` **5.4.8**——版本原先只写
+  "固定"没写具体号，2026-10-10 按本机文件 sha256 反查补记）+ 封装模块进
   `crates/ui_leptos/assets/`，不入 git 的构建产物模式照 3dbrowser
-  （.gitignore + 重建配方注释）；版本固定 + 同源部署，跨源 CDN 走
-  CSP/SRI 准则（ADR 0007 §3 同文）。
+  （.gitignore + 重建配方注释；容器镜像照该配方自动装配）；版本固定 + 同源部署，
+  跨源 CDN 走 CSP/SRI 准则（ADR 0007 §3 同文）。
 - 主包 wasm 体积不变（G2 是 JS 资产，不进 wasm）。
 - 二期减重（不在本 ADR 范围）：G2 官方 tree-shaking 用法
   （define custom 只打包用到的 mark/transform）可把 spec 常用面子集

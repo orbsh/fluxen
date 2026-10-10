@@ -211,8 +211,8 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
 - 去 eval：薄封装 ES module（mount/update/resize/unmount 契约，内部
   动态 import g2、CBOR→spec 解码），chart.rs 复用 ADR 0007 的
   import(url) 通道；`Chart { url }` 字段 serde default 向后兼容。
-- 资产：g2.min.js（321KB gz）进 assets/ 照 3dbrowser 的 gitignore+
-  重建配方模式；ApexCharts 资产与 index.html script 标签退役。
+- 资产：g2.min.js（321KB gz，@antv/g2 5.4.8）进 assets/ 照 3dbrowser 的
+  gitignore+重建配方模式；ApexCharts 资产与 index.html script 标签退役。
 - 示例：08.apexchart.yaml 改写为 G2 spec；08.chart.yaml 保留驱动帧。
 - 验证：headless 已证 spec 渲染出 canvas；tooltip/interaction 的鼠标
   行为需有头浏览器目检（实施 e2e 覆盖）；交互细节未取证前 ADR 保持草案。
