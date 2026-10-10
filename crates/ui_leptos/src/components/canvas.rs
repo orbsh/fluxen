@@ -59,6 +59,22 @@ fn bind_value(a: &impl AccreteOps) -> (Option<String>, Option<Value>) {
     }
 }
 
+/// 空载荷判据（ADR 0012）：宿主为缺失/空槽合成的那个值——`Null` 或零条目
+/// map，即下文 `payload` 的"尚无数据"。空的 data 区 = 不占位：容器收起，
+/// 载荷第一次非空时按节点尺寸撑开。除 `{}`/`Null` 之外的任何值（含空串、
+/// 空数组）都算"有数据"，语义只看数据有没有，不猜内容。
+fn payload_is_empty(v: &Value) -> bool {
+    match v {
+        Value::Null => true,
+        Value::Object(m) => m.is_empty(),
+        _ => false,
+    }
+}
+
+/// 不占位时容器的样式（ADR 0012）。用内联样式而不是 `hide` 类：`.f` 与
+/// `.hide` 同 div 实测互相压制（见 Pitfalls），内联无此歧义。
+const HIDDEN_STYLE: &str = "display: none;";
+
 /// 挂载全逻辑：解析载荷闭包 → import(url) → 契约检查 → mount →
 /// update 订阅 → ResizeObserver → unmount。失败路径一律 warn + 空容器
 /// （fail-loud，对齐 ADR 0003 惯例）。
@@ -102,6 +118,22 @@ fn mount_module(
         })
     };
 
+    // 占位随载荷生效（ADR 0012）：空的 data 区 = 不占位。判据同 `payload` 的
+    // "尚无数据"（见 `payload_is_empty`）——这里只是把它从载荷语义延伸到占位
+    // 语义，零新词汇、wire 不变。
+    // 这里只给**构建那一刻**的值（模块挂载前、以及行重建后都由它定）；挂载
+    // 之后的同步在下面 update Effect 里做：可响应式属性（`.style(闭包)`）要求
+    // 闭包 `Send`，而判空必须读槽（`Ctx` 非 Send），所以走 Effect 的命令式写入。
+    // 撑开不重挂：容器从隐藏转为可见、尺寸就位后，由模块自己的
+    // ResizeObserver → resize() 接手重画，import 不重跑、GL 上下文不丢。
+    let style_now = if payload_is_empty(&payload()) {
+        HIDDEN_STYLE.to_string()
+    } else {
+        style.clone()
+    };
+    // 撑开时写回容器的值（节点尺寸），交给 update Effect。
+    let size_style = style;
+
     let nr = NodeRef::<Div>::new();
     let el_id = id.to_string();
     let ctx2 = ctx.clone();
@@ -133,8 +165,15 @@ fn mount_module(
         let payload0 = Rc::clone(&payload);
         let source0 = source.clone();
         leptos::task::spawn_local(async move {
+            // mount 真正推给模块的载荷。下面 update 的基线必须是**它**，不能
+            // 到那一步再重新读一次槽：槽写入若落在 import/mount 这个窗口里
+            // （append 行与 set 载荷背靠背发出就是常态），重读会把新值当成
+            // 基线，Effect 判定"没变化"→ update 永不触发 → 模块停在挂载时
+            // 的空 spec 上。症状：宿主标了 mounted、canvas 在，资产却一个
+            // 都不请求（本地 wasm 模块 import 窗口被写者间隔掩盖，CDN 模块必现）。
+            let mounted_payload = payload0();
             // 初始数据（CBOR 字节）——mount 的 data 参数
-            let data0 = encode(&payload0());
+            let data0 = encode(&mounted_payload);
 
             // 宿主通道：host.send(event, cborBytes) → 现有动作帧上行。
             // 闭包持 Rc<Ctx> + id，事件名与解码后的 JSON 一起交给
@@ -214,17 +253,31 @@ fn mount_module(
 
             // 数据区变化 → update(cid, cbor)：Effect 订阅源槽，比对载荷。
             {
-                let mut last = payload0();
+                // 基线 = 挂载时推给模块的那份，不是此刻重读的槽值（见上）。
+                let mut last = mounted_payload;
                 let cid = cid.clone();
                 let update = update.clone();
                 let id = id.clone();
                 let ctx = ctx2.clone();
                 let src = source0.clone();
+                let el_eff = el.clone();
                 Effect::new(move |_| {
                     if let Some(src) = &src {
                         let _ = ctx.slot_for_data(src).get();
                     }
                     let p = payload0();
+                    // ADR 0012：占位随载荷生效——空载荷收起容器，非空写回节点
+                    // 尺寸（`size_style`）。每次运行都写（幂等）：载荷若在挂载
+                    // 完成前就到了，构建那一刻的值还是"空"，而这一跑同时是
+                    // p == last 的情形（进不了下面的 update 分支），它是唯一的
+                    // 同步机会。撑开本身不重挂——尺寸变化由模块自己的
+                    // ResizeObserver → resize() 接手。
+                    let want = if payload_is_empty(&p) {
+                        HIDDEN_STYLE.to_string()
+                    } else {
+                        size_style.clone()
+                    };
+                    el_eff.set_attribute("style", &want).ok();
                     if p != last {
                         let d = encode(&p);
                         last = p;
@@ -299,7 +352,7 @@ fn mount_module(
     div()
         .id(id)
         .class(css.as_str())
-        .style(style.as_str())
+        .style(style_now)
         .node_ref(nr)
         .into_any()
 }
