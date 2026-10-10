@@ -88,6 +88,11 @@ struct State {
     clear: [f32; 4],
     dirty: bool,
     size: (u32, u32),
+    /// 本实例的 canvas：加载过渡层要挂在它的父容器上（见 `overlay_build`）。
+    canvas: web_sys::HtmlCanvasElement,
+    /// 加载过渡层句柄（assets 拉取期间在容器里转圈）。幂等：需要时建、队列空
+    /// 了收；three-d 侧没有自带进度，这一层就是"下载时的过渡"。
+    overlay: Option<web_sys::Element>,
 }
 
 impl State {
@@ -252,6 +257,62 @@ fn with_ctx<T>(ctx: u32, f: impl FnOnce(&mut State) -> T) -> Result<T, JsError> 
     Ok(f(&mut s))
 }
 
+/// 加载过渡层：在宿主容器里居中转圈。样式随模块自带（模块可能从 CDN 加载，
+/// 不能依赖宿主页面 CSS）；容器设成定位祖先，过渡层才贴合容器尺寸。
+fn overlay_build(canvas: &web_sys::HtmlCanvasElement) -> Option<web_sys::Element> {
+    let doc = web_sys::window()?.document()?;
+    let host = canvas.parent_element()?;
+    if let Ok(h) = host.clone().dyn_into::<web_sys::HtmlElement>() {
+        let style = h.style();
+        if style.get_property_value("position").unwrap_or_default().is_empty() {
+            let _ = style.set_property("position", "relative");
+        }
+    }
+    let el = doc.create_element("div").ok()?;
+    el.set_class_name("browser3d-loading");
+    el.set_inner_html(
+        "<style>\
+         .browser3d-loading{position:absolute;inset:0;display:grid;place-items:center;background:rgb(127 127 127 / 6%)}\
+         .browser3d-loading>span{width:2.2rem;height:2.2rem;border-radius:50%;border:3px solid rgb(127 127 127 / 25%);border-top-color:rgb(70 140 240 / 95%);animation:browser3d-spin .9s linear infinite}\
+         @keyframes browser3d-spin{to{transform:rotate(1turn)}}\
+         </style><span></span>",
+    );
+    host.append_child(&el).ok()?;
+    Some(el)
+}
+
+/// 需要时建出过渡层（幂等）。句柄在借用里只做 clone，DOM 操作放在借用之外
+/// ——不跨回调持有 thread_local 借用（Pitfalls）。
+fn overlay_ensure(ctx: u32) {
+    let canvas = with_ctx(ctx, |s| {
+        if s.overlay.is_some() {
+            None
+        } else {
+            Some(s.canvas.clone())
+        }
+    });
+    if let Ok(Some(canvas)) = canvas {
+        let el = overlay_build(&canvas);
+        let _ = with_ctx(ctx, |s| {
+            s.overlay = el;
+        });
+    }
+}
+
+/// 装载队列空了就收掉过渡层——一次载荷多名资产时中途不闪。
+fn overlay_hide_if_idle(ctx: u32) {
+    let el = with_ctx(ctx, |s| {
+        if s.pending.is_empty() {
+            s.overlay.take()
+        } else {
+            None
+        }
+    });
+    if let Ok(Some(el)) = el {
+        el.remove();
+    }
+}
+
 /// 契约 mount：canvas + 自定义数据区（CBOR）+ 宿主通道（本示例不用，留口）。
 #[wasm_bindgen]
 pub fn mount(canvas: web_sys::HtmlCanvasElement, data: JsValue, _host: JsValue) -> Result<u32, JsError> {
@@ -293,6 +354,8 @@ pub fn mount(canvas: web_sys::HtmlCanvasElement, data: JsValue, _host: JsValue) 
         clear: [0.0, 0.0, 0.0, 0.0],
         dirty: true,
         size,
+        canvas,
+        overlay: None,
     }));
     state.borrow_mut().apply(decode(&data)?);
 
@@ -356,6 +419,9 @@ pub fn frame(ctx: u32) -> Result<(), JsError> {
     }
     let job = with_ctx(ctx, |s| s.pump())?;
     if let Some((id, url)) = job {
+        // 拉取期间在容器里转圈（three-d 侧没有自带进度；自带的加载 UI 只有泼溅
+        // 那边的 GS3D 有）
+        overlay_ensure(ctx);
         // reqwest 只吃绝对 URL：相对 url 按 document.baseURI 归一化
         // （载荷约定同源相对路径，示例 `/assets/3dbrowser/tile.glb`）。
         let base = web_sys::window()
@@ -387,6 +453,8 @@ pub fn frame(ctx: u32) -> Result<(), JsError> {
                     forget(&id);
                 }
             }
+            // 队列空了才收过渡层：一次载荷多名资产时不中途闪
+            overlay_hide_if_idle(ctx);
         });
     }
     with_ctx(ctx, |s| {
