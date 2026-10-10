@@ -345,6 +345,52 @@ token（summary 槽）→ 零图表重绘；无 update threw 警告。整段演�
 
 触发条件：需要"写布局节点也不重挂模块宿主"时再实施。
 
+### 15. 空载荷的模块宿主不占位（ADR 0012）— done 2026-10-10
+
+形态：一个 box 内图文混排、内容流式到达时（`examples/product_intro.py`），模型区
+在载荷到达前就把地占了——两段文字之间各挂一块 640×420 / 720×460 的空白。文字
+本身是动态的（打字时 bubble 一直在长），定死的只有带尺寸的模块宿主。用户
+2026-10-10：「box 固定了大小，我希望是动态的撑开」，并选定"模型区一开始不占位、
+载荷到了才撑开"，确认走契约语义（不是改示例写法）。
+
+单元（ADR 0012 定语义，本项定落地）：
+
+1. `canvas.rs::mount_module`：容器尺寸从"渲染时静态写入"改为**随载荷反应式
+   生效**——载荷空（`Null` / 空 map，即宿主现在合成的"尚无数据"值）时容器
+   `display: none`，非空时写回 `SizeAttr::size_style()`。Chart 无 SizeAttr，
+   隐藏同样生效，判据不分叉、不加 attrs 字段（wire 零变化）。
+2. 载荷反应性：现有 payload 闭包挂载时读一次（`get_untracked()`），需要补一个
+   **受订阅的布尔派生**驱动容器属性；挂载路径与三态 `data-module-mounted`
+   护栏不动——撑开靠模块自己的 ResizeObserver → `resize()`，不重挂、不重 import。
+3. 不加开关（空即无）；要固定尺寸的空盒子就发非空载荷。
+
+门槛：三门槛 + e2e（product_intro --auto：box 起始只有第一段文字 → 鞋载荷到达
+后长 640×420 → 第二段 → 泼溅载荷到达再长 720×460；撑开时**不重挂**——canvas
+DOM 标记存活、`data-module-mounted` 不变、import 不重跑；13.canvas.3dbrowser.yaml
+与 00.radar.yaml 回归无异常）。风险点：模块在退化尺寸（容器隐藏时 client 尺寸
+为 0）下挂载、需 resize 恢复——3dbrowser 齐备，splatviewer 的 `resize()` 是
+no-op，恢复能力由 e2e 判定，兜底是让它真正 `setSize`（模块侧修复）。
+
+e2e（实测 2026-10-10）：
+
+- `product_intro.py --auto` 一个 box 的时间线：载荷到达前两个宿主都是
+  `display:none`（canvas 1×1），box 高只含文字（50 → 198 随打字增长）；鞋载荷
+  到达 → 该宿主 `height:420px;width:640px`、canvas 640×420，box 高 198 → 618；
+  第二段打完 → 泼溅载荷到达 → `height:460px;width:720px`、canvas 720×460，
+  box 高 814 → 1274。全程 canvas DOM 标记存活（**不重挂**）、两个模块各 import
+  一次、errs 空。
+- `13.canvas.3dbrowser.yaml` 拆帧回归：只发 2 个 append → 两个宿主
+  `display:none;#1x1`；再发 2 个 set → `height:260px;width:300px;#300x260`，
+  两件模型都拉到（MaterialsVariantsShoe.glb / ToyCar.glb）。
+- `00.radar.yaml` 拆帧回归：只发 append → 绑 `trend` 的图表宿主
+  `display:none;#100x100`，带 inline 数据的三个雷达照常 `#321x607`；发 set →
+  图表 `#964x606`（无 SizeAttr，尺寸来自 class）、雷达 `#321x1213`。errs 空。
+- 风险点结论：模块在容器隐藏（client 尺寸 0）时挂载，靠 resize 恢复——
+  3dbrowser canvas 1×1 → 640×420、splatviewer canvas 0×0 → 720×460，都恢复，
+  无需模块侧修复。
+- 门槛：`cargo build --workspace` / `cargo test --workspace` 全过（29 组
+  `test result: ok`、0 FAILED）、`trunk build` 过。
+
 ## Resolved
 
 ### Module update leg was dead — G2 v5 has no `chart.update()` (fixed 2026-10-02)
