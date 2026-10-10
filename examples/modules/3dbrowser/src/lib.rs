@@ -171,7 +171,13 @@ impl State {
         let diag = (sz.x * sz.x + sz.y * sz.y + sz.z * sz.z).sqrt();
         let s = if diag > 0.0 { 4.0 / diag } else { 1.0 };
         for m in model.iter_mut() {
-            m.set_transformation(Mat4::from_translation(c) * Mat4::from_scale(s));
+            // 归一化必须与 glTF 节点变换**复合**，不能覆盖：three-d 把每个
+            // primitive 的节点变换挂在 Gm 上（model.rs 构造时
+            // `set_transformation(primitive.transformation)`），直接覆盖会丢掉它。
+            // 手表就是踩这条：后盖与指针靠节点旋转（-90°X）对齐表盘，被覆盖后
+            // 它们躺在自己的本地平面上、与表盘垂直（"表盘方向不对"）。
+            let node = m.transformation();
+            m.set_transformation(Mat4::from_translation(c) * Mat4::from_scale(s) * node);
         }
         // 模型归一化后的底面高度：缩放后的 min.y——相机取景锚点按它落位。
         // 不画地面：模型自己站住即可（要背景色走数据区 clear）。
