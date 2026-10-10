@@ -31,9 +31,10 @@ PositionAttr 摆位置做不到——背景既没被遮，交互也没被挡住�
    `@import url("custom.css") layer(custom)` 先于第 3 行的 `@layer theme, base,
    layout, element, custom, style;` 出现 `custom`，而层序由首次出现决定，于是写在
    custom 层里的 `position` 会输给 element 层的 `.float{position:absolute}`（同一
-   缺陷正是老坑"`.hide` 打不过 `.f`"的根因；已记进 PLAN §19，未修）。内联无此
-   问题，与 ADR 0012 的 display 内联同款。h/v 偏移在 overlay 模式下没有意义，
-   随之忽略。
+   缺陷正是老坑"`.hide` 打不过 `.f`"的根因；PLAN §19 记录，并于 2026-10-10 按用户
+   指示修掉——层序声明移到 import 之前，`custom` 归位到 element 与 style 之间）。
+   内联无此问题，与 ADR 0012 的 display 内联同款，故保留。h/v 偏移在 overlay 模式下
+   没有意义，随之忽略。
 3. **"不可操作"靠铺满视口**：点模糊区就是点在浮层自身（空白填充区），事件不会
    落到背后页面；模态内容照常可交互。因此不需要 pointer-events 小把戏，也不需要
    给背后页面加 inert。

@@ -460,18 +460,19 @@ loading_splat2.png）。这次重验还抓到一处真漏：模块的**源文件
 `showLoadingUI: true` 根本不生效，上一轮读到的 67 节点因此毫无意义（模块头注释
 「本文件复制到 …assets/ 即可」就是这条部署约定）。
 
-### 19. custom CSS 层实际排在最前（发现，未修）
+### 19. custom CSS 层实际排在最前（已修 2026-10-10）
 
-实测：main.css 第 1 行是 `@import url("custom.css") layer(custom);`，第 3 行才是
+实测：main.css 第 1 行曾是 `@import url("custom.css") layer(custom);`，第 3 行才是
 `@layer theme, base, layout, element, custom, style;` 的顺序声明。层序由**首次
 出现**决定，于是 `custom` 被那行 import 定成第一个（最弱）层，custom.css 里与
 layout/element/style 层同属性的声明全部被盖掉——这也是老坑"`.hide` 打不过 `.f`"
 （`display:none` 被 layout 层 `.f{display:flex}` 盖掉）的根因。ADR 0013 的 overlay
 几何因此改走内联（见 §16），CSS 只留没有竞争者的伪元素规则。
 
-影响面是 custom.css 里所有同类声明，不止 `hide`。修法就是把两行对调（先声明层序、
-再 import），但那会一次性改变多处既有渲染，是独立单元，故记录不修（用户规则：
-别的活里发现的缺陷记进 PLAN，不顺手改）。
+修（用户 2026-10-10「css 按你的方式改」）：把顺序声明移到 import 之前，两行对调，
+`custom` 回到 element 与 style 之间。验证：`class="f hide"` 的元素 display 从 flex
+变 none（对照 `class="f"` 仍 flex）、`00.radar.yaml` 的图表照常出图（G2 调色板三色
+在）、0 console error。影响面本身覆盖 custom.css 里所有同类声明，这次一次性归位。
 
 ## Resolved
 
