@@ -323,6 +323,15 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
   变 3 帧（append 行 + set `trend` + set `summary`）；walkthrough 改 patch 槽
   （trend `/bind/value/default/data`、summary `/bind/value/default`），行 id
   注入机制随之删除（不再按行寻址，行保持无 id、文件可反复 send）。
+  （2026-10-10 更新：三个雷达也搬进数据槽 `radar_rd` / `radar_mkt` /
+  `radar_ops`——空载荷不占位（ADR 0012）要求图表数据可以单独后发，所以该文件
+  现在 6 帧；交互演示改名合并为 `examples/walkthrough.py`，它搭自己的一行
+  （一个 box：引言 / 折线 / 雷达 / 摘要 / 复核表 / 车 / 鞋），只把 00.radar.yaml
+  的 set 帧当图表数据源——发整份会多开一个 box。实测时间线：行入场时 6 个模块
+  宿主全 display:none（box 只有 650px 的引言 + 两条图表带），图表数据到达后
+  四个图表就地展开，随后依次是摘要（打字机）、复核表（append 进 rack，
+  `tables=1`）、车文字 → 泼溅 720×460、鞋文字 → 鞋 640×420，全程 rows=1、
+  行高 650 → 2168。）
 
 e2e（stage + headless CDP）：挂载后 4 实例；追加一天（trend 槽）→ 仅折线图
 实例 render +1、实例数与 canvas 身份不变、0 销毁、三个雷达零重绘；追加一个
@@ -347,7 +356,8 @@ token（summary 槽）→ 零图表重绘；无 update threw 警告。整段演�
 
 ### 15. 空载荷的模块宿主不占位（ADR 0012）— done 2026-10-10
 
-形态：一个 box 内图文混排、内容流式到达时（`examples/product_intro.py`），模型区
+形态：一个 box 内图文混排、内容流式到达时（当时的 `examples/product_intro.py`，
+2026-10-10 并入 `examples/walkthrough.py`），模型区
 在载荷到达前就把地占了——两段文字之间各挂一块 640×420 / 720×460 的空白。文字
 本身是动态的（打字时 bubble 一直在长），定死的只有带尺寸的模块宿主。用户
 2026-10-10：「box 固定了大小，我希望是动态的撑开」，并选定"模型区一开始不占位、
@@ -364,7 +374,8 @@ token（summary 槽）→ 零图表重绘；无 update threw 警告。整段演�
    护栏不动——撑开靠模块自己的 ResizeObserver → `resize()`，不重挂、不重 import。
 3. 不加开关（空即无）；要固定尺寸的空盒子就发非空载荷。
 
-门槛：三门槛 + e2e（product_intro --auto：box 起始只有第一段文字 → 鞋载荷到达
+门槛：三门槛 + e2e（当时的 `product_intro.py --auto`、现 `walkthrough.py --auto`：
+box 起始只有第一段文字 → 鞋载荷到达
 后长 640×420 → 第二段 → 泼溅载荷到达再长 720×460；撑开时**不重挂**——canvas
 DOM 标记存活、`data-module-mounted` 不变、import 不重跑；13.canvas.3dbrowser.yaml
 与 00.radar.yaml 回归无异常）。风险点：模块在退化尺寸（容器隐藏时 client 尺寸
@@ -373,7 +384,7 @@ no-op，恢复能力由 e2e 判定，兜底是让它真正 `setSize`（模块侧
 
 e2e（实测 2026-10-10）：
 
-- `product_intro.py --auto` 一个 box 的时间线：载荷到达前两个宿主都是
+- `walkthrough.py --auto`（合并前叫 `product_intro.py`）一个 box 的时间线：载荷到达前两个宿主都是
   `display:none`（canvas 1×1），box 高只含文字（50 → 198 随打字增长）；鞋载荷
   到达 → 该宿主 `height:420px;width:640px`、canvas 640×420，box 高 198 → 618；
   第二段打完 → 泼溅载荷到达 → `height:460px;width:720px`、canvas 720×460，
