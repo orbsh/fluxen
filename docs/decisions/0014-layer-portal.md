@@ -46,8 +46,11 @@ transform / filter / contain 就会被困住；而"打开模态的是某条消�
 ## 后果
 
 - Float 的 `overlay`/`dismiss` **撤掉**（用户 2026-10-10：「撤」）；ADR 0013 标记为
-  被本 ADR 取代。登录示例改为 layer + 行内按钮写槽；portal 另给示例与探针。
-- 内容仍有两种写法：直接写在 layer 的 children 里（登录这种最省），或写在触发处
-  附近、用 portal 传送过去（内容与触发点耦合时）。
+  被本 ADR 取代。登录示例（`examples/yaml/17.login.yaml`）改为 layer 作挂载点 +
+  触发行写槽打开（输入框的 Enter——按钮只认 `kind: submit`，不做普通发光），模态内容
+  写在触发行里、由 portal 传送进 layer——传送这条由该例正面覆盖（就地不渲染、内容
+  落在 layer 里），不再另开 portal 示例；实测见 docs/PLAN.md §20 第 ④ 条。
+- 内容两种写法任选：直接写在 layer 的 children 里（最省），或写在触发处附近、用
+  portal 传送过去（内容与触发点耦合时，登录示例即此形）。
 - 两类形状（带 / 不带新字段）都过真实 codec 的往返测试——wire 是契约。门槛见
   docs/PLAN.md §20。
