@@ -63,7 +63,7 @@ fn bind_value(a: &impl AccreteOps) -> (Option<String>, Option<Value>) {
 /// map，即下文 `payload` 的"尚无数据"。空的 data 区 = 不占位：容器收起，
 /// 载荷第一次非空时按节点尺寸撑开。除 `{}`/`Null` 之外的任何值（含空串、
 /// 空数组）都算"有数据"，语义只看数据有没有，不猜内容。
-fn payload_is_empty(v: &Value) -> bool {
+pub(crate) fn payload_is_empty(v: &Value) -> bool {
     match v {
         Value::Null => true,
         Value::Object(m) => m.is_empty(),
@@ -72,8 +72,9 @@ fn payload_is_empty(v: &Value) -> bool {
 }
 
 /// 不占位时容器的样式（ADR 0012）。用内联样式而不是 `hide` 类：`.f` 与
-/// `.hide` 同 div 实测互相压制（见 Pitfalls），内联无此歧义。
-const HIDDEN_STYLE: &str = "display: none;";
+/// `.hide` 同 div 实测互相压制（见 Pitfalls），内联无此歧义。canvas/chart 宿主
+/// 与 layer（ADR 0014）共用。
+pub(crate) const HIDDEN_STYLE: &str = "display: none;";
 
 /// 挂载全逻辑：解析载荷闭包 → import(url) → 契约检查 → mount →
 /// update 订阅 → ResizeObserver → unmount。失败路径一律 warn + 空容器
