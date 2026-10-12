@@ -1,56 +1,81 @@
-# Float overlay 示例（ADR 0013）：模态登录框——铺满视口、背景模糊、背后页面
-# 不可操作；`dismiss: true` 时点模糊区（浮层自身，而不是卡片内容）本地关闭。
-# 字段经 `event: login` 上行到 stage 控制台。前置：先发 00.main.yaml +
-# 00.chat.yaml；本文件 append 进 chat 流的那一行。
-action: append
-event: chat
-data:
-  type: float
-  attrs:
-    overlay: true
-    dismiss: true
-  children:
-  - type: form
+# layer + portal 示例（ADR 0014）：模态登录框。
+#
+# 1) 布局根 append 一个 layer = **显式声明的挂载点**（渲染器不加固定逻辑）。
+#    显隐只有一条规则：所绑 local 槽 `login_modal` 非空即显示（ADR 0012「空即无」）。
+# 2) chat 行里放触发输入框（回车写槽 = 打开）与 portal（把模态内容传送进 layer，
+#    就地只留空锚点）。点卡片外的模糊区关闭 = 清空该槽；槽空过，再回车即重开
+#    （下次写入必是新值，"同值不写"不会误挡）。
+# 前置：先发 00.main.yaml + 00.chat.yaml。
+- action: patch
+  event: ""
+  path: /children
+  op: append
+  value:
+    type: layer
+    id: login_layer
+    attrs:
+      dismiss: true
     bind:
       value:
-        kind: event
-        event: login
+        kind: local
+        slot: login_modal
+- action: append
+  event: chat
+  data:
+    type: case
+    id: login_demo
+    attrs:
+      class: [f, col, gap]
     children:
-    - type: case
+    - type: input
+      bind:
+        value:
+          kind: local
+          slot: login_modal
+          event: login::open
+          default: "回车打开登录框"
+    - type: portal
       attrs:
-        class:
-        - border
-        - round
-        - shadow
-        grid:
-          width: 26rem
-          flex: 0 0 auto
+        to: "#login_layer"
       children:
-      - type: text
-        attrs:
-          format: md
+      - type: form
         bind:
           value:
-            kind: default
-            default: "**登录（示例）**\n\n任意账号密码即可：回车或点按钮把字段上行到 stage 控制台；点卡片外的模糊区关闭。"
-      - type: input
-        bind:
-          value:
-            kind: field
-            field: user
-            type: text
-            default: ""
-      - type: input
-        bind:
-          value:
-            kind: field
-            field: pass
-            type: password
-            default: ""
-      - type: button
-        attrs:
-          oneshot: false
-        bind:
-          value:
-            kind: submit
-            default: "登录"
+            kind: event
+            event: login
+        children:
+        - type: case
+          attrs:
+            class: [border, round, shadow]
+            grid:
+              width: 26rem
+              flex: 0 0 auto
+          children:
+          - type: text
+            attrs:
+              format: md
+            bind:
+              value:
+                kind: default
+                default: "**登录（示例）**\n\n任意账号密码即可：回车或点按钮把字段上行到 stage 控制台；点卡片外的模糊区关闭（清空槽），再回车重开。"
+          - type: input
+            bind:
+              value:
+                kind: field
+                field: user
+                type: text
+                default: ""
+          - type: input
+            bind:
+              value:
+                kind: field
+                field: pass
+                type: password
+                default: ""
+          - type: button
+            attrs:
+              oneshot: false
+            bind:
+              value:
+                kind: submit
+                default: 登录

@@ -402,7 +402,11 @@ e2e（实测 2026-10-10）：
 - 门槛：`cargo build --workspace` / `cargo test --workspace` 全过（29 组
   `test result: ok`、0 FAILED）、`trunk build` 过。
 
-### 16. Float overlay：背景模糊 + 不可操作（ADR 0013）— done 2026-10-10
+### 16. Float overlay：背景模糊 + 不可操作（ADR 0013）— 被 ADR 0014 取代 2026-10-10
+
+（用户 2026-10-10：「撤」。模态语义归 layer + portal——遮罩不该声明在消息行的
+子树里、靠 `fixed` 逃出去；`PositionAttr` 的 `overlay`/`dismiss` 两个字段已从
+wire 撤掉。本节记录保留，两条几何实测教训对 layer 一样成立，见 §20。）
 
 形态：登录模态框要"挡住并模糊后面的页面"，而 Float 只有绝对定位 + Popup 的
 hover 展开。做法：`PositionAttr` 加 `overlay` / `dismiss` 两个可选字段（该结构
@@ -416,8 +420,9 @@ CSS 只留 `::before` 的模糊/色调（`backdrop-filter`，写法同 `--toolti
 压层。不可操作由铺满视口本身保证（点模糊区 = 点在浮层上），dismiss 是本地瞬时
 状态（`e.target === el` → `display:none`），不上线协议。
 
-门槛：全过。`cargo test --workspace` 绿（含 `crates/accrete/tests/float_overlay.rs`
-的两类形状 codec 往返）+ wasm 目标构建 + trunk 落进 dist。e2e（stage + headless
+门槛：全过。`cargo test --workspace` 绿（当时的
+`crates/accrete/tests/float_overlay.rs` 已随 ADR 0014 删除，换成 `layer_portal.rs`）
++ wasm 目标构建 + trunk 落进 dist。e2e（stage + headless
 CDP，跑 `examples/yaml/17.login.yaml`）：`::before` 的 `backdrop-filter` 计算值为
 `blur(6px)`；浮层矩形 = 视口（1200×900）；视口角落 `elementFromPoint` 命中的是
 浮层自身（= 背后页面点不到）；卡片居中；点卡片不关闭（display 仍 flex）、点模糊区
@@ -473,6 +478,25 @@ layout/element/style 层同属性的声明全部被盖掉——这也是老坑"`
 `custom` 回到 element 与 style 之间。验证：`class="f hide"` 的元素 display 从 flex
 变 none（对照 `class="f"` 仍 flex）、`00.radar.yaml` 的图表照常出图（G2 调色板三色
 在）、0 console error。影响面本身覆盖 custom.css 里所有同类声明，这次一次性归位。
+
+### 20. layer + portal：模态层的渲染位置（ADR 0014）— 执行中 2026-10-10
+
+形态：ADR 0013 的 Float overlay 把遮罩留在消息行子树里（全靠 `fixed` 逃出去，祖先有
+transform/filter/contain 就困住），且"按钮在某条消息里、遮罩属于应用外壳"是本质错配。
+用户 2026-10-10 定方案：类似 Vue Teleport——应用**显式声明**一个全屏 layer 作挂载点
+（渲染器不加固定逻辑），portal 用 `to` 指过去，显隐由 layer 的载荷槽决定（空 = 不显示，
+复用 ADR 0012）；Float 的 `overlay`/`dismiss` 撤掉；ADR 0013 标记被取代。
+
+实现：accrete 加 `layer`（attrs: class/selector/dismiss；bind.value = Local/Source 槽；
+children = 模态内容）与 `portal`（attrs: to；children 传送到目标）；ui_leptos 加
+components/layer.rs、components/portal.rs 并接入渲染分派；几何内联在 layer 宿主、
+遮罩（`::before` 模糊/色调）进 custom.css（层序已修，见 §19）；dismiss 判等逻辑从
+float.rs 搬。
+
+门槛：`cargo test --workspace`（含 layer/portal 两形状的 codec 往返）+ wasm 目标构建 +
+trunk + e2e 五条：① 槽空时 layer 不可见且不占位；② 写槽后铺满视口、`::before` 有
+blur、背后 `elementFromPoint` 命中 layer；③ 点空白关闭 / 点内容不关闭；④ portal 的
+children 的 DOM 父节点是 layer（不是它声明的地方）；⑤ 切页后 layer 仍在。
 
 ## Resolved
 

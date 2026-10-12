@@ -190,14 +190,6 @@ pub struct PositionAttr {
     pub h: Option<PosH>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     pub v: Option<PosV>,
-    /// overlay（ADR 0013）：模态形态——铺满视口、背景模糊、背后页面不可操作。
-    /// 置位时位置偏移（h/v）无意义并被忽略。只在 Float 上用。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub overlay: Option<bool>,
-    /// dismiss（ADR 0013）：点浮层自身（模糊区，而非模态内容）本地隐藏。
-    /// 只在 overlay 下有意义；是本页瞬时状态，不上线协议。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dismiss: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -320,6 +312,65 @@ pub struct Float {
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
+}
+
+/// 模态层（ADR 0014）：应用显式声明的全屏挂载点，portal 把内容传送进来。
+/// 显隐只有一条规则——所绑 `bind["value"]` 槽非空即显示（空即无，ADR 0012 复用）；
+/// `dismiss` 点层自身（模糊区）时清空该槽（清空即关）。几何内联在渲染侧，
+/// 遮罩走 custom.css。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+pub struct Layer {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<LayerAttr>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bind: Option<HashMap<String, Bind>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<Accrete>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
+pub struct LayerAttr {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    /// dismiss（ADR 0014）：点层自身（模糊区，而非模态内容）清空所绑槽。
+    /// 本页瞬时状态：只写 local/data 平面，不上线协议。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dismiss: Option<bool>,
+}
+
+/// 渲染位置传送（ADR 0014）：children 渲染到 `to` 选中的元素里，就地只留一个空锚点。
+/// 只做位置，不管显隐与遮罩——那是 layer 的语义。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+pub struct Portal {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<PortalAttr>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<Accrete>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
+pub struct PortalAttr {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    /// 目标挂载点：CSS 选择器，选中应用显式声明的 layer 宿主（ADR 0014：挂载点由
+    /// 应用声明，渲染器不加固定逻辑；解析不到就不渲染 + warn）。
+    pub to: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -740,6 +791,9 @@ pub enum Accrete {
     #[ui_acrete(has_id = "true")]
     canvas(Canvas),
     float(Float),
+    #[ui_acrete(has_id = "true")]
+    layer(Layer),
+    portal(Portal),
     #[ui_acrete(has_id = "true")]
     fold(Fold),
     form(Form),

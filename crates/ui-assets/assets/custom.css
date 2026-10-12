@@ -42,14 +42,12 @@
         border-radius: 2rem;
     }
 
-    /* Float overlay（ADR 0013）：模态形态，铺满视口 + 模糊背景 + 挡住背后页面。
-       几何（position/inset/z-index/居中）在 float.rs 里内联，不写这里——custom 层
-       实际排在最前（main.css 第 1 行的 @import 先于第 3 行的 @layer 顺序声明出现
-       custom，首次出现即定序），这里写的 position 会输给 element 层的
-       `.float{position:absolute}`；同一原因也让 `.hide` 打不过 layout 层的 `.f`
-       （见 docs/PLAN.md §16）。这里只放没有竞争者的部分：伪元素模糊/色调，以及
-       把内容压在模糊层之上。 */
-    .float.overlay {
+    /* 模态层（ADR 0014）：铺满视口 + 模糊背景 + 挡住背后页面。几何
+       （position/inset/height/z-index/居中）在 layer.rs 里内联，不写这里——内联
+       本无层叠歧义（ADR 0012 的 display 内联同款；custom 层的定序缺陷已于
+       PLAN §19 修掉）。这里只放没有竞争者的部分：伪元素模糊/色调，以及把内容
+       压在模糊层之上。 */
+    .layer {
         &::before {
             content: "";
             position: absolute;
