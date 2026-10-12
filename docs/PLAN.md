@@ -340,19 +340,36 @@ token（summary 槽）→ 零图表重绘；无 update threw 警告。整段演�
 
 门槛：三门槛 + 上述 e2e。
 
-### 14. 容器子节点级 Memo（未实施，暂缓）
+### 14. 容器子节点级 Memo — 实测否证 2026-10-12（流式只走数据槽）
 
-容器内子节点没有 memo（`render_children` 直接 map dispatch）：任一子节点变化
-→ 容器 render 闭包重跑 → 模块宿主重挂。rack 有行级 `Memo<Accrete>`（未变行
-不重算），容器层没有对应物，所以"写布局节点"这条路线的重挂问题仍在（§13 只
-把流式内容搬出布局平面，没有改渲染路径）。
+原方案（形态与判据留档）：容器内子节点没有 memo（`render_children` 直接 map
+dispatch）：任一子节点变化 → 容器 render 闭包重跑 → 模块宿主重挂。rack 有行级
+`Memo<Accrete>`（未变行不重算），容器层没有对应物，所以"写布局节点"这条路线的重挂
+问题仍在（§13 只把流式内容搬出布局平面，没有改渲染路径）。判据：Accrete 是纯数据 +
+PartialEq，节点值相等即可跳过该子树——数据本身即虚拟树，剪枝搭在数据相等性上，
+不需要额外 vdom 层（diff 仍由 tachys 在 view 树上做）。注意跳过只对"节点自身数据
+未变"成立：订阅驱动的更新（source/local 槽）在组件自己的闭包里重跑，不依赖父闭包，
+memo 不得挡在订阅组件的更新路径上。
 
-判据：Accrete 是纯数据 + PartialEq，节点值相等即可跳过该子树——数据本身即
-虚拟树，剪枝搭在数据相等性上，不需要额外 vdom 层（diff 仍由 tachys 在 view
-树上做）。注意跳过只对"节点自身数据未变"成立：订阅驱动的更新（source/local
-槽）在组件自己的闭包里重跑，不依赖父闭包，memo 不得挡在订阅组件的更新路径上。
+实测（2026-10-12）：三条路都走不通，容器级隔离在本渲染栈里不可达。
 
-触发条件：需要"写布局节点也不重挂模块宿主"时再实施。
+- 每子节点一个 `Memo<Accrete>`（建在 `render_children` 里）是空转——DOM identity
+  探针：给一个 canvas 打标记、patch 它的兄弟，标记消失。根因是 Memo 建在父闭包的
+  render 作用域里，父一重跑它就死掉重建（新实例、初值恒等），判等因此恒真。挪进
+  每行的 `Owner` 也不行：实测布局信号写入时该 memo 从不重算，尽管根闭包重跑了——
+  rack 的行能被通知，是因为每行 memo track 的是**按键的槽信号**，不是整平面那个。
+- rack 形状的 `keyed()`（同步建在组件构建路径里）直接 wasm panic
+  （`RuntimeError: memory access out of bounds`）。症结不在 Owner 挂哪儿：行视图 +
+  行 memo 以 prev=None 反复重跑数百次（每轮重建 Memo，判等空转），而 `create:
+  layout set` 只发了 1 次——keyed 自己构成自重建订阅环，最终耗尽 wasm 内存。
+- `keyed()` 包进外层动态闭包（rack 的形状）不再 panic，但 tachys 的
+  `Render for F::rebuild` 是 teardown + rebuild：每次布局写入都整棵重建（新 Memo、
+  prev=None、模块宿主重挂），隔离一样没有。
+
+结论：容器级剪枝这条路封死，**流式的唯一可用机制是数据槽**（§13 的规则，已进
+Conventions）。判据那段留着，它是对"数据即虚拟树"的正确推理，只是本栈的重建语义
+不给它落点。调试这类问题先给宿主 div 和它的 canvas **都**打标记：宿主标记没了 =
+keyed/AnyView teardown，宿主在而 canvas 没了 = `on_load` 重发（原地重建）。
 
 ### 15. 空载荷的模块宿主不占位（ADR 0012）— done 2026-10-10
 
@@ -552,7 +569,11 @@ re-renders only the line chart in place (instance count and canvas identity
 unchanged, 0 destroys, the three radars untouched), a summary token re-renders
 no chart at all, and the demo grows to 90 data rows (30 days × 3 departments).
 The general case — any layout-plane write still remounts module hosts — is not
-fixed; it needs the container-level memo recorded in §14.
+fixed, and the container-level memo §14 proposed for it was later measured
+unreachable in this rendering stack (a `Memo` in the parent render scope is
+vacuous, a synchronously built `keyed()` panics, and `keyed()` under an outer
+dynamic closure tears down on every layout write — see §14), so keeping streamed
+values out of the layout plane stays the only working mechanism.
 
 ### Emitted events carried no node id — the wrapper's `id` was always absent (fixed 2026-10-02)
 
@@ -672,4 +693,7 @@ four charts of the row (4 → 8 → 12 G2 instances, canvases replaced) while th
 row's own text nodes kept DOM identity. Two further reasons the slot is the
 right home: a layout path is positional and dies when the tree shifts, while a
 slot is addressed by name; and a slot-bound widget owns a subscription
-independent of its parent, so it survives a parent re-render.
+independent of its parent, so it survives a parent re-render. The obvious
+alternative — pruning container children so a layout write skips untouched
+subtrees — was measured unreachable in this rendering stack (§14 实测否证), so
+this is not a "cheaper later" choice but the only working mechanism.
