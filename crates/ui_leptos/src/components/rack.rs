@@ -144,26 +144,95 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
         if scroll {
             let id_ = id.clone();
             leptos::task::spawn_local(async move {
-                // 自动滚动 = "开启 + 在底部"才跟随（ADR/PLAN §17）：旧判据
+                // 自动滚动 = "开启 + 在底部"才跟随（PLAN §17）：旧判据
                 // "离底部不到一个视口高"会把手动上滚一点的人拽回底部。
                 // 旗标由只装一次的 scroll 监听维护（我们自己的滚动也保持它为
                 // true）；上拖即停，拖回底部恢复。
+                //
+                // 触发面有两条，缺一不可：
+                // ① 本函数所在的闭包重跑 = 列表槽被写（新行 append）；
+                // ② 容器/子节点尺寸变化——打字机长高、模块宿主按 ADR 0012 撑开、
+                //    图表带渲染，都不写列表槽，闭包不重跑。只靠 ① 的话，一整行
+                //    内容流式长高的场景（walkthrough 的"一个 box"）永远不跟随。
+                //    所以 ② 由 ResizeObserver（尺寸）+ 子树 MutationObserver（DOM/
+                //    文字变化）补齐，判据仍是同一条"在底部才跟随"。
+                //
+                // 生长是分多帧到的（模块宿主撑开、图表带渲染），单发的"跳一下"会
+                // 停在中间值上（实测落后 20~480px），故触发后走一个收敛循环：每帧
+                // 重钉、高度连续两帧不变才停；旗标为"0"（用户上滚）立即停。
                 crate::dom::eval(&format!(
                     r#"
                     var e = document.getElementById("{id_extra}");
                     if (e) {{
                         if (!e.dataset.scrollInit) {{
                             e.dataset.scrollInit = "1";
-                            var atBottom = function () {{
-                                e.dataset.atBottom =
-                                    (e.scrollHeight - e.scrollTop - e.clientHeight <= 2) ? "1" : "0";
+                            // 最后一次钉下的 scrollTop：用来认出"这次 scroll 是我们自己
+                            // 造成的"——生长常晚于 scroll 事件派发，此刻按 live 值重算
+                            // 会把"还在跟随"误判成用户上滚。
+                            var expectTop = -1;
+                            var chasing = false;
+                            var pin = function () {{
+                                if (e.dataset.atBottom === "0") {{ return; }}
+                                var max = e.scrollHeight - e.clientHeight;
+                                expectTop = max;
+                                e.scrollTop = max;
                             }};
+                            // 追赶循环：生长分多帧到（模块宿主撑开、图表带渲染、打字
+                            // 机），单拍"跳一下"会停在中间值上。用 setTimeout 而不是
+                            // rAF——headless/慢机上 rAF 实测被拖到秒级，追赶因此落后
+                            // 数百 px。高度稳定三拍、或旗标转 "0"（用户上滚）、或超时
+                            // 2s 即停；期间任何新变化再触发一轮。
+                            var chase = function () {{
+                                pin();
+                                if (chasing) {{ return; }}
+                                chasing = true;
+                                var last = -1, stable = 0, t0 = Date.now();
+                                var tick = function () {{
+                                    pin();
+                                    var now = e.scrollHeight - e.clientHeight;
+                                    stable = (now === last) ? stable + 1 : 0;
+                                    last = now;
+                                    if (e.dataset.atBottom === "0" || stable >= 3 ||
+                                        Date.now() - t0 > 2000) {{
+                                        chasing = false;
+                                        return;
+                                    }}
+                                    setTimeout(tick, 40);
+                                }};
+                                setTimeout(tick, 40);
+                            }};
+                            var atBottom = function () {{
+                                // 落在底部、或落回刚钉下的位置 = 仍是跟随（用户自己
+                                // 滚到底也落进第一条）；只有明显离开两者才算上滚。
+                                var max = e.scrollHeight - e.clientHeight;
+                                if (Math.abs(e.scrollTop - max) <= 2 ||
+                                    (expectTop >= 0 && Math.abs(e.scrollTop - expectTop) <= 2)) {{
+                                    e.dataset.atBottom = "1";
+                                    return;
+                                }}
+                                e.dataset.atBottom = "0";
+                            }};
+                            var ro = new ResizeObserver(chase);
+                            var observeChildren = function () {{
+                                ro.disconnect();
+                                ro.observe(e);
+                                for (var i = 0; i < e.children.length; i++) {{
+                                    ro.observe(e.children[i]);
+                                }}
+                            }};
+                            new MutationObserver(function (recs) {{
+                                for (var i = 0; i < recs.length; i++) {{
+                                    if (recs[i].type === "childList") {{ observeChildren(); break; }}
+                                }}
+                                chase();
+                            }}).observe(e, {{ childList: true, subtree: true,
+                                              characterData: true, attributes: true }});
+                            observeChildren();
                             e.addEventListener("scroll", atBottom, {{ passive: true }});
-                            atBottom();
+                            e.dataset.atBottom =
+                                (e.scrollHeight - e.scrollTop - e.clientHeight <= 2) ? "1" : "0";
                         }}
-                        if (e.dataset.atBottom !== "0") {{
-                            e.scrollTop = e.scrollHeight;
-                        }}
+                        chase();
                     }}
                     "#,
                     id_extra = id_

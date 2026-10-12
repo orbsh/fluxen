@@ -459,6 +459,18 @@ true）：开启且在底部才跟随，上拖即停，拖回底部恢复。
 后追加 → top 仍 0、旗标 `"0"`（位置不动）；再滚回底部后追加 → top = max 661
 （恢复跟随）。
 
+补充（2026-10-12，用户报「walkthrough 里没有自动滚动」）：跟随的触发面原先只有
+"列表槽被写"——注入的那段 JS 挂在外层动态闭包上，而闭包唯一 tracked 读的就是列表
+槽。聊天"每条消息一行"够用，但**一行内部流式长高**（walkthrough 的"一个 box"、
+打字机、模块宿主按 ADR 0012 撑开、图表带渲染）不写列表槽 → 整段演示一次都不跟随。
+修法：触发面补 `ResizeObserver`（容器 + 元素子节点，childList 的 MutationObserver
+负责把新子节点加进观察）与子树 MutationObserver
+（`childList+subtree+characterData+attributes`）；"在底部才跟随"的旗标仍由 scroll
+监听维护，但改成**认得出自己的滚动**——落在底部、或落回刚钉下的 scrollTop 都算
+跟随，只有明显离开两者才算上滚（生长常晚于 scroll 事件派发，按 live 值重算会把
+跟随误判成上滚）；追赶用 40ms `setTimeout` 拍（高度连续三拍不变 / 旗标转 0 / 2s
+超时即停），不用 rAF。实测数字见 Resolved 那条。
+
 ### 18. Canvas 模块的加载过渡 — done 2026-10-10
 
 形态：泼溅那件早就显式关掉了 GS3D 自带的加载 UI（`showLoadingUI: false`，
@@ -526,6 +538,38 @@ float.rs 搬。
   且模态仍开着。全程 0 console error。
 
 ## Resolved
+
+### The rack's auto-follow only fired on a list write — a row that grows internally never followed (fixed 2026-10-12)
+
+User report: 「walkthrough 中，没有自动滚动」. Root cause: the injected follow JS lives
+inside the rack's outer dynamic closure, whose only tracked read is the LIST slot, so
+"jump to the newest" ran exactly once per row append. The walkthrough is one row for the
+whole demo — after that row lands, every later change (typewriter patches, chart data,
+module payloads, a row-inner rack append) writes a DATA slot, never the list slot, so
+nothing followed; the row then grew from 650 px to 2168 px while `scrollTop` stayed at the
+value the append had pinned. §17's own e2e never saw it because that probe appended row
+after row — the one path that did trigger the follow.
+
+Fixed in `rack.rs`'s injected JS, three parts. (a) Trigger surface: a `ResizeObserver` on
+the container plus its element children (a `childList` `MutationObserver` re-observes new
+children) and a subtree `MutationObserver` (`childList+subtree+characterData+attributes`),
+so growth anywhere inside a row triggers the same pin. (b) The "only while at the bottom"
+flag is still maintained by the scroll listener, but now RECOGNIZES OUR OWN scrolls —
+landing at the bottom, or back at the `scrollTop` we last pinned, counts as following;
+only a position clearly away from both is a user scroll-up. Live-value recomputation is
+wrong here because growth is dispatched AFTER the scroll event, which misreads a follower
+as a scroller (measured: the view froze mid-stream on the first attempt). (c) The catch-up
+is a 40 ms `setTimeout` loop that stops after three stable-height ticks (flag "0" or a 2 s
+cap also stop it): `requestAnimationFrame` was measured starved to the second scale on this
+box's headless chromium (swiftshader + 7.9 MB wasm + six module hosts), so an rAF-driven
+chase stuck at `chasing = true` with no tick running and lagged 480 px.
+
+Measured (`walkthrough.py --auto --delay 0.01`, fresh stage + fresh headless chromium):
+`top == max` at every sample through the whole run (0/0 → … → 1054/1054, terminal
+1578/1578); scroll-up → append leaves `top` at 0; back to the bottom → append follows
+(1718); a data-slot write that grows the row without touching the list slot follows
+(max 1718 → 4554). 0 console errors; `cargo test --workspace` green (30 groups). Probes
+kept as skill scripts `e2e_autoscroll.py` / `e2e_scroll_flags.py`.
 
 ### Module update leg was dead — G2 v5 has no `chart.update()` (fixed 2026-10-02)
 
