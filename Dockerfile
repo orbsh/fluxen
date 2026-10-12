@@ -49,7 +49,12 @@ COPY examples/modules ./examples/modules
 # container serves the mesh, chart and truck demos and leaves
 # /assets/splatviewer/bonsai.ksplat absent.
 ARG GLTF_SAMPLE_ASSETS_COMMIT=edc7c9e67c639d230715049ee31f9a96a6babbbe
+# The mkdir is load-bearing: assets/3dbrowser/ is gitignored as a whole
+# directory, so a clean checkout (CI's actions/checkout) does not contain it and
+# `curl -o` dies with "curl: (23) client returned ERROR on write" — a write
+# failure, which is not the same as a failed download.
 RUN set -eu; \
+    mkdir -p crates/ui_leptos/assets/3dbrowser; \
     base="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/${GLTF_SAMPLE_ASSETS_COMMIT}/Models"; \
     curl -fsSL "$base/MaterialsVariantsShoe/glTF-Binary/MaterialsVariantsShoe.glb" \
       -o crates/ui_leptos/assets/3dbrowser/MaterialsVariantsShoe.glb; \
