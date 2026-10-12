@@ -539,6 +539,55 @@ float.rs 搬。
 
 ## Resolved
 
+### A text node's second `.class()` call wiped the first — markdown body text had no typography rule (fixed 2026-10-12)
+
+User report: 「文本没有行距」. Two layers of cause, both long-standing (identical in the
+dioxus-era `ui_dixous` text widget and in the main.css carried over from fluxora):
+
+- **Name mismatch.** `text_` emitted the class `text` while the element rule was `.txt`,
+  so a text node matched no rule at all and inherited `body { line-height: 1 }`
+  (main.css:67) — CJK prose sat at line box == font size. The emitted class is now `txt`.
+- **The class list never landed on markdown nodes at all.** `div().class(base_css).class("markdown")`
+  makes two `.class()` calls on one element and the second REPLACES the first: measured,
+  every `.markdown` element's `className` was exactly `markdown` — `txt`/`col`, every
+  `attrs.class` the producer wrote and the node's own id were all gone (which is also why
+  `.--header` in custom.css had never matched anything). markdown now joins the same
+  `css.join(" ")` and the element gets a single `.class()` call.
+
+Measured after the fix (fresh `trunk build --release`, then stage + headless chromium;
+the page's wasm hash was checked in `performance.getEntriesByType('resource')` so the
+verdict is not about a stale build): `.txt` nodes 8 → 12, with `txt col markdown` and
+`txt --header nogrow col markdown`; the `<p>` inside `.markdown` and `.txt` itself compute
+line-height 30px at font-size 20px (was 20px); the menu tabs (text + `box`) also move
+20px → 30px, i.e. single-line chrome built from text nodes grows 10px; `.txt accent`
+computes `oklch(0.7 0.12 182.49)` (the style-layer `.accent.txt` combos are live again);
+0 console errors, 0 leftover `.text`. Paragraph spacing (`p { margin: 0.2rem }`,
+main.css:741) is a separate knob and was left alone. Only `text.rs` had the double-call
+flaw — `fold.rs`, `case.rs` make their two calls on different elements/branches.
+
+### The image build's glTF fetch died on `curl: (23)` — a gitignored directory is absent in CI (fixed 2026-10-12)
+
+Builder step 10/15 failed with `curl: (23) client returned ERROR on write of 16375 bytes`.
+Error 23 is a WRITE error, not a network one: curl opens `-o`'s file when the first body
+byte arrives, so a successful connection plus a write error means the output path cannot
+be opened. Measured with the same Khronos URL through the proxy: into an existing
+directory 7,833,592 B / exit 0; into a NONEXISTENT directory the identical
+`curl: (23) … on write of 16375 bytes` / exit 23; direct (no proxy)
+`curl: (35) Recv failure: Connection reset by peer` — a different signature, not this bug.
+
+Root cause: `crates/ui_leptos/assets/3dbrowser/` is gitignored as a WHOLE directory
+(.gitignore:10), so a clean checkout — `actions/checkout` in .github/workflows/docker.yml,
+whose buildx output matches the reported log shape — contains no such directory and
+`COPY crates ./crates` cannot create one. The other fetched inputs are covered:
+`assets/splatviewer/` carries tracked files and the g2chart RUN already had `mkdir -p`.
+Fix: `mkdir -p crates/ui_leptos/assets/3dbrowser` before the first curl in that RUN (it
+also gives the later `cp pkg/… assets/3dbrowser/` a landing directory).
+
+Verified without a container daemon: `git archive HEAD | tar -x` IS the CI context — the
+directory is absent, the old snippet reproduces exit 23, and with `mkdir -p` prepended both
+glbs download and both `sha256sum -c` lines pass. The full image build was NOT run (docker
+commands hit the session's approval gate); the steps after this one are unverified.
+
 ### The rack's auto-follow only fired on a list write — a row that grows internally never followed (fixed 2026-10-12)
 
 User report: 「walkthrough 中，没有自动滚动」. Root cause: the injected follow JS lives
