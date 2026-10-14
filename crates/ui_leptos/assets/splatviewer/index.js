@@ -8,7 +8,8 @@
 // camera 可选：3DGS 数据集的坐标系朝向各异（多数是 Y 向下），GS3D 的默认
 // 相机（[0,10,15] 看向原点、up=[0,1,0]）常常是歪斜的，需按场景给出。
 // 单场景展示（最新 key 生效，重复发送同 URL 幂等跳过）。three.js 与
-// @mkkellogg/gaussian-splats-3d 走 CDN import map（esm.sh），本模块零构建。
+// @mkkellogg/gaussian-splats-3d 走 CDN（esm.sh）**按需加载**——模块求值本身
+// 零下载，库到 mount() 才拉；本模块零构建。
 // 产物部署：本文件复制到 crates/ui_leptos/assets/splatviewer/index.js 即可
 // （模块纯 JS，无 wasm 产物）。
 
@@ -18,8 +19,21 @@
 const THREE_URL = "https://esm.sh/three@0.170.0";
 const GS3D_URL = "https://esm.sh/@mkkellogg/gaussian-splats-3d@0.4.7?deps=three@0.170.0";
 
-const THREE = await import(THREE_URL);
-const GaussianSplats3D = await import(GS3D_URL);
+// 库按需加载（2026-10-14）：模块顶层的 await import 会让"本文件被 import"
+// 直接等于"拉 three.js + GS3D"，与"用到才加载"相悖——模块求值现在零下载，
+// 到 mount() 才拉。宿主那边已把 import 推迟到载荷非空（空载荷的 canvas 宿主
+// 一个字节都不请求），这里再收一道。three 显式拉一次是为了让 GS3D 内部的
+// 那份 three 命中同一个版本（?deps 钉的就是它）。
+let libs = null;
+function ensureLibs() {
+  if (!libs) {
+    libs = Promise.all([import(THREE_URL), import(GS3D_URL)]).then(([three, gs3d]) => ({
+      THREE: three,
+      GS3D: gs3d,
+    }));
+  }
+  return libs;
+}
 
 const scenes = new Map(); // ctx -> { viewer, el, url, count, started, loaded }
 // 单调递增的实例号：用 scenes.size+1 会在 unmount 之后撞号（存活实例 2、
@@ -67,6 +81,9 @@ export async function mount(el, data /* ArrayBuffer(CBOR) */, _host) {
   // 模块自带极简 CBOR 解码（只解本模块关心的子集：map/utf8/null/bool/int）。
   const spec = decodeCbor(new Uint8Array(data));
   const assets = (spec && spec.assets) || {};
+
+  // 库在这里才下载（模块求值零下载）：宿主 import 本模块 ≠ 拉 three.js。
+  const { GS3D: GaussianSplats3D } = await ensureLibs();
 
   el.replaceChildren();
   const host = document.createElement("div");

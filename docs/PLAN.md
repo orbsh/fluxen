@@ -537,6 +537,46 @@ float.rs 搬。
 - ⑤ 清空槽后再写能重开；`inject page=about` 切页后 layer 是同一元素（`same: true`）
   且模态仍开着。全程 0 console error。
 
+### 21. 组件库按需加载：宿主 import 时机 + 模块求值 + mermaid 预加载（ADR 0015）— done 2026-10-14
+
+形态（用户 2026-10-14：「js 的库要惰性加载，没有用到 editor 组件的时候不要加载」「canvas
+库好像也没有惰性加载？比如加载 splat 播放器的时候才加载 three.js」）：三层同一判据
+"用到才加载"——(1) 宿主 `mount_module` 的 import + 契约检查 + mount 从 `NodeRef on_load`
+改由**首次非空载荷**触发（空载荷 = 零 import；挂载标记仍是唯一状态源，"pending"（在途）
+不再重发是本次收紧的那条，旧的"标了 true 但内容被原地重建抹掉 → 清标记重挂"保留）；
+(2) 模块把库下载从**模块求值**挪进 `mount()`（splatviewer 收进 `ensureLibs()`、
+3dbrowser 收进 `ensure()`）；(3) diagram 的 mermaid 从 index.html 的 `<script>` 预加载
+改成首次挂载注入 script（全局 promise 门控，形状同 g2chart 的 `ensureG2`）。ADR 0012
+"明确不做"的第 1 条（"首次非空载荷才 mount"）由此改判，0012 挂 Update 指向 ADR 0015；
+ADR 0009 §4 的 mermaid"独立事项"结案。判据（"空"是什么）沿用 `payload_is_empty`，
+wire 零变化。
+
+门槛：全过。stage :3102（`--dist target/e2e-dist`，trunk release，wasm 2 317 842 B）
++ headless chromium :9333（新 profile），跑 `scripts/e2e_lazy_libs.py` —— 13 条断言
+`FAILED: none`，页面异常 0：
+
+- 开页（00.main.yaml 落地、chat 页注入后）资源表**没有** `mermaid.min.js`、没有
+  `splatviewer/*`、没有 `esm.sh`。改动前 mermaid 每次开页必下（2666850 B 原始 /
+  gzip 771617 B 本机实测），`rg 'esm\.sh|three'` 在 dist 的 html+js 里命中 0（库从不
+  进应用包，这条改动前后都成立）。
+- 发 `08.diagram.yaml` 后 `mermaid.min.js` 才出现，`.diagram svg` 数 2（mermaid 真画）。
+- append 一个绑槽、载荷未到的 canvas 行：宿主 `style="display: none;"`、
+  `data-module-mounted` 空、子节点 0、高度 0，**资源表零模块请求**（改动前这一行就会
+  把 splatviewer 拉下来）。
+- 载荷 `set` 到达后依次出现 `/assets/splatviewer/index.js` → `esm.sh` 的 three +
+  GS3D → `truck.ksplat`；宿主标 `true`，宿主内 canvas 320×240。
+
+回归：`scripts/e2e_chart_regress.py`（`00.radar.yaml` 四个槽绑定图表）——radar 之前
+零 g2 请求；之后 `g2.min.js` + g2chart 三件、`window.G2` 为对象、4 个图表宿主挂载
+（dept-trend / radar-rd / radar-mkt / radar-ops）、4 个 canvas 有像素、页面异常 0，
+`FAILED: none`。即"延迟到载荷才挂载"对 chart 这条既有路径没有回归。
+
+两条 e2e 教训（脚本头部同记）：(1) `/send` 的 `delivered to N peer(s)` **不是就绪门**
+——页面 WS 已连、渲染还没订阅时帧被静默丢掉（实测：拿它当门放过去后整页空白、console
+零输出）；门必须是 DOM 读数。(2) 页面在重渲染忙窗口（swiftshader + 4 个 G2 + WebGL
+同屏）里 CDP `Runtime.enable`/`evaluate` 会挂到 socket 超时——读数要重试，socket 超时
+放到 60s。
+
 ## Resolved
 
 ### A text node's second `.class()` call wiped the first — markdown body text had no typography rule (fixed 2026-10-12)

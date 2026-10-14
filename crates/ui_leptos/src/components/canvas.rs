@@ -132,8 +132,9 @@ fn mount_module(
     } else {
         style.clone()
     };
-    // 撑开时写回容器的值（节点尺寸），交给 update Effect。
-    let size_style = style;
+    // 非空时写回容器的尺寸样式：挂载段（update Effect）与载荷看守各持一份。
+    let size_style = style.clone();
+    let style_w = style;
 
     let nr = NodeRef::<Div>::new();
     let el_id = id.to_string();
@@ -141,212 +142,245 @@ fn mount_module(
     let url = url.to_string();
     nr.on_load(move |el| {
         let el: web_sys::HtmlElement = el.dyn_into().expect("div is element");
-        // 幂等护栏：原地 rebuild（兄弟节点 patch 引发的行 effect 重跑）会再次
-        // 触发 NodeRef 的 load → on_load 重跑 → 模块被无谓地 unmount + mount
-        // （canvas 换新、GL 状态丢失）。
-        //
-        // 状态机写在元素属性上：无 → "pending" → "true"，护栏只认 "true" 且
-        // **容器里还有本模块写进去的内容**。只看标记会漏掉一类失效：行视图
-        // 原地重建时会把宿主 div 的子节点按视图（空）重写，把模块挂进去的
-        // canvas 抹掉（重建后 div 里只剩 tachys 的占位注释），此时标记若还
-        // 在，护栏就直接跳过 → 永久空白。splatviewer 这类 CDN 模块 import
-        // 慢，行重建必然落在挂载窗口内，所以只有它暴露；3dbrowser 是本地
-        // wasm、毫秒级，重建落在挂载之后，从未踩到。
-        // 内容没了就当没挂过，重新挂（模块 mount 自己会 replaceChildren）。
-        let mounted_ok = el.get_attribute("data-module-mounted").as_deref() == Some("true")
-            && el.child_element_count() > 0;
-        if mounted_ok {
+        // 幂等护栏（原地 rebuild 会重跑 on_load）：状态写在元素属性上。
+        // 1) 标 "true" 且容器里还有模块写进去的内容 → 活着，什么都不做；
+        // 2) 标 "true" 但内容被重建抹掉（tachys 按视图重写宿主子节点，只留
+        //    占位注释）→ 标记清掉 = 当作没挂过，下面的看守会重挂；
+        // 3) 其余 → 装看守（"pending" = 挂载在途，看守只同步样式，不重发）。
+        // splatviewer 这类 CDN 模块 import 慢，行重建必然落在挂载窗口内，
+        // 所以只有它暴露过；3dbrowser 是本地 wasm、毫秒级，从未踩到。
+        let mounted = el.get_attribute("data-module-mounted");
+        if mounted.as_deref() == Some("true") && el.child_element_count() > 0 {
             return;
         }
-        el.set_attribute("data-module-mounted", "pending")
-            .expect("set mounted marker");
-        let id = el_id.clone();
-        let url = url.clone();
-        let ctx2 = ctx2.clone();
-        let payload0 = Rc::clone(&payload);
-        let source0 = source.clone();
-        leptos::task::spawn_local(async move {
-            // mount 真正推给模块的载荷。下面 update 的基线必须是**它**，不能
-            // 到那一步再重新读一次槽：槽写入若落在 import/mount 这个窗口里
-            // （append 行与 set 载荷背靠背发出就是常态），重读会把新值当成
-            // 基线，Effect 判定"没变化"→ update 永不触发 → 模块停在挂载时
-            // 的空 spec 上。症状：宿主标了 mounted、canvas 在，资产却一个
-            // 都不请求（本地 wasm 模块 import 窗口被写者间隔掩盖，CDN 模块必现）。
-            let mounted_payload = payload0();
-            // 初始数据（CBOR 字节）——mount 的 data 参数
-            let data0 = encode(&mounted_payload);
+        if mounted.as_deref() == Some("true") {
+            el.remove_attribute("data-module-mounted").ok();
+        }
 
-            // 宿主通道：host.send(event, cborBytes) → 现有动作帧上行。
-            // 闭包持 Rc<Ctx> + id，事件名与解码后的 JSON 一起交给
-            // ctx.send（与表单 submit 同一条 uplink）。
-            let host = js_sys::Object::new();
-            let cb = Closure::<dyn FnMut(String, js_sys::Uint8Array)>::new(
-                {
-                    let ctx = ctx2.clone();
-                    let id = id.clone();
-                    move |ev: String, bytes: js_sys::Uint8Array| {
-                        let buf = bytes.to_vec();
-                        let decoded: Value = content::codec::ActiveCodec::Cbor
-                            .decode(&buf)
-                            .unwrap_or(Value::Null);
-                        let ctx = ctx.clone();
-                        let id = id.clone();
-                        leptos::task::spawn_local(async move {
-                            ctx.send(ev, Some(id), decoded).await;
-                        });
-                    }
-                },
-            );
-            let _ = js_sys::Reflect::set(&host, &JsValue::from_str("send"), cb.as_ref());
-            // cb 不 drop（closure 转成 JS 函数后被模块持有，泄漏归模块生命周期管）
-            cb.into_js_value(); // 让所有权交给 JS，宿主不再 retain
-
-            // 动态 import(url)。任何契约失败 = warn + 空容器（fail-loud，不猜）。
-            let module = match import_module(&url).await {
-                Some(m) => m,
-                None => {
-                    tracing::warn!("module host {id}: import {url:?} failed");
-                    el.remove_attribute("data-module-mounted").ok();
-                    return;
-                }
-            };
-            let names = ["mount", "update", "resize", "unmount"];
-            let mut contract: [Option<js_sys::Function>; 4] = [None, None, None, None];
-            for (slot, name) in contract.iter_mut().zip(names) {
-                *slot = js_sys::Reflect::get(&module, &JsValue::from_str(name))
-                    .ok()
-                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok());
+        // ADR 0007 的 import + mount 归**首次非空载荷**触发，不挂在 on_load 上
+        // （2026-10-14 用户裁决：组件的库要"用到才加载"——一个绑了槽、数据还
+        // 没到位的 canvas 不许先把 three.js / G2 / wasm 拉下来）。ADR 0012 的
+        // "空载荷不占位"因此从容器样式延伸到模块加载：空载荷 = 零 import。
+        // 本 Effect 是唯一的挂载发起者：读槽 → 同步占位样式 → 载荷非空且宿主
+        // 上还没有挂载标记 → import + mount；之后的变化走既有 update 腿。
+        // 挂载标记仍是唯一状态源，所以 rebuild 重跑 on_load 装出来的第二个
+        // 看守不会重复发起。
+        let el_w = el.clone();
+        let id_w = el_id.clone();
+        let url_w = url.clone();
+        let ctx_w = ctx2.clone();
+        let source_w = source.clone();
+        let payload_w = Rc::clone(&payload);
+        let style_w = style_w.clone();
+        Effect::new(move |_| {
+            if let Some(src) = &source_w {
+                let _ = ctx_w.slot_for_data(src).get();
             }
-            let [Some(mount), Some(update), Some(resize), Some(unmount)] = contract else {
-                tracing::warn!("module host {id}: module {url:?} misses contract exports");
-                el.remove_attribute("data-module-mounted").ok();
-                return;
-            };
-
-            // mount(el, data, host) → ctx id（同步或 Promise<ctx>）
-            let args = js_sys::Array::new();
-            args.push(&JsValue::from(el.clone()));
-            args.push(&data0.into());
-            args.push(&JsValue::from(host));
-            let ret = match js_sys::Reflect::apply(&mount, &JsValue::UNDEFINED, &args) {
-                Ok(r) => r,
-                Err(e) => {
-                    tracing::warn!("module host {id}: mount threw: {e:?}");
-                    el.remove_attribute("data-module-mounted").ok();
-                    return;
-                }
-            };
-            let cid: JsValue = if let Ok(p) = ret.clone().dyn_into::<js_sys::Promise>() {
-                match wasm_bindgen_futures::JsFuture::from(p).await {
-                    Ok(v) => v,
-                    Err(e) => {
-                        tracing::warn!("module host {id}: mount rejected: {e:?}");
-                        el.remove_attribute("data-module-mounted").ok();
-                        return;
-                    }
-                }
+            let p = payload_w();
+            // ADR 0012：占位随载荷生效——空载荷收起容器，非空写回节点尺寸。
+            // 每次运行都写（幂等）。撑开不重挂：尺寸就位后由模块自己的
+            // ResizeObserver → resize() 接手，import 不重跑、GL 上下文不丢。
+            let want = if payload_is_empty(&p) {
+                HIDDEN_STYLE.to_string()
             } else {
-                ret
+                style_w.clone()
             };
-            // 挂载真正成功后才置 "true"（护栏只认它）；此前是 "pending" ——
-            // 进行中的挂载不会被 rebuild 触发的 on_load 重复发起。
-            el.set_attribute("data-module-mounted", "true").ok();
-
-            // 数据区变化 → update(cid, cbor)：Effect 订阅源槽，比对载荷。
-            {
-                // 基线 = 挂载时推给模块的那份，不是此刻重读的槽值（见上）。
-                let mut last = mounted_payload;
-                let cid = cid.clone();
-                let update = update.clone();
-                let id = id.clone();
-                let ctx = ctx2.clone();
-                let src = source0.clone();
-                let el_eff = el.clone();
-                Effect::new(move |_| {
-                    if let Some(src) = &src {
-                        let _ = ctx.slot_for_data(src).get();
-                    }
-                    let p = payload0();
-                    // ADR 0012：占位随载荷生效——空载荷收起容器，非空写回节点
-                    // 尺寸（`size_style`）。每次运行都写（幂等）：载荷若在挂载
-                    // 完成前就到了，构建那一刻的值还是"空"，而这一跑同时是
-                    // p == last 的情形（进不了下面的 update 分支），它是唯一的
-                    // 同步机会。撑开本身不重挂——尺寸变化由模块自己的
-                    // ResizeObserver → resize() 接手。
-                    let want = if payload_is_empty(&p) {
-                        HIDDEN_STYLE.to_string()
-                    } else {
-                        size_style.clone()
-                    };
-                    el_eff.set_attribute("style", &want).ok();
-                    if p != last {
-                        let d = encode(&p);
-                        last = p;
-                        let a = js_sys::Array::new();
-                        a.push(&cid);
-                        a.push(&d.into());
-                        if let Err(e) = js_sys::Reflect::apply(&update, &JsValue::UNDEFINED, &a) {
-                            tracing::warn!("module host {id}: update threw: {e:?}");
-                        }
-                    }
-                });
+            el_w.set_attribute("style", &want).ok();
+            if payload_is_empty(&p) || el_w.get_attribute("data-module-mounted").is_some() {
+                return;
             }
+            let el = el_w.clone();
+            let id = id_w.clone();
+            let url = url_w.clone();
+            let ctx2 = ctx_w.clone();
+            let source0 = source_w.clone();
+            let payload0 = Rc::clone(&payload_w);
+            let size_style = size_style.clone();
+            el.set_attribute("data-module-mounted", "pending")
+                .expect("set mounted marker");
+            // mount 真正推给模块的载荷 = 触发挂载的那份，也必须是下面 update 的
+            // 基线：不能到那一步再重新读一次槽——槽写入若落在 import/mount 这个
+            // 窗口里（append 行与 set 载荷背靠背发出就是常态），重读会把新值当成
+            // 基线，Effect 判定"没变化"→ update 永不触发 → 模块停在挂载时的空
+            // spec 上。症状：宿主标了 mounted、canvas 在，资产却一个都不请求
+            // （本地 wasm 模块的 import 窗口被写者间隔掩盖，CDN 模块必现）。
+            let mounted_payload = p;
+            leptos::task::spawn_local(async move {
+                // 初始数据（CBOR 字节）——mount 的 data 参数
+                let data0 = encode(&mounted_payload);
 
-            // 尺寸归宿主：ResizeObserver 观察容器（css 像素）→ resize(cid, w, h)。
-            // dpr 换算与 canvas.width 设置归模块（见各 index.js）。
-            {
-                let cid_ro = cid.clone();
-                let cb = Closure::<dyn FnMut(js_sys::Array, JsValue)>::new(
+                // 宿主通道：host.send(event, cborBytes) → 现有动作帧上行。
+                // 闭包持 Rc<Ctx> + id，事件名与解码后的 JSON 一起交给
+                // ctx.send（与表单 submit 同一条 uplink）。
+                let host = js_sys::Object::new();
+                let cb = Closure::<dyn FnMut(String, js_sys::Uint8Array)>::new(
                     {
-                        let resize = resize.clone();
+                        let ctx = ctx2.clone();
                         let id = id.clone();
-                        move |entries: js_sys::Array, _obs: JsValue| {
-                            let e = js_sys::Reflect::get(&entries, &JsValue::from(0))
-                                .ok()
-                                .unwrap_or(JsValue::UNDEFINED);
-                            let rect = js_sys::Reflect::get(&e, &JsValue::from_str("contentRect"))
-                                .ok()
-                                .unwrap_or(JsValue::UNDEFINED);
-                            let num = |k: &str| {
-                                js_sys::Reflect::get(&rect, &JsValue::from_str(k))
-                                    .ok()
-                                    .and_then(|v| v.as_f64())
-                                    .unwrap_or(0.0)
-                            };
-                            let a = js_sys::Array::new();
-                            a.push(&cid_ro);
-                            a.push(&JsValue::from(num("width")));
-                            a.push(&JsValue::from(num("height")));
-                            if let Err(err) =
-                                js_sys::Reflect::apply(&resize, &JsValue::UNDEFINED, &a)
-                            {
-                                tracing::warn!("module host {id}: resize threw: {err:?}");
-                            }
+                        move |ev: String, bytes: js_sys::Uint8Array| {
+                            let buf = bytes.to_vec();
+                            let decoded: Value = content::codec::ActiveCodec::Cbor
+                                .decode(&buf)
+                                .unwrap_or(Value::Null);
+                            let ctx = ctx.clone();
+                            let id = id.clone();
+                            leptos::task::spawn_local(async move {
+                                ctx.send(ev, Some(id), decoded).await;
+                            });
                         }
                     },
                 );
-                let ro = web_sys::ResizeObserver::new(cb.as_ref().unchecked_ref());
-                // ro 若不可用（旧浏览器）只是不转发尺寸，不影响挂载
-                if let Ok(ro) = ro {
-                    ro.observe(&el);
-                    cb.forget(); // observer 长期持有 callback
-                    let unmount = unmount.clone();
-                    let ro_disconnect = ro.clone();
-                    on_cleanup(move || {
-                        ro_disconnect.disconnect();
-                        let a = js_sys::Array::new();
-                        a.push(&cid);
-                        let _ = js_sys::Reflect::apply(&unmount, &JsValue::UNDEFINED, &a);
-                    });
+                let _ = js_sys::Reflect::set(&host, &JsValue::from_str("send"), cb.as_ref());
+                // cb 不 drop（closure 转成 JS 函数后被模块持有，泄漏归模块生命周期管）
+                cb.into_js_value(); // 让所有权交给 JS，宿主不再 retain
+
+                // 动态 import(url)。任何契约失败 = warn + 空容器（fail-loud，不猜）。
+                let module = match import_module(&url).await {
+                    Some(m) => m,
+                    None => {
+                        tracing::warn!("module host {id}: import {url:?} failed");
+                        el.remove_attribute("data-module-mounted").ok();
+                        return;
+                    }
+                };
+                let names = ["mount", "update", "resize", "unmount"];
+                let mut contract: [Option<js_sys::Function>; 4] = [None, None, None, None];
+                for (slot, name) in contract.iter_mut().zip(names) {
+                    *slot = js_sys::Reflect::get(&module, &JsValue::from_str(name))
+                        .ok()
+                        .and_then(|v| v.dyn_into::<js_sys::Function>().ok());
+                }
+                let [Some(mount), Some(update), Some(resize), Some(unmount)] = contract else {
+                    tracing::warn!("module host {id}: module {url:?} misses contract exports");
+                    el.remove_attribute("data-module-mounted").ok();
+                    return;
+                };
+
+                // mount(el, data, host) → ctx id（同步或 Promise<ctx>）
+                let args = js_sys::Array::new();
+                args.push(&JsValue::from(el.clone()));
+                args.push(&data0.into());
+                args.push(&JsValue::from(host));
+                let ret = match js_sys::Reflect::apply(&mount, &JsValue::UNDEFINED, &args) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tracing::warn!("module host {id}: mount threw: {e:?}");
+                        el.remove_attribute("data-module-mounted").ok();
+                        return;
+                    }
+                };
+                let cid: JsValue = if let Ok(p) = ret.clone().dyn_into::<js_sys::Promise>() {
+                    match wasm_bindgen_futures::JsFuture::from(p).await {
+                        Ok(v) => v,
+                        Err(e) => {
+                            tracing::warn!("module host {id}: mount rejected: {e:?}");
+                            el.remove_attribute("data-module-mounted").ok();
+                            return;
+                        }
+                    }
                 } else {
-                    let unmount = unmount.clone();
-                    on_cleanup(move || {
-                        let a = js_sys::Array::new();
-                        a.push(&cid);
-                        let _ = js_sys::Reflect::apply(&unmount, &JsValue::UNDEFINED, &a);
+                    ret
+                };
+                // 挂载真正成功后才置 "true"（护栏只认它）；此前是 "pending" ——
+                // 进行中的挂载不会被 rebuild 触发的 on_load 重复发起。
+                el.set_attribute("data-module-mounted", "true").ok();
+
+                // 数据区变化 → update(cid, cbor)：Effect 订阅源槽，比对载荷。
+                {
+                    // 基线 = 挂载时推给模块的那份，不是此刻重读的槽值（见上）。
+                    let mut last = mounted_payload;
+                    let cid = cid.clone();
+                    let update = update.clone();
+                    let id = id.clone();
+                    let ctx = ctx2.clone();
+                    let src = source0.clone();
+                    let el_eff = el.clone();
+                    Effect::new(move |_| {
+                        if let Some(src) = &src {
+                            let _ = ctx.slot_for_data(src).get();
+                        }
+                        let p = payload0();
+                        // ADR 0012：占位随载荷生效——空载荷收起容器，非空写回节点
+                        // 尺寸（`size_style`）。每次运行都写（幂等）：载荷若在挂载
+                        // 完成前就到了，构建那一刻的值还是"空"，而这一跑同时是
+                        // p == last 的情形（进不了下面的 update 分支），它是唯一的
+                        // 同步机会。撑开本身不重挂——尺寸变化由模块自己的
+                        // ResizeObserver → resize() 接手。
+                        let want = if payload_is_empty(&p) {
+                            HIDDEN_STYLE.to_string()
+                        } else {
+                            size_style.clone()
+                        };
+                        el_eff.set_attribute("style", &want).ok();
+                        if p != last {
+                            let d = encode(&p);
+                            last = p;
+                            let a = js_sys::Array::new();
+                            a.push(&cid);
+                            a.push(&d.into());
+                            if let Err(e) = js_sys::Reflect::apply(&update, &JsValue::UNDEFINED, &a) {
+                                tracing::warn!("module host {id}: update threw: {e:?}");
+                            }
+                        }
                     });
                 }
-            }
+
+                // 尺寸归宿主：ResizeObserver 观察容器（css 像素）→ resize(cid, w, h)。
+                // dpr 换算与 canvas.width 设置归模块（见各 index.js）。
+                {
+                    let cid_ro = cid.clone();
+                    let cb = Closure::<dyn FnMut(js_sys::Array, JsValue)>::new(
+                        {
+                            let resize = resize.clone();
+                            let id = id.clone();
+                            move |entries: js_sys::Array, _obs: JsValue| {
+                                let e = js_sys::Reflect::get(&entries, &JsValue::from(0))
+                                    .ok()
+                                    .unwrap_or(JsValue::UNDEFINED);
+                                let rect = js_sys::Reflect::get(&e, &JsValue::from_str("contentRect"))
+                                    .ok()
+                                    .unwrap_or(JsValue::UNDEFINED);
+                                let num = |k: &str| {
+                                    js_sys::Reflect::get(&rect, &JsValue::from_str(k))
+                                        .ok()
+                                        .and_then(|v| v.as_f64())
+                                        .unwrap_or(0.0)
+                                };
+                                let a = js_sys::Array::new();
+                                a.push(&cid_ro);
+                                a.push(&JsValue::from(num("width")));
+                                a.push(&JsValue::from(num("height")));
+                                if let Err(err) =
+                                    js_sys::Reflect::apply(&resize, &JsValue::UNDEFINED, &a)
+                                {
+                                    tracing::warn!("module host {id}: resize threw: {err:?}");
+                                }
+                            }
+                        },
+                    );
+                    let ro = web_sys::ResizeObserver::new(cb.as_ref().unchecked_ref());
+                    // ro 若不可用（旧浏览器）只是不转发尺寸，不影响挂载
+                    if let Ok(ro) = ro {
+                        ro.observe(&el);
+                        cb.forget(); // observer 长期持有 callback
+                        let unmount = unmount.clone();
+                        let ro_disconnect = ro.clone();
+                        on_cleanup(move || {
+                            ro_disconnect.disconnect();
+                            let a = js_sys::Array::new();
+                            a.push(&cid);
+                            let _ = js_sys::Reflect::apply(&unmount, &JsValue::UNDEFINED, &a);
+                        });
+                    } else {
+                        let unmount = unmount.clone();
+                        on_cleanup(move || {
+                            let a = js_sys::Array::new();
+                            a.push(&cid);
+                            let _ = js_sys::Reflect::apply(&unmount, &JsValue::UNDEFINED, &a);
+                        });
+                    }
+                }
+            });
         });
     });
 
