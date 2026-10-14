@@ -88,7 +88,9 @@ url 指向 `/assets/g2chart/index.js`（`Chart { url }` 字段可覆盖，
 - ApexCharts 的 spec 形态 chart 载荷：全仓示例（08.apexchart.yaml）
   改写为 G2 spec；`assets/apexcharts.min.js`/`.css` 与 index.html 的
   全局 script 标签删除。08.chart.yaml（通用形态）保留为 e2e 驱动帧。
-- mermaid 不在本 ADR（diagram 组件的同类整改将来同通道进行，独立事项）。
+- mermaid 不在本 ADR（diagram 组件的同类整改将来同通道进行，独立事项）——**2026-10-14
+  结案**：mermaid 是 UMD 全局、走不了本 ADR 的模块通道，改为 diagram 首次挂载时按需注入
+  `script`（index.html 的预加载退役，形状同 g2chart 模块的 `ensureG2`），见 ADR 0015。
 
 ## 后果
 

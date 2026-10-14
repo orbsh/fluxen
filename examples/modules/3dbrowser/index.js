@@ -5,9 +5,13 @@
 // wasm-bindgen glue（./browser3d.js，同目录）内部加载。
 import init, * as wasm from "./browser3d.js";
 
-const runtime = init(); // 首次挂载时下载/实例化 wasm；重复调用共享同一 Promise
+// wasm 到首次 mount() 才下载/实例化：模块顶层的 init() 会让"本文件被 import"
+// 直接等于"拉 wasm 字节"，与"用到才加载"相悖（2026-10-14）。宿主已把 import
+// 推迟到载荷非空，这里再收一道。重复调用共享同一 Promise。
+let runtime = null;
 
 async function ensure() {
+  if (!runtime) runtime = init();
   await runtime;
 }
 
