@@ -13,3 +13,8 @@ crates/ui_leptos/assets/3dbrowser/
 crates/ui_leptos/assets/g2chart/
 *.glb
 *.ksplat
+# Editor 封装模块 + Monaco AMD 子集（ADR 0016）：封装模块从 crates/ui_leptos/modules/editor
+# 拷入；Monaco 取自 npm tarball（版本固定 0.55.1 的 package/min/vs，原样——worker 的
+# 内容哈希名被 editor.main.js 写死，不能改名），不入 git
+crates/ui_leptos/assets/editor/
+crates/ui_leptos/assets/monaco/

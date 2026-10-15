@@ -15,11 +15,14 @@ Steps (each waits for one Enter; --auto runs unattended, --delay paces the text)
   9  append the review table + form into the row's rack -> the form appears
  10  TYPE the car paragraph, then set the splat payload
  11  TYPE the shoe paragraph, then set the shoe payload
+ 12  TYPE the code-review paragraph, then set the editor's {code, lang} payload
+     (Monaco is pulled at THAT moment — ADR 0015) and press Ctrl/Cmd+S to watch
+     the uplink land on the stage console
 
 The box in child order (what the reader watches fill in):
 
     intro text | line chart | radar group | summary text | review form |
-    car text | splat canvas | shoe text | shoe canvas
+    car text | splat canvas | shoe text | shoe canvas | patch text | code editor
 
 Frames go to the mirror's POST /send, so no WS handshake is needed and the stage
 console echoes each one. The typewriter is a per-token PATCH stream (3 chars per
@@ -48,10 +51,17 @@ Implementation choices worth naming:
   comes — an empty rack renders nothing and takes no space.
 - Models land AFTER the paragraph above them; the trend keeps growing one day per
   frame (the walkthrough's original "chart grows" beat).
+- The code editor is a module host like the canvases: it is in the row from the
+  start, bound to its own slot, so it costs ZERO requests until the code payload
+  lands (ADR 0015) — Monaco is ~4.5 MB and must never ride the page load. Its save
+  is Ctrl/Cmd+S in the editor, which uplinks `{code, lang}` over the same leg the
+  review form submits through (ADR 0016).
 
-Prerequisites: crates/ui_leptos/assets/3dbrowser/ (with MaterialsVariantsShoe.glb)
-and crates/ui_leptos/assets/splatviewer/ (with truck.ksplat). Run from the repo
-root (paths below are relative to it).
+Prerequisites: crates/ui_leptos/assets/3dbrowser/ (with MaterialsVariantsShoe.glb),
+crates/ui_leptos/assets/splatviewer/ (with truck.ksplat), crates/ui_leptos/assets/editor/
+and crates/ui_leptos/assets/monaco/ (the editor wrapper + Monaco's AMD subset; recipes
+in crates/ui_leptos/modules/editor/index.js and the Dockerfile).
+Run from the repo root (paths below are relative to it).
 
 Usage:
   python3 examples/walkthrough.py [--host 127.0.0.1] [--port 3002] [--auto]
@@ -73,8 +83,10 @@ REVIEW = "review"              # data slot: the rack the review form is appended
 ANALYTICS = "analytics_intro"  # data slot: the opening paragraph
 SAY_CAR = "say_car"            # data slot: the splat paragraph
 SAY_SHOE = "say_shoe"          # data slot: the shoe paragraph
+SAY_PATCH = "say_patch"        # data slot: the code-review paragraph
 CAR_SLOT = "intro_car"         # data slot: the splat scene's payload
 SHOE_SLOT = "intro_shoe"       # data slot: the mesh model's payload
+CODE_SLOT = "patch_code"       # data slot: the editor's payload {code, lang}
 
 TREND_DATA = "/bind/value/default/data"     # pointer into the trend slot node
 TEXT_VALUE = "/bind/value/default"          # pointer into a text slot node
@@ -89,6 +101,15 @@ TRUCK_URL = "/assets/splatviewer/truck.ksplat"
 # data area takes no space (ADR 0012), so the area appears with its payload.
 SPLAT_SIZE = ("720px", "460px")
 SHOE_SIZE = ("640px", "420px")
+
+# The editor area (ADR 0016). An editor is a module host with a definite size like a
+# canvas, and its payload is {code, lang} — "the code as a parameter".
+CODE_SIZE = ("100%", "280px")
+PATCH_CODE = """pub fn render(nodes: &[Node]) -> Frame {
+    // 改两笔再按 Ctrl/Cmd+S：整段代码连同语言 id 会从同一条上行通道回上去
+    nodes.iter().map(Node::draw).collect()
+}
+"""
 
 # The two chart bands. A chart is sized by its container (ADR 0009), so the band
 # is a borderless container with a definite track height given through `attrs.grid`
@@ -144,6 +165,12 @@ SHOE_TEXT = """换一件小的。这两件东西的共同点是——都不是�
 
 下面就是这个模型：左键拖动绕它转一圈，看侧墙的支撑结构和鞋底的纹路；右键拖动是平移，滚轮缩放。"""
 
+PATCH_TEXT = """最后一步换个方向：前面都在"看"，这一段是"改"。下面这块编辑器是 Monaco——VS Code 用的那个编辑器内核。代码不是嵌在页面里的：它和上面两件商品一样是随消息下来的一个参数，写进数据槽，编辑器订阅这个槽。
+
+这意味着两件事。一是库的下载由载荷到达决定——编辑器这一段文字先到，Monaco 那四点几兆的库要等代码真的送上来才拉，所以"消息里有编辑器"不等于"首屏多下四兆"。二是上行同一条腿：改两笔、按 Ctrl/Cmd+S，整段代码连同语言 id 会沿复核表提交走的那条通道回给生产者，生产者据此回写文件或发起评审。
+
+试着改一行——比如把 collect() 换成别的东西——然后按 Ctrl/Cmd+S，看 stage 控制台的 `<-` 块。"""
+
 
 def text_node(slot):
     """A paragraph subscribing to a data slot. Bubble styling comes from the chat
@@ -183,6 +210,17 @@ def canvas_node(url, slot, width, height):
     }
 
 
+def editor_node(node_id, slot, width, height):
+    """A code editor bound to a data slot (ADR 0016). Same module-host contract as a
+    canvas; what the module renders is Monaco, and the payload is `{code, lang}`."""
+    return {
+        "type": "editor",
+        "id": node_id,
+        "attrs": {"width": width, "height": height},
+        "bind": {"value": {"kind": "source", "source": slot}},
+    }
+
+
 def frame_message():
     """The whole demo as ONE chat row: the nine children, in reading order."""
     return {
@@ -208,6 +246,8 @@ def frame_message():
                 canvas_node(SPLAT_URL, CAR_SLOT, *SPLAT_SIZE),
                 text_node(SAY_SHOE),
                 canvas_node(THREED_URL, SHOE_SLOT, *SHOE_SIZE),
+                text_node(SAY_PATCH),
+                editor_node("patch-editor", CODE_SLOT, *CODE_SIZE),
             ],
         },
     }
@@ -391,9 +431,9 @@ def main():
     step.wait("inject `page` = chat——远程把当前页切到 chat（vals 平面写入）")
     print(f"    send → {send_json(mirror, {'action': 'inject', 'slot': 'page', 'data': 'chat'})}")
 
-    step.wait("整条消息入场（一个 box：引言 / 折线 / 雷达 / 摘要 / 复核表 / 车 / 鞋，全部绑槽）")
+    step.wait("整条消息入场（一个 box：引言 / 折线 / 雷达 / 摘要 / 复核表 / 车 / 鞋 / 编辑器，全部绑槽）")
     print(f"    append row → {send_json(mirror, frame_message())}")
-    for slot in (ANALYTICS, SUMMARY, SAY_CAR, SAY_SHOE):
+    for slot in (ANALYTICS, SUMMARY, SAY_CAR, SAY_SHOE, SAY_PATCH):
         print(f"    seed slot  → {send_json(mirror, frame_seed_text(slot))}")
 
     step.wait("打字机：分析引言")
@@ -434,7 +474,18 @@ def main():
         f"    set payload → {send_json(mirror, frame_set_payload(SHOE_SLOT, {'assets': {'shoe': SHOE_URL}}))}"
     )
 
-    print("\n完成。一个 box 里引言/图表/摘要/复核表/两件商品依次到位；折线 30 天，复核表可提交。")
+    step.wait("打字机：待审的那段代码的说明")
+    type_out(mirror, SAY_PATCH, PATCH_TEXT, delay, "代码说明")
+
+    step.wait("编辑器入场（代码作为参数写进槽；Monaco 在载荷到达时才拉——ADR 0015）")
+    print(
+        "    set payload → "
+        f"{send_json(mirror, frame_set_payload(CODE_SLOT, {'code': PATCH_CODE, 'lang': 'rust'}))}"
+    )
+
+    step.wait("在编辑器里改两笔、按 Ctrl/Cmd+S：stage 控制台出现 `<-` submit + 本节点 id + {code, lang}")
+
+    print("\n完成。一个 box 里引言/图表/摘要/复核表/两件商品/编辑器依次到位；折线 30 天，复核表可提交，编辑器可回传代码。")
 
 
 if __name__ == "__main__":

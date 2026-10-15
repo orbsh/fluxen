@@ -1,6 +1,6 @@
 use crate::Ctx;
 use accrete::classify::Classify;
-use accrete::{AccreteOps, Canvas, Chart};
+use accrete::{AccreteOps, Canvas, Chart, Editor};
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::Value;
@@ -44,6 +44,25 @@ pub fn chart_(accrete: Chart, ctx: &Ctx, id: String) -> AnyView {
         .unwrap_or_default();
     let (source, inline) = bind_value(&accrete);
     mount_module(&id, &accrete.url, String::new(), css, source, inline, ctx)
+}
+
+/// 代码编辑器（ADR 0016）：载荷 = `{code, lang?, event?}`（"代码作为参数"），
+/// 渲染器 = url 指向的封装模块（默认 /assets/editor/index.js）。尺寸族与
+/// canvas 同（编辑器必须有确定高度），挂载走同一条 mount_module 通道——
+/// 库（Monaco）由模块自己在 mount() 里拉（ADR 0015）。
+pub fn editor_(accrete: Editor, ctx: &Ctx, id: String) -> AnyView {
+    let style = accrete
+        .attrs
+        .as_ref()
+        .map(|a| a.size_style())
+        .unwrap_or_default();
+    let css = accrete
+        .attrs
+        .as_ref()
+        .and_then(|a| a.get_class().clone().map(|c| c.join(" ")))
+        .unwrap_or_default();
+    let (source, inline) = bind_value(&accrete);
+    mount_module(&id, &accrete.url, style, css, source, inline, ctx)
 }
 
 /// `bind["value"]` → (source 槽名, inline default)。

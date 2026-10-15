@@ -13,3 +13,5 @@ README*.md
 **/*.ksplat
 **/*.glb
 crates/ui_leptos/assets/g2chart/
+crates/ui_leptos/assets/editor/
+crates/ui_leptos/assets/monaco/

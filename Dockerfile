@@ -31,7 +31,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY examples/modules ./examples/modules
 
-# Four build inputs the repo does not carry — all gitignored (media addresses in
+# Five build inputs the repo does not carry — all gitignored (media addresses in
 # assets/*/README.md, module recipes in the Cargo.toml / module headers):
 #
 #  * the glTF models the examples point at (`/assets/3dbrowser/*.glb`), taken
@@ -40,13 +40,15 @@ COPY examples/modules ./examples/modules
 #  * the 3dbrowser module (wasm + bindgen glue + index.js), built here rather
 #    than shipped as an artifact;
 #  * the g2chart module's deployed copy plus its runtime library g2.min.js;
+#  * the editor module's deployed copy plus Monaco's AMD subset (npm tarball,
+#    version + sha1 pinned);
 #  * the truck splat scene, served from this repo's own `assets` release — the
 #    scene's upstream home is a 590 MB zip, so the 29 MB file is mirrored there.
 #
 # `trunk build` then copies crates/ui_leptos/assets/** into the served dist
-# (index.html: `<link data-trunk rel="copy-dir" href="/assets">`), so all four
+# (index.html: `<link data-trunk rel="copy-dir" href="/assets">`), so all five
 # must land before that step. The second splat scene (bonsai) is NOT fetched: a
-# container serves the mesh, chart and truck demos and leaves
+# container serves the mesh, chart, editor and truck demos and leaves
 # /assets/splatviewer/bonsai.ksplat absent.
 ARG GLTF_SAMPLE_ASSETS_COMMIT=edc7c9e67c639d230715049ee31f9a96a6babbbe
 # The mkdir is load-bearing: assets/3dbrowser/ is gitignored as a whole
@@ -83,6 +85,39 @@ RUN mkdir -p crates/ui_leptos/assets/g2chart \
     && curl -fsSL "https://unpkg.com/@antv/g2@${G2_VERSION}/dist/g2.min.js" \
          -o crates/ui_leptos/assets/g2chart/g2.min.js \
     && echo "7e7d346cab68c002a889dc6145bfc1f9ae1391be82ce8d514fb106ef3a6e6412  crates/ui_leptos/assets/g2chart/g2.min.js" | sha256sum -c -
+
+# The editor module's runtime (ADR 0016): the wrapper is tracked source
+# (crates/ui_leptos/modules/editor/) — only its deployed copy is gitignored —
+# and Monaco's AMD subset is unpacked from the pinned npm tarball, sha1-checked
+# like every other upstream input here. min/vs is copied VERBATIM: editor.main.js
+# and the *Mode chunks hard-code the worker files' content-hashed names
+# (assets/editor.worker-<hash>.js etc.), so renaming or re-hashing anything
+# breaks worker resolution at runtime. Same recipe as the module header's.
+# The four language-service workers (css/html/json/ts = 9.12 MB of the 15.7 MB)
+# are then deleted per ADR 0016 decision 5 — they are only fetched for
+# IntelliSense in those four languages, the review surface needs the tokenizer
+# highlight (basic-languages, no worker), and this prune is what keeps the image
+# at ≈6.3 MB; editor.worker stays. The prune is asserted (exactly one worker file
+# left) so a glob that stops matching — a monaco bump renaming the hashes —
+# fails the build instead of silently shipping the 9 MB again.
+ENV MONACO_VERSION=0.55.1
+ENV MONACO_SHA1=e74c6fe5a6bf985b817d2de3eb88d56afc494a1b
+RUN mkdir -p crates/ui_leptos/assets/editor crates/ui_leptos/assets/monaco \
+    && cp crates/ui_leptos/modules/editor/index.js \
+          crates/ui_leptos/modules/editor/cbor.js \
+          crates/ui_leptos/assets/editor/ \
+    && curl -fsSL \
+         "https://registry.npmjs.org/monaco-editor/-/monaco-editor-${MONACO_VERSION}.tgz" \
+         -o /tmp/monaco.tgz \
+    && echo "${MONACO_SHA1}  /tmp/monaco.tgz" | sha1sum -c - \
+    && tar -xzf /tmp/monaco.tgz -C /tmp \
+    && cp -r /tmp/package/min/vs crates/ui_leptos/assets/monaco/vs \
+    && rm -f crates/ui_leptos/assets/monaco/vs/assets/css.worker-*.js \
+             crates/ui_leptos/assets/monaco/vs/assets/html.worker-*.js \
+             crates/ui_leptos/assets/monaco/vs/assets/json.worker-*.js \
+             crates/ui_leptos/assets/monaco/vs/assets/ts.worker-*.js \
+    && test "$(ls crates/ui_leptos/assets/monaco/vs/assets/*.worker-*.js | wc -l)" = 1 \
+    && rm -rf /tmp/monaco.tgz /tmp/package
 
 # The truck scene, mirrored in this repo's own `assets` release (why: the scene's
 # upstream home is a 590 MB multi-scene zip — see assets/splatviewer/README.md).

@@ -1,0 +1,55 @@
+# 代码编辑器示例（ADR 0016）：Monaco 走模块通道（ADR 0007），库在 mount() 里才拉
+# （ADR 0015），保存 = 编辑器里 Ctrl/Cmd+S → 上行 `{code, lang}`（与表单 submit 同腿）。
+# 前置：封装模块在 crates/ui_leptos/assets/editor/（纯 JS，无构建，配方见
+# crates/ui_leptos/modules/editor/index.js 头注释），Monaco 的 AMD 子集在
+# crates/ui_leptos/assets/monaco/vs/（同理，两者都是 gitignore 的构建产物）；
+# 布局侧先发 00.main.yaml + 00.chat.yaml。
+#
+# 两条形态各一个，演示同一契约的两种数据来源：
+#   1. inline 载荷（"代码作为参数"）——数据区原样就是 {code, lang}，节点只带尺寸；
+#   2. 绑槽（kind: source）——编辑器先不占位、也不 import（ADR 0012/0015）：
+#      下面那条 set 把代码送进槽，编辑器才出现（改稿 / 流式评审的形态）。
+# 保存上行：点进任一编辑器、按 Ctrl+S，stage 控制台的 `<-` 块会打印
+# event: submit + 该节点 id + {code, lang}。
+- action: append
+  event: chat
+  data:
+    type: editor
+    id: patch-inline
+    attrs:
+      width: 100%
+      height: 320px
+    bind:
+      value:
+        kind: default
+        default:
+          code: |
+            fn main() {
+                println!("hello, accrete");
+            }
+          lang: rust
+- action: append
+  event: chat
+  data:
+    type: editor
+    id: patch-staged
+    attrs:
+      width: 100%
+      height: 240px
+    bind:
+      value:
+        kind: source
+        source: staged_code
+# 槽里的载荷形状与 inline 完全一致（宿主取槽节点的 bind.value.default 原样推给模块）。
+- action: set
+  event: staged_code
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          code: |
+            def accrete(*parts):
+                return sum(parts)
+          lang: python
