@@ -265,6 +265,37 @@ pub fn default_chart_url() -> String {
     "/assets/g2chart/index.js".to_string()
 }
 
+/// 代码编辑器封装模块的默认地址（ADR 0016）。Monaco 的 AMD 子集装在
+/// `assets/monaco/vs/**`，封装模块在 `assets/editor/`——两者都是同一档
+/// 「版本固定的静态资产」；换 CDN 时显式覆盖本字段。
+pub fn default_editor_url() -> String {
+    "/assets/editor/index.js".to_string()
+}
+
+/// 代码编辑器（ADR 0016）。走 ADR 0007 的模块通道——与 Canvas/Chart 同一条
+/// 挂载路径，库（Monaco）在模块 `mount()` 里才拉（ADR 0015）。
+/// 数据区（`bind["value"]`）载荷 = `{code, lang?, event?}`：
+/// - `code`：源码文本（"代码作为参数"）；
+/// - `lang`：Monaco 语言 id（缺省 plaintext）；
+/// - `event`：保存时上行的对事件名（缺省 `submit`）——编辑器自己在 Ctrl/Cmd+S
+///   里 `host.send(event, CBOR({code, lang}))`，与表单 submit 同一条上行腿。
+/// `{}`/Null = 尚无数据 → 不占位（ADR 0012）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+pub struct Editor {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// 封装模块的 ES module 地址（ADR 0007 契约）。默认指向自家静态资产。
+    #[serde(default = "default_editor_url")]
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<SizeAttr>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bind: Option<HashMap<String, Bind>>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
@@ -790,6 +821,8 @@ pub enum Accrete {
     diagram(Diagram),
     #[ui_acrete(has_id = "true")]
     canvas(Canvas),
+    #[ui_acrete(has_id = "true")]
+    editor(Editor),
     float(Float),
     #[ui_acrete(has_id = "true")]
     layer(Layer),

@@ -122,6 +122,39 @@ fn chart_url_has_backward_compatible_default() {
 }
 
 #[test]
+fn editor_url_has_backward_compatible_default() {
+    // ADR 0016: frames without `url` decode onto the vendored wrapper, so a
+    // producer only ever sends the data area.
+    let e: accrete::Editor = serde_json::from_value(json!({
+        "bind": {"value": {"kind": "default", "default": {"code": "fn main() {}", "lang": "rust"}}}
+    }))
+    .unwrap();
+    assert_eq!(e.url, "/assets/editor/index.js");
+    assert_eq!(e.id, None);
+    assert!(e.attrs.is_none());
+    // explicit url wins (swapping renderer/CDN is a frame edit, per ADR 0007)
+    let e2: accrete::Editor =
+        serde_json::from_value(json!({"url": "https://cdn/editor/index.js"})).unwrap();
+    assert_eq!(e2.url, "https://cdn/editor/index.js");
+    // the enum-level wire shape: type tag + has_id variant, empty bind/attrs omitted
+    let a: Accrete = serde_json::from_value(json!({"type": "editor", "id": "ed1"})).unwrap();
+    assert!(matches!(a, Accrete::editor(_)));
+    assert_eq!(a.get_id().as_deref(), Some("ed1"));
+    let back = serde_json::to_value(&a).unwrap();
+    assert_eq!(back["type"], json!("editor"));
+    assert_eq!(back["url"], json!("/assets/editor/index.js"));
+    assert!(back.get("bind").is_none());
+    assert!(back.get("attrs").is_none());
+    // payload shape: the data area IS the payload, verbatim — `{"code": ""}` is a
+    // (non-empty) map, i.e. "an editor with empty code", NOT the no-data-yet value
+    // (`{}`/Null stay that one, ADR 0012); nothing is synthesized from node fields.
+    let b: accrete::Bind =
+        serde_json::from_value(json!({"kind": "default", "default": {"code": "", "lang": "python"}}))
+            .unwrap();
+    assert_eq!(b.default, Some(json!({"code": "", "lang": "python"})));
+}
+
+#[test]
 fn local_roundtrips_through_serde() {
     let a: Accrete = serde_json::from_value(json!({
         "type": "select",

@@ -577,6 +577,78 @@ wire 零变化。
 同屏）里 CDP `Runtime.enable`/`evaluate` 会挂到 socket 超时——读数要重试，socket 超时
 放到 60s。
 
+### 22. editor 组件：Monaco 走模块通道 + 保存上行（ADR 0016）— 代码已落，门槛全绿（2026-10-15）
+
+形态（用户 2026-10-14：「实现 editor 组件（monaco，代码作为参数，保存时发送提交事件）」）：
+新增 `Editor { id, url, attrs: SizeAttr, bind }`（wire tag `editor`，`has_id`），数据区
+`bind["value"]` 载荷 = `{"code": …, "lang": …, "event": …}`（inline default 或 `kind: source`
+槽；`{}`/Null 仍按 ADR 0012 不占位）；渲染走 ADR 0007 模块通道、库在 `mount()` 里才拉
+（ADR 0015）；封装模块 `crates/ui_leptos/modules/editor/index.js` 用 AMD loader 起
+vendored 的 Monaco，绑 Ctrl/Cmd+S → `host.send("submit", CBOR({code, lang}))` 走现有上行
+（与表单 submit 同腿）。宿主侧与 chart 同例：`editor_` 是 `mount_module` 的第三个薄包装。
+
+落地（2026-10-15）：
+- `accrete`：`Editor` 结构 + `default_editor_url()`（`/assets/editor/index.js`）+ 枚举变体
+  `editor`（`has_id`）；`editor_` 在 `crates/ui_leptos/src/components/canvas.rs`，走
+  `bind_value` + `mount_module`，与 `canvas_` 只差三类入参。
+- 封装模块 `crates/ui_leptos/modules/editor/{index.js,cbor.js}`（部署拷贝进 gitignore 的
+  `assets/editor/`）：AMD loader 注入与 `require(["vs/editor/editor.main"])` 都在 `mount()`
+  里（模块被 import ≠ Monaco 被下载）；Monaco 根按 `import.meta.url` 解析（g2chart 那条
+  教训同款）；`update()` 的语言切换走 `setModelLanguage`，`code` 只在与"上次收到/上行的那份"
+  不同时才覆盖（同载荷重复投递不抹掉用户正在编的文本）；尺寸归宿主的 ResizeObserver →
+  `resize()`，模块 `automaticLayout: false`（不与宿主重复布局）。
+- Monaco 0.55.1 的 AMD 子集 vendored 在 `assets/monaco/vs/`（gitignore）；Dockerfile 加
+  装配步（`MONACO_VERSION` + `MONACO_SHA1` + `sha1sum -c`），`.dockerignore` 排除本地副本。
+  剪枝口径按实测修正为**只删四个语言服务 worker**（≈ 9.12 MB，见 ADR 0016 决策 5）。
+- 示例 `examples/yaml/18.editor.yaml`：inline 载荷（rust）1 个 + 绑槽（python，set 帧送
+  载荷）1 个，演示同一契约两种数据来源。
+- 帧层测试 `crates/accrete/tests/bind_routing.rs::editor_url_has_backward_compatible_default`：
+  url 缺省 / CDN 覆盖 / 省略 bind 与 attrs / `has_id` / 载荷原样（不做节点字段合成）。
+
+门槛（2026-10-15 第二轮浏览器实测全绿：剪枝后的树 + 全新 `--user-data-dir` 的 headless
+chromium，`editor_e2e3.py` 26/26 PASS）：
+- [x] `cargo test --workspace` 全绿（bind_routing 9/9）；`cargo build --release -p stage`；
+  `cargo build -p ui_leptos --bin ui_leptos --target wasm32-unknown-unknown --release`
+  （4 817 678 B）；`trunk build --release`（dist wasm 2 323 655 B，dist 含
+  `assets/{editor,monaco}`）。
+- [x] 装配件核实：tarball `13 677 219 B` / sha1 `e74c6fe5a6bf985b817d2de3eb88d56afc494a1b`
+  与 ADR 记的一致；解出的 `package/min/vs` 与本地 assets 树 `diff -r` 逐字节相同。
+- [x] 浏览器：无 editor 节点 → 资源表零 `editor/`+`monaco/` 请求；绑槽空载荷 → 宿主
+  `display: none;`、`data-module-mounted` 空、零 import；载荷到达 → 按序 `editor/index.js`
+  → `editor/cbor.js` → `monaco/vs/loader.js` → `editor.main.js` → 四块 `monaco.contribution-*`
+  + `basic-languages/monaco.contribution` → `editor.api-CalNCsUg.js` → `workers-DcJshg-q.js`
+  → `editor.main.css` → `python-Cr0UkIbn.js`；三个宿主按节点尺寸落位（1124×200 / 320 / 240），
+  当轮 dist wasm 是 `ui_leptos-bde477929ffb0b80`（页面资源表核对，不是陈旧构建）。
+  基线读数取自全新 document——承 §21，旧页面上的资源表基线不作数。
+- [x] 交互：三个编辑器各以真 CDP 键事件发 Ctrl+S → 上行帧恰为 `event: submit` + 该节点 id
+  + `{code, lang}`（rust / python 原文），无多余帧。
+- [x] 剪枝后的 lang=ts/css/html/json：高亮仍由 basic-languages 的 monarch 提供（`tokenize`
+  出 `keyword.ts` / `attribute.name.css` / `tag.html` / `string.key.json` 等类型；DOM 里
+  `mtk6`/`mtk14`/`mtk10`/`mtk20` 等着色的 span 各 40/22/27/27 个）。**失败面不在网络层**：
+  四个 worker 由 blob 壳 `workers-DcJshg-q.js` 内部 `importScripts` 拉取，页面资源表与 CDP
+  Network 都是零 404；代价落在错误面——每个剪掉的语言一条
+  `Uncaught NetworkError: … importScripts … failed to load`，加 Monaco 自己的一条
+  `Could not create web worker(s). Falling back to loading web worker code in main thread`
+  警告。语言服务确实不可用：同一份必报错的样本（`const x: number = "bad"`、`colour: red`、
+  `{"a": ,}`）在 worker 在时 ts/css/json 各出 2 条诊断 marker（另有 css 服务的 colorpicker
+  装饰类），剪掉后 6s 内 0 条，而 `getTypeScriptWorker()` 照常 resolve——失败不经 API 暴露，
+  只在 console 里可见。取舍即 ADR 0016 决策 5 所记：评审要的是高亮，诊断与补全放弃。
+- [x] 镜像装配步同口径（2026-10-15）：Dockerfile 的 Monaco RUN 在 `cp -r min/vs` 之后删同样四个
+  worker 并断言「只剩一个 `*.worker-*.js`」（glob 不再命中 = 构建失败，避免哪天 monaco 升级换了
+  哈希名又悄悄装回 9 MB）。无 docker build 的核实：在 scratch 用 `/bin/sh` 重放该 RUN 的尾段
+  （解 tarball → cp → 新 rm+断言）得 15 700 863 → 6 582 698 B、恰剩 `editor.worker-Be8ye1pW.js`，
+  且与仓库本机剪过的 `assets/monaco/vs` `diff -rq` 一致（镜像 dist 与本轮浏览器实测的树同一份）；
+  反向对照：glob 零命中时计数 ≠ 1，断言会拦下构建。（本机树剪枝数同：15 700 863 → 6 582 698 B；
+  还原 = 从 `monaco-editor-0.55.1.tgz` 重新解出 `package/min/vs/assets/*.worker-*.js` 覆盖回去。）
+- [x] `examples/walkthrough.py` 第 12 拍（2026-10-15 落地并实测）：打字机讲代码 → `set patch_code`
+  `{code, lang: rust}` → 编辑器入场 → 提示改两笔按 Ctrl/Cmd+S 看 stage 控制台的 `<-` 提交。
+  浏览器实测（当时 :3002 服务的是 13:54 的 debug trunk 构建，wasm 8 003 004 B）：编辑器最终都挂上
+  了（1124×280、rust 高亮、链路与 `18.editor.yaml` 同序、剪掉的四个 worker 零请求），但**挂载滞后
+  于发送端且幅度不稳**——5 轮里 4 轮在发送端停止后 2–4s 只读到 `data-module-mounted="pending"`
+  （0 个或 4 个请求），其中一轮在 60s 窗口里停在 `editor.main.js` 不再动，随后一分多钟自己补齐；
+  另一轮 2s 就到位。判据因此是"等编辑器真的出现再断言"，不是"发送端结束"（§21 那条教训的第二个
+  实例）。未在 release 构建上复测：重建 release 的 dist 会换掉正在看的 dist，留给下次专门一轮。
+
 ## Resolved
 
 ### A text node's second `.class()` call wiped the first — markdown body text had no typography rule (fixed 2026-10-12)
