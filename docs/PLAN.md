@@ -649,6 +649,20 @@ chromium，`editor_e2e3.py` 26/26 PASS）：
   另一轮 2s 就到位。判据因此是"等编辑器真的出现再断言"，不是"发送端结束"（§21 那条教训的第二个
   实例）。未在 release 构建上复测：重建 release 的 dist 会换掉正在看的 dist，留给下次专门一轮。
 
+### 23. append 的落点参数 position（ADR 0005 的追加）— done 2026-10-16
+
+- `content::AppendOp` 加 `position: i64`（`#[serde(default, skip_serializing_if = "is_zero")]`）；
+  语义连同解析规则落在 `content::append_index`：`0` = 末尾；正数从尾往内数（`+1` = 最后一个之前，
+  `+len` = 头部）；负数从头往内数（`-1` = 头部）；域外拒收，不夹取。方向刻意与"从头部锚定的
+  插入"相反——索引一律从本操作自己的锚定端往内数。
+- `ui_leptos::ctx` 的 append 臂由 `list.push` 改成按落点 `list.insert`，越界 warn 后丢弃该条目；
+  id 唯一性拒收的顺序不变（先查重、再算落点）。
+- 门槛：`cargo test -p content` 新增 4 例（落点表、域外拒收、线上字段写与不写、带位置解码）；
+  `cargo test -p content -p accrete -p stage` 全绿，`cargo check -p ui_leptos` 绿。
+- 起因：reflux 侧收敛操作集——位置插入不单设动作，`insert` 折进 append；需要整段重排时
+  `set` 整体替换列表。schema 导出不受影响：它导的是 `accrete::Accrete` 的**节点**形状，
+  帧信封（ops）从来不在其中（实测两份导出逐字节同长 40 574 B）。
+
 ## Resolved
 
 ### A text node's second `.class()` call wiped the first — markdown body text had no typography rule (fixed 2026-10-12)

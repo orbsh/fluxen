@@ -270,7 +270,18 @@ fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
                         continue;
                     }
                 }
-                list.push(d.clone());
+                // 落点：0 = 末尾；正数从尾往内数（+1 = 最后一个之前）；负数从头往内数
+                // （-1 = 头部）。域外拒收并计数——夹取会把行放到调用方没要求的位置。
+                let Some(spot) = content::append_index(list.len(), x.position) else {
+                    tracing::warn!(
+                        "append rejected: event {:?} has {} rows, position {} is out of range",
+                        x.event,
+                        list.len(),
+                        x.position
+                    );
+                    continue;
+                };
+                list.insert(spot, d.clone());
                 slot.set(Arc::new(list));
             }
             Content::Remove(x) => {

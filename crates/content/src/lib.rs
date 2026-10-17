@@ -100,7 +100,42 @@ pub enum Content<T> {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AppendOp<T> {
     pub event: String,
+    /// 落点（ADR 0005）。0 = 末尾（默认，即追加）；正数从**尾**往内数（+1 = 最后一个之前，
+    /// +len = 头部）；负数从**头**往内数（-1 = 头部）。域外由渲染器拒收，见 `append_index`。
+    ///
+    /// 方向是刻意的：索引一律从本操作自己的锚定端往内数——append 锚在尾，所以正数往头走；
+    /// 从头部锚定的插入与它正负相反。
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub position: i64,
     pub data: T,
+}
+
+/// 省缺即 0（末尾）：位置没有信息时帧里不写这个字段——`position: 0` 是可由缺省推出的冗余。
+fn is_zero(n: &i64) -> bool {
+    *n == 0
+}
+
+/// 一行落在列表的哪个下标：`len` 是当前行数，`position` 是线上那个数。
+///
+/// | position | 落点 |
+/// |---|---|
+/// | `0` | 末尾（追加，默认） |
+/// | `+n`（`1..=len`） | 从尾往内第 n 个位置之前（`+1` = 最后一个之前，`+len` = 头部） |
+/// | `-n`（`1..=len`） | 从头往内第 n 个位置之前（`-1` = 头部，`-len` = 最后一个之前） |
+///
+/// 域外返回 `None`：调用方拒收该操作并计数，**不夹取**——夹取会把行放到调用方没要求的
+/// 位置，那是静默降级。注意它与你熟悉的 `Vec::insert(i)` / `list.insert(i)` 差一位：那里的
+/// `i` 是数组下标，这里的数是从锚定端数过来的第几个位置。
+pub fn append_index(len: usize, position: i64) -> Option<usize> {
+    match position {
+        0 => Some(len),
+        n if n > 0 => usize::try_from(n).ok().and_then(|k| len.checked_sub(k)),
+        n => n
+            .checked_neg()
+            .and_then(|k| usize::try_from(k).ok())
+            .and_then(|k| k.checked_sub(1))
+            .filter(|spot| *spot < len),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
