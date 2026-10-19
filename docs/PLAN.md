@@ -663,6 +663,15 @@ chromium，`editor_e2e3.py` 26/26 PASS）：
   `set` 整体替换列表。schema 导出不受影响：它导的是 `accrete::Accrete` 的**节点**形状，
   帧信封（ops）从来不在其中（实测两份导出逐字节同长 40 574 B）。
 
+### 24. 页面级上行把手：入口读 `data-path`／`data-codec`，发布 `window.fluxen.send` — done 2026-10-19
+
+- `ui_leptos::mount()` 从 `#main` 多读两个属性：`data-path`（默认 `/channel`，必须以 `/` 开头，否则 warn 后保留默认）与 `data-codec`（默认 CBOR）；页面 URL 的 `?codec=` 仍然优先（更具体）。起因是宿主可以不是 stage：reflux 的通道叫 `/ws`，且先只走 JSON——而把 `?codec=json` 挂在用户看得见的地址栏上，会让「地址栏 == 路径标记」这条断言自带噪音。
+- 挂载后发布 `window.fluxen = { send(event, data) }`：与 canvas 模块拿到的 `host.send` 是同一条腿（都落 `Ctx::send`），`id` 为 `None`（页面级事件没有节点身份），`data` 过一遍 `JSON.stringify` → `serde_json::Value`，不可序列化的值落成 `null`——不发一个假帧，也不静默丢掉调用。
+- 连接还没打开时调用不会丢：`emit` 是 future，gloo 的 `Sink::poll_ready` 在 `readyState == 0` 时挂起、`open` 时唤醒（`websocket/futures.rs:287`），所以把手只负责 `spawn_local` 它，自己不排队。
+- **装配必须留在 `mount_to` 的闭包里**：`Ctx::new` 的读循环走 `Executor::spawn_local`，把 transport 与 `Ctx` 提到 mount 之前会 panic（实测：页面白屏、`#main` 空着、控制台一行 `spawn_local before a global executor was initialized`）。
+- trunk 的产物名带内容哈希（`ui_leptos-<hash>.js` / `…_bg.wasm`），glue 的默认 wasm 路径却写死 `ui_leptos_bg.wasm`——所以宿主页面必须显式传 `init({ module_or_path: "<hashed>.wasm" })`，否则 404。
+- 门槛：reflux 侧 `tools/gate_m1_1.py`（探针页 + `App` 伺服 + CDP，5 条）——渲染器挂进 `#main`；`Network.webSocketCreated` 的 URL 是 `ws://…/ws?codec=json`；`fluxen.send("probe", {v: 1})` 到生产者是 `{event, data}` 且无 `id`；`init()` 返回即调的那一帧也到达；零 console error。`cargo check -p ui_leptos` 绿。
+
 ## Resolved
 
 ### A text node's second `.class()` call wiped the first — markdown body text had no typography rule (fixed 2026-10-12)
