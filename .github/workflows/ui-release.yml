@@ -1,0 +1,77 @@
+name: ui-release
+
+# A release is a deliberate act: tag `v*` (annotated or lightweight, either is fine) and CI publishes
+# the renderer bundle. Not on branch pushes — the docker image already tracks main.
+#
+# What lands on the release: the four core files, `manifest.json`, `SHA256SUMS`, and one tarball.
+# What does not: the demo's module media (3dbrowser 28 MB, splatviewer 48 MB, monaco 6.6 MB,
+# mermaid 2.6 MB, g2chart 1.1 MB). Those are fetched by frames that name them and are assembled per
+# deployment — see `scripts/ui_dist.py`'s header for the reasoning.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish (e.g. v0.1.0)"
+        required: true
+
+env:
+  TRUNK_VERSION: "0.21.14"  # the version development uses, pinned
+
+jobs:
+  ui-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create the release and upload assets
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install trunk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@${{ env.TRUNK_VERSION }}
+
+      - name: Build and assemble
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          trunk --version
+          python3 scripts/ui_dist.py --tag "$TAG"
+
+      - name: Keep the summary
+        run: |
+          {
+            echo '```'
+            cat dist-release/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: ${{ inputs.tag || github.ref_name }}
+          draft: false
+          generate_release_notes: true
+          body: |
+            The renderer bundle, built from `${{ github.sha }}` with `trunk build --release`.
+
+            Copy the four files `manifest.json` names into your static root, or take the tarball.
+            `assets/3dbrowser`、`assets/splatviewer`、`assets/monaco`、`assets/mermaid.min.js`、
+            `assets/g2chart` are NOT here: those are module media loaded by frames that name them,
+            assembled per deployment.
+          files: |
+            dist-release/fluxen-ui-*.tar.gz
+            dist-release/manifest.json
+            dist-release/SHA256SUMS
+            dist-release/*.js
+            dist-release/*.wasm
+            dist-release/assets/*.css

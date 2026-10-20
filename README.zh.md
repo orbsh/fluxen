@@ -84,3 +84,25 @@ cargo run -p stage -- schema                                # Accrete 线上形�
 ```
 
 流式语义、行身份行为、codec 细节：见上文 wiki 链接与 `docs/decisions/` 下的 ADR。
+
+## 发布渲染器
+
+渲染器以 release 资产的形式发布，宿主因此既不需要这个仓，也不需要 `trunk`：
+
+```
+python3 scripts/ui_dist.py            # 构建，然后装配到 dist-release/
+python3 scripts/ui_dist.py --no-build # 装配已有的 crates/ui_leptos/dist
+```
+
+打 `v*` tag 时 CI 跑同一个脚本（`.github/workflows/ui-release.yml`），发布：
+
+- `manifest.json` —— `entry.js`／`entry.wasm`，以及每个文件的 sha256 与大小
+- 它点名的四件（`ui_leptos-<hash>.js`、`…_bg.wasm`、`assets/main.css`、`assets/custom.css`）
+- `SHA256SUMS`，以及 `fluxen-ui-<tag>.tar.gz`（同样四件 + manifest）
+
+按 tag 取用（例如 `https://github.com/orbsh/fluxen/releases/download/v0.1.0/manifest.json`），把四件
+拷进你的静态根，并把**带哈希的** wasm 路径传给 `init({ module_or_path })` —— glue 的默认
+`ui_leptos_bg.wasm` 在 trunk 的哈希名下并不存在（PLAN §24）。
+
+不含：`assets/3dbrowser`、`assets/splatviewer`、`assets/monaco`、`assets/mermaid.min.js`、
+`assets/g2chart`。这些是模块媒体，只有帧点名时才加载，由部署侧自行组装（见 Dockerfile）。
