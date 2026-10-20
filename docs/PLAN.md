@@ -672,6 +672,17 @@ chromium，`editor_e2e3.py` 26/26 PASS）：
 - trunk 的产物名带内容哈希（`ui_leptos-<hash>.js` / `…_bg.wasm`），glue 的默认 wasm 路径却写死 `ui_leptos_bg.wasm`——所以宿主页面必须显式传 `init({ module_or_path: "<hashed>.wasm" })`，否则 404。
 - 门槛：reflux 侧 `tools/gate_m1_1.py`（探针页 + `App` 伺服 + CDP，5 条）——渲染器挂进 `#main`；`Network.webSocketCreated` 的 URL 是 `ws://…/ws?codec=json`；`fluxen.send("probe", {v: 1})` 到生产者是 `{event, data}` 且无 `id`；`init()` 返回即调的那一帧也到达；零 console error。`cargo check -p ui_leptos` 绿。
 
+### 25. 渲染器发布产物：一份能直接引用的 UI bundle（tag `v*` → release 资产）— done 2026-10-20
+
+`crates/ui_leptos/dist` 一直是本机构建物：谁要它就得 checkout 整个仓、装 trunk、编 wasm——reflux 那侧就是手工把四件拷进 `www/static/vendor/fluxen/` 并自己写一份 `versions.json`。这一节把「产物」变成可引用的东西。
+
+- `scripts/ui_dist.py`：默认跑 `trunk build --release`（`--no-build` 可对已有 dist 装配）→ 挑出四件核心（trunk 的 `ui_leptos-<hash>.js` / `…_bg.wasm`、`assets/main.css`、`assets/custom.css`）→ 写 `manifest.json`（`renderer`／`tag`／`rev`／`entry`／`files{sha256,size}`）、`SHA256SUMS`、`fluxen-ui-<tag>.tar.gz`。tar 条目排序、`uid/gid=0`、`uname/gname` 空、mtime 取 `SOURCE_DATE_EPOCH`（缺省 0），gzip 头同一个值——同一份 dist 装配两次，tarball 逐字节相同。
+- `.github/workflows/ui-release.yml`：tag `v*` 或手动派发 → stable rust + `wasm32-unknown-unknown` + trunk **0.21.14**（与开发同版本，钉住）→ 跑脚本 → `softprops/action-gh-release` 上传 tarball／manifest／SHA256SUMS／四件散装。散装是为了「直接引用」：消费者只取自己需要的 URL，不必解包。
+- **不装演示媒体**：`assets/3dbrowser` 28 MB、`splatviewer` 48 MB、`monaco` 6.6 MB、`mermaid.min.js` 2.6 MB、`g2chart` 1.1 MB。这些是帧点名才加载的模块媒体，由部署侧自己组装（Dockerfile 就是那份组装）；整个 dist 打进 release 等于每个 tag 挂 ~86 MB，而其中 97% 的字节没有任何消费者请求。
+- **一个文件一个名字**：不改 trunk 的哈希名，角色映射放在 `manifest.json` 的 `entry`（`js`／`wasm`）。不做 `fluxen.js` 这类稳定别名——那是同一份字节的第二个名字，还多拷 2.4 MB。
+- **manifest 是 fluxen 形状，不是消费者形状**：reflux 的 `versions.json` 键带 `vendor/fluxen/` 前缀，那是它的目录布局，由它自己从本 manifest 派生；渲染器不猜消费者把文件放哪儿。
+- 门槛（本地实测 2026-10-20）：脚本跑了两次——一次 `--no-build` 对 `0bf166d` 的既有 dist，一次走 `trunk build --release` 再装配。两轮四件 sha256 **与 reflux 钉的 `versions.json` 逐条相同**（js `7eee5b77…`、wasm `b09fde99…`、`assets/main.css` `201997bc…`、`assets/custom.css` `fd0d78dd…`），`rev` 亦相同；`fluxen-ui-v0.1.0.tar.gz` 723 514 B；`SHA256SUMS` 四行，`sha256sum -c` 可验；同一份 dist 装配两次，tarball 逐字节相同（`227e981d…`）。**界限说清**：那次 `trunk build --release` 里 cargo 复用了缓存（`Finished release profile in 0.18s`），trunk 只重做了分发——所以证明的是「分发幂等 + 装配可复现」，**不是**「冷编译逐字节可复现」（没做 clean build，别当已有证据）。工作流本身本地跑不了（无 `gh`、不自主推 tag），只按 `docker.yml` 的既有写法核对过结构。
+
 ## Resolved
 
 ### A text node's second `.class()` call wiped the first — markdown body text had no typography rule (fixed 2026-10-12)

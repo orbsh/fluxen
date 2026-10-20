@@ -18,3 +18,4 @@ crates/ui_leptos/assets/g2chart/
 # 内容哈希名被 editor.main.js 写死，不能改名），不入 git
 crates/ui_leptos/assets/editor/
 crates/ui_leptos/assets/monaco/
+dist-release/

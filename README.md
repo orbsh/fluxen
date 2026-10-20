@@ -105,3 +105,26 @@ cargo run -p stage -- schema                                # Accrete wire-shape
 Streaming semantics, key behavior, and codec details: see the wiki doc linked
 above plus ADRs in `docs/decisions/`.
 
+
+## Releasing the renderer
+
+The renderer ships as release assets, so a host needs neither this repo nor `trunk`:
+
+```
+python3 scripts/ui_dist.py            # build, then assemble into dist-release/
+python3 scripts/ui_dist.py --no-build # assemble an existing crates/ui_leptos/dist
+```
+
+A `v*` tag runs the same script in CI (`.github/workflows/ui-release.yml`) and publishes:
+
+- `manifest.json` — `entry.js` / `entry.wasm`, plus sha256 and size for every file
+- the four files it names (`ui_leptos-<hash>.js`, `…_bg.wasm`, `assets/main.css`, `assets/custom.css`)
+- `SHA256SUMS`, and `fluxen-ui-<tag>.tar.gz` (the same four plus the manifest)
+
+Fetch by tag — e.g. `https://github.com/orbsh/fluxen/releases/download/v0.1.0/manifest.json` — copy
+the four files into your static root, and pass the **hashed** wasm path to `init({ module_or_path })`:
+the glue's default `ui_leptos_bg.wasm` does not exist under trunk's hashed names (PLAN §24).
+
+Not included: `assets/3dbrowser`, `assets/splatviewer`, `assets/monaco`, `assets/mermaid.min.js`,
+`assets/g2chart`. Those are module media, fetched only when a frame names them and assembled per
+deployment (see the Dockerfile).
