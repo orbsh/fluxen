@@ -31,7 +31,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY examples/modules ./examples/modules
 
-# Five build inputs the repo does not carry — all gitignored (media addresses in
+# Six build inputs the repo does not carry — all gitignored (media addresses in
 # assets/*/README.md, module recipes in the Cargo.toml / module headers):
 #
 #  * the glTF models the examples point at (`/assets/3dbrowser/*.glb`), taken
@@ -42,6 +42,8 @@ COPY examples/modules ./examples/modules
 #  * the g2chart module's deployed copy plus its runtime library g2.min.js;
 #  * the editor module's deployed copy plus Monaco's AMD subset (npm tarball,
 #    version + sha1 pinned);
+#  * the forcegraph module's deployed copy plus 3d-force-graph (unpkg dist,
+#    version + sha256 pinned — the wrapper falls back to the same URL);
 #  * the truck splat scene, served from this repo's own `assets` release — the
 #    scene's upstream home is a 590 MB zip, so the 29 MB file is mirrored there.
 #
@@ -118,6 +120,24 @@ RUN mkdir -p crates/ui_leptos/assets/editor crates/ui_leptos/assets/monaco \
              crates/ui_leptos/assets/monaco/vs/assets/ts.worker-*.js \
     && test "$(ls crates/ui_leptos/assets/monaco/vs/assets/*.worker-*.js | wc -l)" = 1 \
     && rm -rf /tmp/monaco.tgz /tmp/package
+
+# The forcegraph module's runtime (ADR 0017): 3d-force-graph is UMD (it exposes
+# the global ForceGraph3D and bundles three.js itself), so the wrapper injects it
+# with a <script> tag instead of importing it — that is also why the library
+# never enters the app bundle. The wrapper is tracked source
+# (examples/modules/forcegraph/) and only its deployed copy is gitignored.
+# Version pinned + sha256-checked like every other upstream input here; the
+# wrapper falls back to this same pinned unpkg URL if the same-origin file is
+# missing (see the module header).
+ENV FORCE_GRAPH_VERSION=1.80.1
+RUN mkdir -p crates/ui_leptos/assets/forcegraph \
+    && cp examples/modules/forcegraph/index.js \
+          examples/modules/forcegraph/cbor.js \
+          crates/ui_leptos/assets/forcegraph/ \
+    && curl -fsSL \
+         "https://unpkg.com/3d-force-graph@${FORCE_GRAPH_VERSION}/dist/3d-force-graph.min.js" \
+         -o crates/ui_leptos/assets/forcegraph/3d-force-graph.min.js \
+    && echo "13088340aad408156064fd120c3bc3a47c93a3cc45b8f132d6284b20e2223be9  crates/ui_leptos/assets/forcegraph/3d-force-graph.min.js" | sha256sum -c -
 
 # The truck scene, mirrored in this repo's own `assets` release (why: the scene's
 # upstream home is a 590 MB multi-scene zip — see assets/splatviewer/README.md).

@@ -683,7 +683,84 @@ chromium，`editor_e2e3.py` 26/26 PASS）：
 - **manifest 是 fluxen 形状，不是消费者形状**：reflux 的 `versions.json` 键带 `vendor/fluxen/` 前缀，那是它的目录布局，由它自己从本 manifest 派生；渲染器不猜消费者把文件放哪儿。
 - 门槛（本地实测 2026-10-20）：脚本跑了两次——一次 `--no-build` 对 `0bf166d` 的既有 dist，一次走 `trunk build --release` 再装配。两轮四件 sha256 **与 reflux 钉的 `versions.json` 逐条相同**（js `7eee5b77…`、wasm `b09fde99…`、`assets/main.css` `201997bc…`、`assets/custom.css` `fd0d78dd…`），`rev` 亦相同；`fluxen-ui-v0.1.0.tar.gz` 723 514 B；`SHA256SUMS` 四行，`sha256sum -c` 可验；同一份 dist 装配两次，tarball 逐字节相同（`227e981d…`）。**界限说清**：那次 `trunk build --release` 里 cargo 复用了缓存（`Finished release profile in 0.18s`），trunk 只重做了分发——所以证明的是「分发幂等 + 装配可复现」，**不是**「冷编译逐字节可复现」（没做 clean build，别当已有证据）。工作流本身本地跑不了（无 `gh`、不自主推 tag），只按 `docker.yml` 的既有写法核对过结构。
 
+### 26. Canvas 的模块选项 + forcegraph 变体（ADR 0017）— done 2026-10-23
+
+用户 2026-10-23：「Canvas 再加一个 3d-force-graph 的变体，示例参考 k10r。边和节点的基础尺寸
+之类的做成可配置选项。……这种属于变体的不要放在 accrete 中，在 canvas 的选项中添加一个
+Value 动态类型把额外的选项打包传给它引用的 js，js 那边自己处理就可以了」。
+
+- wire 面只加一个可选键：`Canvas { …, options: Option<Value> }`（缺省不出现）。核心零解释。
+- 宿主：`mount(el, data, host, options)`，第四参是 JS 对象（wire Value → JSON 文本 → `JSON.parse`）；
+  不走 CBOR——配置是一次性静态值，数据面仍是 CBOR。语义与 `url` 同级：挂载期静态，不进 update 腿。
+- 新模块 `examples/modules/forcegraph/`（纯 JS，零构建，库在 `mount()` 里才注入）：载荷
+  `{nodes, links}` 按 id 求差量、端点先解析、一次 update 一次 `graphData()`+reheat、`d3AlphaMin(0)`；
+  尺寸 = 屏幕像素（`nodeSizePx/nodeSizeStepPx/nodeTiers/linkWidthPx/linkWidthStepPx/linkStrongAt`），
+  按**本 canvas 高度**折世界单位；`autoFit`（默认开）每批数据后 `zoomToFit` + 尾随补一次取景，
+  并用拟合后的相机距离重算像素基准。
+- 载体一：`examples/yaml/19.canvas.forcegraph.yaml`（三帧整份快照）；载体二：
+  `examples/walkthrough.py` 第 18–20 步（收尾一拍，同一个 canvas 节点 + `options` 袋）。
+- 部署：`crates/ui_leptos/assets/forcegraph/`（gitignore）；Dockerfile 拷模块 + 从 unpkg 拉
+  3d-force-graph **1.80.1** 并校验 sha256。
+
+门槛（本地实测 2026-10-23）：
+
+- `cargo test --workspace`：75 个用例 0 失败，含新增 `crates/accrete/tests/canvas_options.rs` 三例
+  （往返保模块词汇、缺省不上 wire、`/options/...` 深层可 patch）。`cargo check -p accrete --all-features`
+  与 `--target wasm32-unknown-unknown` 的 ui_leptos 均绿。
+- 库文件的来源与字节：unpkg 的 `3d-force-graph@1.80.1/dist/3d-force-graph.min.js` 1 389 954 B，
+  sha256 `13088340aad408156064fd120c3bc3a47c93a3cc45b8f132d6284b20e2223be9`——与 k10r 仓库里那份
+  vendor 副本**逐字节相同**（两个路径各 `sha256sum` 过一次）。
+- 第四参真的过了界（桩模块把入参抄进 dataset）：`{"nested":{"palette":["a","b"]},"nodeSizePx":3.5}`、
+  `data` 13 B、`host.send` 是 function、resize 报 `200x120`——JSON 对象原样到达，键不被改写。
+- 真模块（`19.canvas.forcegraph.yaml`，headless chromium + SwiftShader）：宿主 `data-module-mounted="true"`、
+  宿主内 `canvas` 1384×460、模块状态 `nodes: 15 / links: 14`、`3d-force-graph.min.js` 在 resource timing 里、
+  控制台零 warn 零异常。像素：裁宿主矩形后 `colors=227`、ink 0.44%（升到 4px 档后 0.52%），
+  墨迹包围盒 286×272、居中于 1384×460——图在画，纵向基本吃满，横向留白是 3:1 画布的固有比例。
+- 像素基准可核对：`pxPerUnit=0.4932`（camDist 1000、画布 460px 高）→ weight 9 的节点
+  `nodeVal=1800` = 半径 12.16 世界单位 = 6px 屏幕半径（`nodeSizePx 3 + step 3 × 3 档`），
+  即 options 里的 px 承诺在拟合后的画面上成立。
+- walkthrough：`python3 examples/walkthrough.py --port 3102 --auto --delay 0.01` 20 步跑完，
+  第 18/19/20 步（5 点 4 线 → 10 点 9 线 → 15 点 14 线）均 `delivered to 2 peer(s)`，
+  收尾页面里关系图宿主 `canvas-5` 1369×460 `marker=true` 且画布有像素。
+- **UMD 分支被页面劫持（本轮实测抓到并改掉）**：3d-force-graph 是 UMD，出口顺序
+  CommonJS → AMD → 全局；Monaco 定义了 `define.amd`，于是库被注册成匿名 AMD 模块、
+  `window.ForceGraph3D` 一个字节都不落 —— 症状是**编辑器挂载之后**关系图必然
+  `mount rejected: window.ForceGraph3D is not a function`，同一页面在没有 Monaco 时
+  一切正常（干净页复现不出、跑完 editor 那一步才复发，正因为如此第一版 `<script>`
+  载法在演示里时好时坏）。改用 fetch 源码 + blob → `import()`，在遮蔽
+  `module/exports/define` 的模块作用域里求值，UMD 只剩"挂全局"那条路；页面自己的
+  `define` 全程不动（实测：修好之后同一页面 `define.amd` 仍是 true，宿主
+  `canvas-3` `marker=true`、画布 1400×460、ink 3.1%、墨迹包围盒 817×386）。
+  代价：CSP 需放行 `blob:`，库地址需可 fetch（同源或带 CORS）。
+- **常显名字 + 悬停卡片改版（用户 2026-10-23：「节点和边要显示名字，悬停显示详细信息的菜单不要阴影了，现在显示的很难看」）**：
+  节点/边的名字改为 HTML 覆盖层常显（每帧把世界坐标投影成屏幕坐标；标签重叠时后来的
+  先藏，"位置一变就回来"），悬停卡片只留详情。卡片的"阴影感"根因是库自带的
+  `.float-tooltip-kap` 外壳（bg + padding + radius）里又套了一层带边框的 div，缩小时像
+  一层阴影；注入样式把外壳抹平，只剩单层深底卡片（实测 computed style：
+  `background rgba(0,0,0,0)`、`box-shadow none`、`padding 0px`、`border-radius 0px`）。
+  实测：29 个标签（15 点 + 14 边）全部生成、23 个在视口内显示、重叠对 0（改之前
+  7 对）、宿主 1400×460 ink 3.5%、控制台零 warn。
+
+### 未修：模块实例在宿主重建/换布局后不进 unmount（2026-10-23 实测）
+
+同一次 walkthrough 收尾读到的 `window.__fg`（临时调试钩子，未入源码）里有两个存活实例（各 15 点），
+页面只有一个关系图宿主——一个成了孤儿。成因在宿主既有路径：`data-module-mounted` 标了 `true` 但
+容器被原地重建抹空时，`canvas.rs` 清标记重挂，**没有先 `unmount` 旧实例**；换布局根（`create`）
+同样没有对旧宿主补一次 `unmount`。对 WebGL 模块这不是无害残留（每实例一份 GL 上下文 + rAF）。
+本节的改动不修它（属 canvas 宿主的生命周期问题，与 options 无关），记在这里等下一单元。
+
 ## Resolved
+
+### trunk 0.22 拒绝了 copy-dir 的绝对 href —— `x start` 在装配阶段就死（fixed 2026-10-23）
+
+`crates/ui_leptos/index.html` 里 `<link data-trunk rel="copy-dir" href="/assets" />` 是 trunk **0.21.14**
+（Dockerfile 与 `.github/workflows/ui-release.yml` 钉的版本）吃得下的写法。本机的 trunk 是 0.22.0
+（nixpkgs），它把 `href` 当文件系统路径去 canonicalize，于是 `x start` 在装配阶段报
+`error taking canonical path of directory "/assets": No such file or directory`，wasm 都编完了却拿不到 dist。
+
+改成相对路径 `href="assets"`（trunk 文档里的形态，0.21/0.22 都认），产物不变：`dist/` 仍是哈希命名的
+`ui_leptos-<hash>.js` / `…_bg.wasm` + `dist/assets/**`。**没有**顺手把 pin 提到 0.22——`ui-release.yml`
+出的 dist 是消费者按 sha256 钉住的东西（reflux 的 `versions.json`），换 trunk 版本等于换掉那四件的字节。
 
 ### A text node's second `.class()` call wiped the first — markdown body text had no typography rule (fixed 2026-10-12)
 
