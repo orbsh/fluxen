@@ -30,7 +30,16 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
         .and_then(|a| a.get_class().clone().map(|c| c.join(" ")))
         .unwrap_or_default();
     let (source, inline) = bind_value(&accrete);
-    mount_module(&id, &accrete.url, style, css, source, inline, ctx)
+    mount_module(
+        &id,
+        &accrete.url,
+        style,
+        css,
+        source,
+        inline,
+        accrete.options.clone(),
+        ctx,
+    )
 }
 
 /// G2 图表：载荷 = G2 spec（GoG 词汇的纯 JSON），渲染器 = url 指向的
@@ -43,7 +52,7 @@ pub fn chart_(accrete: Chart, ctx: &Ctx, id: String) -> AnyView {
         .and_then(|a| a.get_class().clone().map(|c| c.join(" ")))
         .unwrap_or_default();
     let (source, inline) = bind_value(&accrete);
-    mount_module(&id, &accrete.url, String::new(), css, source, inline, ctx)
+    mount_module(&id, &accrete.url, String::new(), css, source, inline, None, ctx)
 }
 
 /// 代码编辑器（ADR 0016）：载荷 = `{code, lang?, event?}`（"代码作为参数"），
@@ -62,7 +71,7 @@ pub fn editor_(accrete: Editor, ctx: &Ctx, id: String) -> AnyView {
         .and_then(|a| a.get_class().clone().map(|c| c.join(" ")))
         .unwrap_or_default();
     let (source, inline) = bind_value(&accrete);
-    mount_module(&id, &accrete.url, style, css, source, inline, ctx)
+    mount_module(&id, &accrete.url, style, css, source, inline, None, ctx)
 }
 
 /// `bind["value"]` → (source 槽名, inline default)。
@@ -105,6 +114,7 @@ fn mount_module(
     css: String,
     source: Option<String>,
     inline_default: Option<Value>,
+    options: Option<Value>,
     ctx: &Ctx,
 ) -> AnyView {
     // 载荷解析：inline default 直用；kind:source 读槽内节点（其
@@ -159,6 +169,14 @@ fn mount_module(
     let el_id = id.to_string();
     let ctx2 = ctx.clone();
     let url = url.to_string();
+    // 模块私有选项（ADR 0017）：wire Value 原样序列化成 JSON 文本，到 mount 那一跳
+    // 才 `JSON.parse` 成 JS 对象（第四参）。不套 CBOR——它是挂载期一次性配置、不流式，
+    // 模块不必为它背解码器；数据面（data）仍是 CBOR，两条腿分工不同。
+    // 缺省/Null = `{}`：模块自己套默认值，宿主不猜任何键。
+    let options_json = match options {
+        None | Some(Value::Null) => "{}".to_string(),
+        Some(v) => v.to_string(),
+    };
     nr.on_load(move |el| {
         let el: web_sys::HtmlElement = el.dyn_into().expect("div is element");
         // 幂等护栏（原地 rebuild 会重跑 on_load）：状态写在元素属性上。
@@ -191,6 +209,7 @@ fn mount_module(
         let source_w = source.clone();
         let payload_w = Rc::clone(&payload);
         let style_w = style_w.clone();
+        let options_w = options_json.clone();
         Effect::new(move |_| {
             if let Some(src) = &source_w {
                 let _ = ctx_w.slot_for_data(src).get();
@@ -215,6 +234,7 @@ fn mount_module(
             let source0 = source_w.clone();
             let payload0 = Rc::clone(&payload_w);
             let size_style = size_style.clone();
+            let opts_json = options_w.clone();
             el.set_attribute("data-module-mounted", "pending")
                 .expect("set mounted marker");
             // mount 真正推给模块的载荷 = 触发挂载的那份，也必须是下面 update 的
@@ -275,11 +295,21 @@ fn mount_module(
                     return;
                 };
 
-                // mount(el, data, host) → ctx id（同步或 Promise<ctx>）
+                // mount(el, data, host, options) → ctx id（同步或 Promise<ctx>）
+                // options 是 JS 对象（ADR 0017）：挂载期一次性配置，模块自己解释。
+                let opts: JsValue = match js_sys::JSON::parse(&opts_json) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        // 文本来自 serde_json，正常不会失败；失败当空配置挂载（不挡渲染）。
+                        tracing::warn!("module host {id}: options not JSON: {e:?}");
+                        js_sys::Object::new().into()
+                    }
+                };
                 let args = js_sys::Array::new();
                 args.push(&JsValue::from(el.clone()));
                 args.push(&data0.into());
                 args.push(&JsValue::from(host));
+                args.push(&opts);
                 let ret = match js_sys::Reflect::apply(&mount, &JsValue::UNDEFINED, &args) {
                     Ok(r) => r,
                     Err(e) => {

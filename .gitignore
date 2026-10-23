@@ -18,4 +18,7 @@ crates/ui_leptos/assets/g2chart/
 # 内容哈希名被 editor.main.js 写死，不能改名），不入 git
 crates/ui_leptos/assets/editor/
 crates/ui_leptos/assets/monaco/
+# forcegraph 封装模块 + 3d-force-graph 库（ADR 0017）：模块从 examples/modules/forcegraph
+# 拷入，库取自 unpkg（版本固定 1.80.1 + sha256，见 Dockerfile），不入 git
+crates/ui_leptos/assets/forcegraph/
 dist-release/

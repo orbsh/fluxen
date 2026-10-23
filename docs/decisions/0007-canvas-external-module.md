@@ -64,9 +64,10 @@ set/patch { "event": "model-data", "path": "/assets/apple",
 URL 指向的 ES module 必须导出四个函数：
 
 ```js
-mount(el: HTMLElement, data: Uint8Array, host) → ctx
+mount(el: HTMLElement, data: Uint8Array, host, options) → ctx
    // el 是组件自己的 canvas 容器；data 是 bind["value"] 的 CBOR；
-   // host = { send(event, bytes) } ——模块上行走现有动作帧协议（本期只留通道）
+   // host = { send(event, bytes) } ——模块上行走现有动作帧协议（本期只留通道）；
+   // options = 模块私有配置的 JS 对象（ADR 0017：Canvas.options 动态袋，缺省 `{}`）
 update(ctx, data: Uint8Array)   // 槽内容变化 → 宿主重序列化推入
 resize(ctx, w, h)               // 尺寸归宿主：ResizeObserver 驱动
 unmount(ctx)                    // leptos 视图销毁时必调；模块释放 GL/循环

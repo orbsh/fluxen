@@ -323,6 +323,14 @@ pub struct Canvas {
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<SizeAttr>,
+    /// 模块私有选项的**动态袋**（ADR 0017）：核心不认识的渲染器配置
+    /// （3d-force-graph 的节点/边尺寸、力参数、配色……）打包放这里，
+    /// 宿主原样交给模块的 `mount(el, data, host, options)`，一个键都不解释。
+    /// 这是"变体不进 accrete"的落点：换渲染器只换 url + options，DSL 不变。
+    /// 缺省/Null = `{}`（模块自己套默认值）；与 `url` 同一语义——挂载期配置，
+    /// 不进 update 热更新腿（改它要靠重新挂载）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<Value>,
     /// `bind["value"]`：载荷惯例与 Chart/diagram 同族——`kind: source` 指向
     /// 具名数据槽（槽内节点的 `bind.value.default` 原始 JSON 即模块 data 区），
     /// 流式喂数据 = 对该槽 `set`/`patch`（指针 `/bind/value/default/...`）。

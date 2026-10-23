@@ -1,0 +1,130 @@
+# Canvas + forcegraph 模块（ADR 0017）：3d-force-graph 力导向关系图，流式长图。
+#
+# 结构照 13.canvas.3dbrowser.yaml：canvas 绑具名数据槽（kind: source），载荷是
+# 槽节点的 bind.value.default。区别在**喂数据的方式**——这里每帧送一整份快照
+# （set 覆盖），不是逐点 patch 追加。理由是物理引擎的粒度：一次 update = 宿主推
+# 一次载荷，一帧里塞几个点就只推进一次；逐点 patch 等于每个点都 reheat 一遍，
+# 图会一路抖（k10r 的 streaming demo 就是按批投递、一批一次 graphData）。
+# 模块侧按节点 id 去重，所以"整份快照重复送达"是幂等的：旧点不动、新点长出来。
+#
+# options 是本模块的私有配置（ADR 0017 的动态袋，核心一个键都不解释）：下面只
+# 调了尺寸/相机/粒子几项，其余用模块默认值（节点 2px 直径、每档 +2px，边 1px，
+# 见 examples/modules/forcegraph/index.js 的 DEFAULTS）。想换配色就加 palette，
+# 想换整个渲染器就换 url——DSL 形状不变。
+#
+# 前置：模块产物在 crates/ui_leptos/assets/forcegraph/（index.js + cbor.js +
+# 3d-force-graph.min.js，装配见 Dockerfile / 模块头注释；同源缺件时模块自己回落
+# unpkg 的钉版本 CDN）。布局侧先发 00.main.yaml + 00.chat.yaml。
+
+# ---- 第 1 帧：骨架 + crate 层 ------------------------------------------------
+- action: append
+  event: chat
+  data:
+    type: canvas
+    url: /assets/forcegraph/index.js
+    attrs:
+      width: 100%
+      height: 460px
+    options:
+      nodeSizePx: 4
+      nodeSizeStepPx: 4
+      linkWidthPx: 1.4
+      linkOpacity: 0.85
+      fitPaddingPx: 56
+      particles: 1
+    bind:
+      value:
+        kind: source
+        source: mfg
+
+- action: set
+  event: mfg
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          nodes:
+            - {id: accrete, name: accrete, kind: crate, weight: 9}
+            - {id: ui_leptos, name: ui_leptos, kind: crate, weight: 8}
+            - {id: content, name: content, kind: crate, weight: 7}
+            - {id: transport, name: transport, kind: crate, weight: 5}
+            - {id: stage, name: stage, kind: crate, weight: 6}
+          links:
+            - {source: ui_leptos, target: accrete, kind: renders, strength: 5}
+            - {source: stage, target: content, kind: encodes, strength: 4}
+            - {source: stage, target: ui_leptos, kind: serves, strength: 3}
+            - {source: transport, target: content, kind: carries, strength: 3}
+
+# ---- 第 2 帧：组件层（ui_leptos 的 render 分派） -----------------------------
+- action: set
+  event: mfg
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          nodes:
+            - {id: accrete, name: accrete, kind: crate, weight: 9}
+            - {id: ui_leptos, name: ui_leptos, kind: crate, weight: 8}
+            - {id: content, name: content, kind: crate, weight: 7}
+            - {id: transport, name: transport, kind: crate, weight: 5}
+            - {id: stage, name: stage, kind: crate, weight: 6}
+            - {id: canvas, name: canvas, kind: component, weight: 7}
+            - {id: chart, name: chart, kind: component, weight: 6}
+            - {id: editor, name: editor, kind: component, weight: 6}
+            - {id: rack, name: rack, kind: component, weight: 6}
+            - {id: pages, name: pages, kind: component, weight: 5}
+          links:
+            - {source: ui_leptos, target: accrete, kind: renders, strength: 5}
+            - {source: stage, target: content, kind: encodes, strength: 4}
+            - {source: stage, target: ui_leptos, kind: serves, strength: 3}
+            - {source: transport, target: content, kind: carries, strength: 3}
+            - {source: canvas, target: accrete, kind: node, strength: 2}
+            - {source: rack, target: pages, kind: rows, strength: 3}
+            - {source: canvas, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: chart, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: editor, target: ui_leptos, kind: mounted-by, strength: 3}
+
+# ---- 第 3 帧：模块层（canvas/chart/editor 各自 import 的外部模块） -----------
+- action: set
+  event: mfg
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          nodes:
+            - {id: accrete, name: accrete, kind: crate, weight: 9}
+            - {id: ui_leptos, name: ui_leptos, kind: crate, weight: 8}
+            - {id: content, name: content, kind: crate, weight: 7}
+            - {id: transport, name: transport, kind: crate, weight: 5}
+            - {id: stage, name: stage, kind: crate, weight: 6}
+            - {id: canvas, name: canvas, kind: component, weight: 7}
+            - {id: chart, name: chart, kind: component, weight: 6}
+            - {id: editor, name: editor, kind: component, weight: 6}
+            - {id: rack, name: rack, kind: component, weight: 6}
+            - {id: pages, name: pages, kind: component, weight: 5}
+            - {id: forcegraph, name: forcegraph, kind: module, weight: 6}
+            - {id: browser3d, name: 3dbrowser, kind: module, weight: 5}
+            - {id: splatviewer, name: splatviewer, kind: module, weight: 5}
+            - {id: g2chart, name: g2chart, kind: module, weight: 4}
+            - {id: monaco, name: monaco, kind: lib, weight: 7}
+          links:
+            - {source: ui_leptos, target: accrete, kind: renders, strength: 5}
+            - {source: stage, target: content, kind: encodes, strength: 4}
+            - {source: stage, target: ui_leptos, kind: serves, strength: 3}
+            - {source: transport, target: content, kind: carries, strength: 3}
+            - {source: canvas, target: accrete, kind: node, strength: 2}
+            - {source: rack, target: pages, kind: rows, strength: 3}
+            - {source: canvas, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: chart, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: editor, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: forcegraph, target: canvas, kind: mounts, strength: 4}
+            - {source: browser3d, target: canvas, kind: mounts, strength: 4}
+            - {source: splatviewer, target: canvas, kind: mounts, strength: 4}
+            - {source: g2chart, target: chart, kind: mounts, strength: 3}
+            - {source: monaco, target: editor, kind: mounts, strength: 5}
