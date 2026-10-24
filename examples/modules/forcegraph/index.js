@@ -248,15 +248,18 @@ const esc = (v) =>
 // ---- 悬停卡片与常显标签的样式 -----------------------------------------------
 // 库自带一个 .float-tooltip-kap 外壳（padding/border-radius/background 各一套），
 // 里面再套我们自己的卡片就变成双层框、看着脏。这里把它抹平，只留我们这一层：
-// 无边框、无阴影、一个半透明底。
+// 无边框、无阴影、不透明底 —— 卡片是"读数字"的地方，背后透出画布上的字就没法读了。
+// 层级也在这里定：标签层和卡片都是绝对定位的同级兄弟，标签后插入（DOM 顺序在后）
+// 会盖在卡片上，所以显式给卡片更高的 z-index。
 const STYLE_ID = "forcegraph-module-style";
 const CSS = `
 .fg-host { position: relative; }
 .fg-host .float-tooltip-kap {
   padding: 0; border: 0; border-radius: 0; background: transparent;
   box-shadow: none; color: inherit; font: inherit; max-width: none;
+  z-index: 2;
 }
-.fg-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.fg-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
 .fg-label {
   position: absolute; left: 0; top: 0; white-space: nowrap;
   transform: translate(-50%, -50%); will-change: transform;
@@ -282,7 +285,7 @@ function tooltip(title, pairs) {
     )
     .join("");
   return (
-    `<div style="background:rgba(15,23,42,.9);color:#e2e8f0;border-radius:.45rem;` +
+    `<div style="background:#0f172a;color:#e2e8f0;border-radius:.45rem;` +
     `padding:.4rem .55rem;font:12px/1.45 system-ui,-apple-system,sans-serif;min-width:7.5rem">` +
     `<div style="font-weight:600;margin-bottom:.15rem">${esc(title)}</div>${rows}</div>`
   );
