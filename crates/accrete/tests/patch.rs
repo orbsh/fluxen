@@ -4,6 +4,7 @@
 //! external producers see), `replace_at` swaps the pointed value, `append_at`
 //! extends strings / pushes into arrays, and any write that violates the
 //! Accrete wire type is rejected atomically (node unchanged).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use accrete::{Accrete, AccreteOps};
 use serde_json::{Value, json};

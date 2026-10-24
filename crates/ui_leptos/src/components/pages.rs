@@ -48,6 +48,8 @@ pub fn pages_(accrete: Pages, ctx: &Ctx, id: String) -> AnyView {
         return div().id(id.as_str()).class(css.as_str()).into_any();
     };
     let slot = ctx.slot_for_list(&source);
+    // 只在 leptos 的 render 作用域里调用：没有 owner 就没有可挂载的行作用域。
+    #[allow(clippy::expect_used)]
     let parent_owner = Owner::current().expect("pages_ requires a reactive owner");
 
     // 选中键：effect 订阅 select 绑定（local 槽/source 槽 + path 提取），

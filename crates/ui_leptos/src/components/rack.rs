@@ -64,6 +64,8 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
     let ctx = ctx.clone();
     // 行 owner 的挂载点：本函数执行时的 reactive owner（rack 自身的作用域），
     // 与外层 list 更新解耦——行订阅随 rack 消亡，不随外层重建丢失。
+    // 只在 leptos 的 render 作用域里调用：没有 owner，行订阅就无处挂。
+    #[allow(clippy::expect_used)]
     let parent_owner = Owner::current().expect("rack_ requires a reactive owner");
     let mut css = vec!["rack", "f"];
     use_common_css(&mut css, &accrete);

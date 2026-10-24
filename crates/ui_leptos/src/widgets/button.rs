@@ -9,7 +9,7 @@ use serde_json::{Value, to_value};
 /// 按钮：默认文本取 `bind["value"].default`；`Submit` 变体切换 form 的确认信号。
 pub fn button_(accrete: Button, ctx: &Ctx) -> AnyView {
     let t = use_default(&accrete)
-        .unwrap_or(to_value("Ok").unwrap())
+        .unwrap_or(Value::String("Ok".into()))
         .as_str()
         .unwrap_or("Ok")
         .to_owned();

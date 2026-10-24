@@ -86,26 +86,43 @@ fn walk(ast: &syn::File) -> HashMap<String, CompInfo> {
 
 #[proc_macro]
 pub fn gen_dispatch(input: TokenStream) -> TokenStream {
-    // 解析: file = "..", entry = "Accrete", object = "accrete"
     let cfg = parse_macro_input!(input as Attrs);
-    let file = cfg.get("file").expect("must provide file").to_owned();
-    let entry = cfg.get("entry").expect("must provide entry").to_owned();
-    let object = cfg.get("object").expect("must provide object").to_owned();
+    match gen_dispatch_inner(&cfg) {
+        Ok(ts) => ts.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// The whole expansion, fallible. A proc macro's failure IS a compile error —
+/// `panic!` produced one too, but through the panic machinery and without a
+/// span, so the diagnostic landed on the macro call with no hint of which
+/// attribute was wrong.
+fn gen_dispatch_inner(cfg: &Attrs) -> syn::Result<proc_macro2::TokenStream> {
+    let span = Span::call_site();
+    let missing = |what: &str| syn::Error::new(span, format!("gen_dispatch requires `{what}`"));
+    let file = cfg.get("file").ok_or_else(|| missing("file"))?.to_owned();
+    let entry = cfg.get("entry").ok_or_else(|| missing("entry"))?.to_owned();
+    let object = cfg.get("object").ok_or_else(|| missing("object"))?.to_owned();
 
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(&file);
     let path_str = path.to_string_lossy().into_owned();
-    let txt = read_to_string(&path).unwrap_or_else(|e| panic!("read {file} failed: {e}"));
-    let ast = parse_file(&txt).unwrap_or_else(|e| panic!("parse {file} failed: {e}"));
+    let txt = read_to_string(&path)
+        .map_err(|e| syn::Error::new(span, format!("read {file} failed: {e}")))?;
+    let ast = parse_file(&txt)
+        .map_err(|e| syn::Error::new(span, format!("parse {file} failed: {e}")))?;
     let info = walk(&ast);
 
-    let entry = Ident::new(&entry, Span::call_site());
-    let object = Ident::new(&object, Span::call_site());
+    let entry = Ident::new(&entry, span);
+    let object = Ident::new(&object, span);
 
     let CompInfo::Enum { fields } = info
         .get(&entry.to_string())
-        .unwrap_or_else(|| panic!("no enum {entry}"))
+        .ok_or_else(|| syn::Error::new(span, format!("no enum {entry} in {file}")))?
     else {
-        panic!("not an enum");
+        return Err(syn::Error::new(
+            span,
+            format!("{entry} is not an enum in {file}"),
+        ));
     };
 
     let mut arms = Vec::new();
@@ -126,7 +143,9 @@ pub fn gen_dispatch(input: TokenStream) -> TokenStream {
                     static #counter: std::sync::LazyLock<std::sync::Mutex<u32>> =
                         std::sync::LazyLock::new(|| std::sync::Mutex::new(0));
                     let id = c.id.clone().unwrap_or_else(|| {
-                        let mut tc = #counter.lock().unwrap();
+                        let mut tc = #counter
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
                         *tc += 1;
                         format!(#tag, *tc)
                     });
@@ -156,5 +175,5 @@ pub fn gen_dispatch(input: TokenStream) -> TokenStream {
         }
     };
 
-    out.into()
+    Ok(out)
 }

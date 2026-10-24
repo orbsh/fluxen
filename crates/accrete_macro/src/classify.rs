@@ -71,20 +71,23 @@ pub fn impl_classify_accrete(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     let g = if struct_has_field(ast, "attrs") {
         quote! {
             impl Classify for #name {
+                // `borrow_attrs()` is None while the attrs RefCell is already
+                // borrowed (re-entrant render). Reporting "no attrs" beats a
+                // panic inside generated code the user cannot see.
                 fn get_class(&self) -> &Option<Vec<String>> {
-                    self.borrow_attrs().unwrap().get_class()
+                    match self.borrow_attrs() { Some(a) => a.get_class(), None => &None }
                 }
                 fn get_selector(&self) -> &Option<String> {
-                    self.borrow_attrs().unwrap().get_selector()
+                    match self.borrow_attrs() { Some(a) => a.get_selector(), None => &None }
                 }
                 fn add_class(&mut self, class: &str) {
-                    self.borrow_attrs_mut().unwrap().add_class(class);
+                    if let Some(a) = self.borrow_attrs_mut() { a.add_class(class) }
                 }
                 fn delete_class(&mut self, class: &str) {
-                    self.borrow_attrs_mut().unwrap().delete_class(class);
+                    if let Some(a) = self.borrow_attrs_mut() { a.delete_class(class) }
                 }
                 fn is_horizontal(&self) -> bool {
-                    self.borrow_attrs().unwrap().is_horizontal()
+                    match self.borrow_attrs() { Some(a) => a.is_horizontal(), None => false }
                 }
             }
         }

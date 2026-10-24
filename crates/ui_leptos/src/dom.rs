@@ -1,12 +1,5 @@
 /// 轻量 DOM 助手：封装 web_sys 的常用操作，供组件使用。
-pub fn el(tag: &str) -> web_sys::Element {
-    web_sys::window()
-        .unwrap()
-        .document()
-        .unwrap()
-        .create_element(tag)
-        .unwrap()
-}
+/// （旧的 `el(tag)` 助手在 DOM 上建裸节点，已无人调用——组件一律走 leptos 的 view。）
 
 pub fn set_class(el: &web_sys::Element, class: &str) {
     let _ = el.set_attribute("class", class);

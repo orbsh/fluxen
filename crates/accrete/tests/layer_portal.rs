@@ -4,6 +4,7 @@
 //! 注意：accrere 的解码不设 `deny_unknown_fields`，所以旧帧里多带的
 //! `overlay`/`dismiss` 键会被静默忽略——不是报错，是退化成纯定位 float。所以
 //! 「撤干净」这条用**编码结果里没有这两个键**来守，而不是用解码失败来守。
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use accrete::Accrete;
 

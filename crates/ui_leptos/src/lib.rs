@@ -1,3 +1,8 @@
+
+// Unit tests may use the unwrap/panic vocabulary the production targets are
+// denied (a panicking test is a failing test). `cfg(test)` is on only for this
+// crate's own test build; `tests/` crates set the same line at their own root.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn))]
 pub mod ctx;
 pub mod dom;
 pub mod hooks;
@@ -17,9 +22,12 @@ use wasm_bindgen::closure::Closure;
 
 /// 入口：解析 `#main` 的 host/token/codec/path，建立 WS，挂载响应式根，
 /// 并把页面级上行把手（`window.fluxen.send`）交给页面上的 JS。
-pub fn mount() {
-    let doc = web_sys::window().unwrap().document().unwrap();
-    let loc = doc.location().unwrap();
+pub fn mount() -> Result<(), String> {
+    // 挂载是页面级操作，每一步都可能失败（不在浏览器里、页面缺 #main、
+    // WS 连不上）；这些是调用方要呈现的状态，走 Result，不 panic。
+    let win = web_sys::window().ok_or("mount() outside a browser (no window)")?;
+    let doc = win.document().ok_or("no document")?;
+    let loc = doc.location().ok_or("no document.location")?;
     let mut host = "".to_owned();
     let mut token = None;
     let mut codec_type = CodecType::Cbor;
@@ -29,7 +37,7 @@ pub fn mount() {
         if let Some(h) = ele.get_attribute("data-host") {
             host = h;
         } else {
-            host = loc.host().unwrap();
+            host = loc.host().map_err(|_| "document.location has no host")?;
         }
 
         // 页面级配置：框架在 `#main` 上钉自己的通道路径与编码（宿主可能不是 `/channel`、
@@ -82,13 +90,16 @@ pub fn mount() {
         .ok()
         .flatten()
         .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-        .expect("no #main element to mount into");
+        .ok_or("no #main element to mount into")?;
+
+    // 传输先建：连不上是页面级错误（Result），不能挂上界面再炸。
+    let transport: std::rc::Rc<dyn transport::Transport> = std::rc::Rc::new(
+        transport_ws::WsTransport::new(&url, codec.clone())?,
+    );
 
     // mount_to 返回的 UnmountHandle 被 Drop 时会卸载视图——`let _ =` 会让界面挂上即被拆掉
     // （症状正是"ws 正常但界面空白"）。必须 forget 持有整个应用生命周期。
     leptos::mount::mount_to(parent, move || {
-        let transport: std::rc::Rc<dyn transport::Transport> =
-            std::rc::Rc::new(transport_ws::WsTransport::new(&url, codec.clone()));
         // 必须在 Leptos 的运行期里装配：`Ctx::new` 用 Executor::spawn_local，早于
         // mount_to 调用它会 panic（"before a global executor was initialized"）。
         let ctx = Ctx::new(transport, codec);
@@ -100,6 +111,7 @@ pub fn mount() {
         }
     })
     .forget();
+    Ok(())
 }
 
 /// 页面级上行把手：`window.fluxen.send(event, data)`。

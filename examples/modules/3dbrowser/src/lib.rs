@@ -8,6 +8,7 @@
 //! `pkg/` + 本目录 `index.js` 一起放 CDN（或本地 assets），Canvas 组件的
 //! `url` 指向 `index.js`。宿主只认识四个导出（mount/update/resize/unmount），
 //! 数据区语义（`assets`/`primitives`）完全归本模块。
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use js_sys::Uint8Array;
 use serde::Deserialize;

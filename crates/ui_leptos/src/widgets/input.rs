@@ -10,7 +10,7 @@ use wasm_bindgen::JsCast;
 fn default_option_jskind(v: &Option<JsType>) -> Value {
     v.as_ref()
         .map(|x| x.default_value())
-        .unwrap_or_else(|| to_value("").unwrap())
+        .unwrap_or_else(|| Value::String(String::new()))
 }
 
 /// 输入框：`Field` 绑定写 form 字段信号；`Event`/`Local` 绑定在 Enter 时
@@ -60,11 +60,10 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
                 .map(|e| e.value())
                 .unwrap_or_default();
             let parsed = match k1.as_ref() {
-                Some(JsType::bool) => to_value(event_value == "true"),
-                Some(JsType::number) => to_value(event_value.parse::<f64>().unwrap_or(0.0)),
-                _ => to_value(event_value),
-            }
-            .unwrap();
+                Some(JsType::bool) => Value::Bool(event_value == "true"),
+                Some(JsType::number) => Value::from(event_value.parse::<f64>().unwrap_or(0.0)),
+                _ => Value::String(event_value),
+            };
             slot.set(parsed);
         }
     };

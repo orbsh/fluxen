@@ -9,3 +9,6 @@ ui_leptos = { path = "../ui_leptos", optional = true }
 
 [features]
 leptos = ["dep:ui_leptos"]
+
+[lints]
+workspace = true

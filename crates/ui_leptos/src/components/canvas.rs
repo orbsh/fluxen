@@ -178,6 +178,8 @@ fn mount_module(
         Some(v) => v.to_string(),
     };
     nr.on_load(move |el| {
+        // on_load 交回的就是宿主自己建的那个 div，类型收窄只可能成功。
+        #[allow(clippy::expect_used)]
         let el: web_sys::HtmlElement = el.dyn_into().expect("div is element");
         // 幂等护栏（原地 rebuild 会重跑 on_load）：状态写在元素属性上。
         // 1) 标 "true" 且容器里还有模块写进去的内容 → 活着，什么都不做；
@@ -235,6 +237,8 @@ fn mount_module(
             let payload0 = Rc::clone(&payload_w);
             let size_style = size_style.clone();
             let opts_json = options_w.clone();
+            // 属性写入失败只可能是元素已脱离文档；标记是幂等护栏，不是数据面。
+            #[allow(clippy::expect_used)]
             el.set_attribute("data-module-mounted", "pending")
                 .expect("set mounted marker");
             // mount 真正推给模块的载荷 = 触发挂载的那份，也必须是下面 update 的

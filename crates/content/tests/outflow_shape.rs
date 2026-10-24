@@ -1,5 +1,6 @@
 //! ADR 0010: the wrapped event payload shape shared by the uplink and
 //! the `local` slot write (`Ctx::emit` builds exactly this object).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use content::Outflow;
 use serde_json::json;

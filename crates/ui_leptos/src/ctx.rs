@@ -56,6 +56,10 @@ pub struct LeptosTransport {
 impl Ctx {
     /// 装配：传入已连接的 transport（由 lib.rs 按 feature 选择实现）。
     /// 框架桥接：`spawn_local` 读流写 `frame` 信号，Effect 消费解码分发。
+    /// # Panics
+    /// 只在 leptos 的 owner 作用域里构造（mount/render 期）；没有 owner 就
+    /// 没有响应式图，构造本身无从谈起——这是运行期不变量，不是可返回的错误。
+    #[allow(clippy::expect_used)]
     pub fn new(transport: std::rc::Rc<dyn Transport>, codec: ActiveCodec) -> Self {
         let frame = RwSignal::new(Vec::new());
         let layout = RwSignal::new(Accrete::text(Default::default()));
@@ -223,12 +227,12 @@ fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
                 let n = x.name.clone();
                 let d = x.data.clone();
                 TMPL.write()
-                    .expect("write TMPL failed")
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(n, d);
             }
             Content::Create(x) => {
                 let mut d = x.data.clone();
-                let env = TMPL.read().expect("read TMPL failed");
+                let env = TMPL.read().unwrap_or_else(std::sync::PoisonError::into_inner);
                 for w in d.expand(&env) {
                     tracing::warn!("{w}");
                 }
@@ -238,7 +242,7 @@ fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
             }
             Content::Set(x) => {
                 let mut d = x.data.clone();
-                let env = TMPL.read().expect("read TMPL failed");
+                let env = TMPL.read().unwrap_or_else(std::sync::PoisonError::into_inner);
                 for w in d.expand(&env) {
                     tracing::warn!("{w}");
                 }
@@ -246,7 +250,7 @@ fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
             }
             Content::Append(x) => {
                 let mut d = x.data.clone();
-                let env = TMPL.read().expect("read TMPL failed");
+                let env = TMPL.read().unwrap_or_else(std::sync::PoisonError::into_inner);
                 for w in d.expand(&env) {
                     tracing::warn!("{w}");
                 }
