@@ -2,6 +2,7 @@
 //!
 //! 三条不变量：往返不丢模块私有词汇、缺省时 wire 上不出现该键、patch 能按
 //! wire 形状寻址到袋里的深层键（与 ADR 0005 的指针词法同一套）。
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use accrete::{Accrete, AccreteOps};
 use serde_json::{json, Value};

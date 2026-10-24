@@ -28,8 +28,11 @@ pub struct WsTransport {
 
 impl WsTransport {
     /// 连接并启动读循环。下行帧通过内部 channel 桥接为流。
-    pub fn new(url: &str, codec: ActiveCodec) -> Self {
-        let ws = WebSocket::open(url).expect("ws open failed");
+    ///
+    /// 失败返回错误而不是 panic：连不上（服务端未起、代理/握手被拒）是
+    /// 页面必须能呈现的状态，不是进程级不可能事件。
+    pub fn new(url: &str, codec: ActiveCodec) -> Result<Self, String> {
+        let ws = WebSocket::open(url).map_err(|e| format!("ws open failed: {e:?}"))?;
         let (write, mut read) = ws.split();
         let (tx, rx) = futures::channel::mpsc::unbounded();
 
@@ -43,11 +46,11 @@ impl WsTransport {
             }
         });
 
-        Self {
+        Ok(Self {
             write: Rc::new(RefCell::new(write)),
             rx: Rc::new(RefCell::new(rx)),
             codec,
-        }
+        })
     }
 }
 

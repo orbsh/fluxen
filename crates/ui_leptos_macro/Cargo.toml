@@ -10,3 +10,5 @@ syn = { workspace = true, features = ["full", "extra-traits"] }
 
 [lib]
 proc-macro = true
+[lints]
+workspace = true

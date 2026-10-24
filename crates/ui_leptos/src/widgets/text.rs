@@ -34,8 +34,10 @@ pub fn text_(accrete: Text, ctx: &Ctx) -> AnyView {
 
     move || -> AnyView {
         let text_content = match use_source_value(&ctx, &accrete) {
-            Some(j) if j.is_string() => j.as_str().unwrap().to_owned(),
-            Some(j) => j.to_string(),
+            Some(j) => match j.as_str() {
+                Some(s) => s.to_owned(),
+                None => j.to_string(),
+            },
             None => "".to_string(),
         };
 

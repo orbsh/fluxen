@@ -15,14 +15,22 @@ struct Message {
 }
 
 fn default_for(kind: &Option<JsType>, default: &Option<Value>) -> Value {
+    // serde_json has an infallible constructor for every JSON scalar, so the
+    // default never needs a `to_value(..).unwrap()` round trip.
     match kind {
         Some(JsType::number) => {
-            to_value(default.as_ref().and_then(|x| x.as_f64()).unwrap_or(0.0)).unwrap()
+            Value::from(default.as_ref().and_then(|x| x.as_f64()).unwrap_or(0.0))
         }
         Some(JsType::bool) => {
-            to_value(default.as_ref().and_then(|x| x.as_bool()).unwrap_or(false)).unwrap()
+            Value::Bool(default.as_ref().and_then(|x| x.as_bool()).unwrap_or(false))
         }
-        _ => to_value(default.as_ref().and_then(|x| x.as_str()).unwrap_or("")).unwrap(),
+        _ => Value::String(
+            default
+                .as_ref()
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string(),
+        ),
     }
 }
 

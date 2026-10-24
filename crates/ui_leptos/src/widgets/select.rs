@@ -4,7 +4,7 @@ use crate::hooks::{use_common_css, use_source_list, use_source_untracked, use_ta
 use accrete::{AccreteOps, Select, classify::Classify};
 use leptos::html::*;
 use leptos::prelude::*;
-use serde_json::to_value;
+use serde_json::{Value, to_value};
 
 /// 下拉选择：`options` 从 `ctx.list[source]` 取，`current` 取 `bind["value"].default`。
 pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
@@ -32,7 +32,7 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
                 option.add_class("selected");
                 div().child(render_accrete(&ctx, &option)).into_any()
             } else {
-                let v = to_value(&key).unwrap_or_else(|_| to_value("").unwrap());
+                let v = to_value(&key).unwrap_or_else(|_| Value::String(String::new()));
                 let c = current;
                 let click_ctx = ctx.clone();
                 let b = accrete.clone();

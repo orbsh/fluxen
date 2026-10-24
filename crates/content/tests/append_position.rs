@@ -4,6 +4,7 @@
 //! 方向是刻意的：索引从**本操作自己的锚定端**往内数——append 锚在尾，正数因此往头走；
 //! 「从头部锚定的插入」正负相反（与它一致，方向相反）。域外**拒收**，不夹取：夹取会把行
 //! 放到调用方没要求的位置，正是静默降级。
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use content::{AppendOp, Content, Message, append_index};
 use serde_json::{Value, json};

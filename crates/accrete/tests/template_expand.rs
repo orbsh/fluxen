@@ -2,6 +2,7 @@
 //! slots in registered JSON bodies with the data values' JSON
 //! serialization, then parses the result back into Accrete. No template
 //! language: producers build loop/conditional fragments in `data`.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use accrete::Accrete;
 use accrete::AccreteOps;

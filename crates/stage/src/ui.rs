@@ -72,6 +72,27 @@ pub fn content_type_for(name: &str) -> &'static str {
     }
 }
 
+/// Build a reply from a status and body. `Response::builder()` fails only on an
+/// invalid status/header value, and every call site here passes constants — so
+/// the failure arm degrades to a bare 500 instead of panicking mid-handler.
+fn reply(status: StatusCode, body: impl Into<Body>) -> Response<Body> {
+    let mut out = Response::new(body.into());
+    *out.status_mut() = status;
+    out
+}
+
+/// The same, plus one header (a `HeaderValue` is already validated, so the
+/// insert cannot fail).
+fn reply_typed(
+    status: StatusCode,
+    ct: axum::http::HeaderValue,
+    body: impl Into<Body>,
+) -> Response<Body> {
+    let mut out = reply(status, body);
+    out.headers_mut().insert(axum::http::header::CONTENT_TYPE, ct);
+    out
+}
+
 /// axum fallback handler: routed paths (/channel, /cli, /send) never land here.
 pub async fn ui_fallback(Extension(st): Extension<UiState>, req: Request) -> Response<Body> {
     match st.proxy {
@@ -90,18 +111,16 @@ async fn proxy_to(trunk: std::net::SocketAddr, req: Request) -> Response<Body> {
     );
     let parsed: axum::http::Uri = match origin.parse() {
         Ok(u) => u,
-        Err(_) => {
-            return Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from("bad uri"))
-                .unwrap()
-        }
+        Err(_) => return reply(StatusCode::BAD_REQUEST, "bad uri"),
     };
     parts.uri = parsed;
-    parts.headers.insert(
-        axum::http::header::HOST,
-        trunk.to_string().parse().expect("valid host value"),
-    );
+    // A bad configured host is a 400, not a panic in the proxy: the value
+    // comes from configuration, so its validity is data, not an invariant.
+    let host: axum::http::HeaderValue = match trunk.to_string().parse() {
+        Ok(v) => v,
+        Err(_) => return reply(StatusCode::BAD_REQUEST, "bad trunk host"),
+    };
+    parts.headers.insert(axum::http::header::HOST, host);
     let client = Client::builder(TokioExecutor::new()).build_http();
     let fwd = Request::from_parts(parts, body);
     match client.request(fwd).await {
@@ -120,22 +139,15 @@ async fn proxy_to(trunk: std::net::SocketAddr, req: Request) -> Response<Body> {
                         .unwrap_or_else(|| {
                             axum::http::HeaderValue::from_static("application/octet-stream")
                         });
-                    Response::builder()
-                        .status(p.status)
-                        .header(axum::http::header::CONTENT_TYPE, ct)
-                        .body(Body::from(bytes))
-                        .unwrap()
+                    reply_typed(p.status, ct, Body::from(bytes))
                 }
-                Err(e) => Response::builder()
-                    .status(StatusCode::BAD_GATEWAY)
-                    .body(Body::from(format!("trunk body read failed: {e}")))
-                    .unwrap(),
+                Err(e) => reply(
+                    StatusCode::BAD_GATEWAY,
+                    format!("trunk body read failed: {e}"),
+                ),
             }
         }
-        Err(e) => Response::builder()
-            .status(StatusCode::BAD_GATEWAY)
-            .body(Body::from(format!("trunk proxy failed: {e}")))
-            .unwrap(),
+        Err(e) => reply(StatusCode::BAD_GATEWAY, format!("trunk proxy failed: {e}")),
     }
 }
 
@@ -144,20 +156,17 @@ async fn serve_static(st: &UiState, req: Request) -> Response<Body> {
         return not_found("no such path");
     };
     match tokio::fs::read(st.dist.join(&rel)).await {
-        Ok(bytes) => Response::builder()
-            .status(StatusCode::OK)
-            .header(axum::http::header::CONTENT_TYPE, content_type_for(&rel))
-            .body(Body::from(bytes))
-            .unwrap(),
+        Ok(bytes) => reply_typed(
+            StatusCode::OK,
+            axum::http::HeaderValue::from_static(content_type_for(&rel)),
+            Body::from(bytes),
+        ),
         Err(_) => not_found(format!("not in dist: /{rel}")),
     }
 }
 
 fn not_found(msg: impl Into<Body>) -> Response<Body> {
-    Response::builder()
-        .status(StatusCode::NOT_FOUND)
-        .body(msg.into())
-        .unwrap()
+    reply(StatusCode::NOT_FOUND, msg)
 }
 
 #[cfg(test)]

@@ -21,7 +21,7 @@ pub fn textarea_(accrete: TextArea, ctx: &Ctx) -> AnyView {
     // 重跑 → 整棵子树重建、刚发送的内容从槽里"还原"（e2e 抓到的回路；
     // 订阅联动是 text/placeholder 这类纯读方的事，它们在 render 闭包里
     // tracked 读）。
-    let initial = use_source_untracked(&ctx, &accrete, "value").unwrap_or_else(|| to_value("").unwrap());
+    let initial = use_source_untracked(&ctx, &accrete, "value").unwrap_or_else(|| Value::String(String::new()));
     let slot = RwSignal::new(initial);
     let placeholder =
         use_source_untracked(&ctx, &accrete, "placeholder").and_then(|d| d.as_str().map(String::from));
@@ -36,7 +36,7 @@ pub fn textarea_(accrete: TextArea, ctx: &Ctx) -> AnyView {
                 .and_then(|t| t.dyn_into::<web_sys::HtmlTextAreaElement>().ok())
                 .map(|e| e.value())
                 .unwrap_or_default();
-            slot.set(to_value(v).unwrap());
+            slot.set(Value::String(v));
         };
         let onkeydown = move |ev: web_sys::KeyboardEvent| {
             if ev.key() == "Enter" {
@@ -51,7 +51,7 @@ pub fn textarea_(accrete: TextArea, ctx: &Ctx) -> AnyView {
                 }
                 // 先清空再 emit：上行 future 可能迟迟不 resolve，信号写
                 // 必须在 send 之前落定（dioxus 移植教训）。
-                slot.set(to_value("").unwrap());
+                slot.set(Value::String(String::new()));
                 // 命令式清空 DOM：用户键入脏化 defaultValue 后，属性级
                 // 更新不再重置显示值，本节点全程存活（同 input_ 缺陷修复）。
                 if let Some(el) = ev

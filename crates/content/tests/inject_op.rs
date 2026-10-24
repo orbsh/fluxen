@@ -1,6 +1,7 @@
 //! ADR 0011: the remote vals-plane write (`action: inject`). Its payload is
 //! the ADR 0010 wrapper, so the slot ends up holding exactly what an in-page
 //! `Local` emit would write — subscribers cannot tell the two apart.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use content::{Content, InjectOp};
 use serde_json::{Value, json};

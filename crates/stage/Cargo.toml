@@ -23,3 +23,6 @@ axum = { version = "0.8", features = ["ws"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 http-body-util = "0.1"
 serde_yaml = "0.9"
+
+[lints]
+workspace = true

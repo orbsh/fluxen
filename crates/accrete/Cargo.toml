@@ -19,3 +19,6 @@ serde_json.workspace = true
 schema = ["dep:schemars"]
 classify = ["dep:regex", "dep:accrete_macro"]
 ops = ["dep:accrete_macro"]
+
+[lints]
+workspace = true

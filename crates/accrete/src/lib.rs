@@ -12,7 +12,7 @@ use accrete_macro::AccreteOps;
 use accrete_macro::{ClassifyAccrete, ClassifyAttrs, ClassifyVariant};
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, to_value};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -66,12 +66,13 @@ impl JsType {
     }
 
     pub fn default_value(&self) -> Value {
+        // JSON scalars have infallible constructors: no serializer round trip,
+        // so nothing can fail for a value this module itself chose.
         match self {
-            Self::number => to_value(0),
-            Self::bool => to_value(false),
-            _ => to_value(""),
+            Self::number => Value::from(0),
+            Self::bool => Value::Bool(false),
+            _ => Value::String(String::new()),
         }
-        .unwrap()
     }
 }
 
@@ -948,7 +949,9 @@ impl Accrete {
 
         // Last segment: apply f. Note RFC 6901 makes "/" the member keyed
         // "" (not the node itself), which the Object arm below handles.
-        let seg = segs.last().unwrap();
+        let Some(seg) = segs.last() else {
+            return Err(format!("pointer has no segment to write: {path:?}"));
+        };
         match cur {
             Value::Object(map) => {
                 let old = map

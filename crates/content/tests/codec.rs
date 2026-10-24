@@ -1,5 +1,6 @@
 //! Codec wire-format contract: Json/CBOR round-trips of Message/Content,
 //! plus the `OneOrMany` shape the gateway wire relies on.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use content::codec::{ActiveCodec, CodecType};
 use content::{AppendOp, Content, Influx, Message, PatchKind, PatchOp, RemoveOp};

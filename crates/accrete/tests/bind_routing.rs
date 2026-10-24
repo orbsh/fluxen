@@ -1,6 +1,7 @@
 //! ADR 0008 wire shapes: `local` kind (slot = 槽名), optional `path`
 //! on both source/local, `Target` retired (unknown kinds must fail),
 //! and the read-side pointer `get_at` on the WIRE shape.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use accrete::{Accrete, AccreteOps, BindVariant};
 use serde_json::json;

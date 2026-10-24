@@ -1,5 +1,6 @@
 //! YAML carrier tests: /send shape contract (Content item or array,
 //! action preserved end-to-end).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 #[test]
 fn yaml_single_content_item_keeps_action() {
