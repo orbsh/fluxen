@@ -2,8 +2,7 @@
 """Fluxen walkthrough demo: ONE chat box, every element streamed into a data slot.
 
 Steps (each waits for one Enter; --auto runs unattended, --delay paces the text):
-  1  send 00.main.yaml      skeleton + the home/about pages
-  2  send 00.chat.yaml      the chat page joins the menu
+  1  send 00.main.yaml      the two-column shell (left graph, right stream)
   3  inject `page`=chat     switch the visible page remotely (ADR 0011)
   4  append the ONE message row (9 children, every child bound to a slot) and
                             seed the four text slots
@@ -60,19 +59,19 @@ Implementation choices worth naming:
   lands (ADR 0015) — Monaco is ~4.5 MB and must never ride the page load. Its save
   is Ctrl/Cmd+S in the editor, which uplinks `{code, lang}` over the same leg the
   review form submits through (ADR 0016).
-- The closing graph is the SAME canvas host with a different `url`: renderer
-  configuration is not DSL vocabulary, it rides the `options` bag (ADR 0017) —
-  core passes it through untouched, the module merges it over its own defaults.
-  Three cumulative snapshots (not per-node patches) because one update = one
-  physics push; the module diffs by node id, so re-sending what is already there
-  is a no-op.
+- The graph is the LEFT COLUMN, not a message (ADR 0018): a native `forcegraph`
+  component with its own WebGL2 renderer — no JS asset, no `url`, no module
+  contract, no three.js. Its knobs are typed DSL (`style`), not an opaque options
+  bag, because the renderer is ours. Cumulative snapshots (not per-node patches)
+  because one update = one physics push; it diffs by node id, so re-sending what
+  is already there is a no-op, and an append never re-frames the camera. The
+  final frame is a `focus` directive — the equivalent of "a search landed".
 
 Prerequisites: crates/ui_leptos/assets/3dbrowser/ (with MaterialsVariantsShoe.glb),
-crates/ui_leptos/assets/splatviewer/ (with truck.ksplat), crates/ui_leptos/assets/editor/
-and crates/ui_leptos/assets/monaco/ (the editor wrapper + Monaco's AMD subset; recipes
-in crates/ui_leptos/modules/editor/index.js and the Dockerfile), and
-crates/ui_leptos/assets/forcegraph/ (index.js + cbor.js + 3d-force-graph.min.js;
-recipe in examples/modules/forcegraph/index.js and the Dockerfile).
+crates/ui_leptos/assets/splatviewer/ (with truck.ksplat), and crates/ui_leptos/assets/editor/
++ crates/ui_leptos/assets/monaco/ (the editor wrapper + Monaco's AMD subset; recipes in
+crates/ui_leptos/modules/editor/index.js and the Dockerfile). The graph needs no assets:
+its renderer is compiled into the wasm bundle.
 Run from the repo root (paths below are relative to it).
 
 Usage:
@@ -100,7 +99,7 @@ CAR_SLOT = "intro_car"         # data slot: the splat scene's payload
 SHOE_SLOT = "intro_shoe"       # data slot: the mesh model's payload
 CODE_SLOT = "patch_code"       # data slot: the editor's payload {code, lang}
 SAY_GRAPH = "say_graph"        # data slot: the relationship-graph paragraph
-GRAPH_SLOT = "graph_map"       # data slot: the force graph's {nodes, links}
+GRAPH_SLOT = "graph"           # data slot: the force graph's {nodes, links, focus?}
 
 TREND_DATA = "/bind/value/default/data"     # pointer into the trend slot node
 TEXT_VALUE = "/bind/value/default"          # pointer into a text slot node
@@ -108,7 +107,6 @@ RADAR_FILE = "examples/yaml/00.radar.yaml"  # the single source of the chart dat
 
 THREED_URL = "/assets/3dbrowser/index.js"
 SPLAT_URL = "/assets/splatviewer/index.js"
-GRAPH_URL = "/assets/forcegraph/index.js"
 SHOE_URL = "/assets/3dbrowser/MaterialsVariantsShoe.glb"
 TRUCK_URL = "/assets/splatviewer/truck.ksplat"
 
@@ -116,20 +114,7 @@ TRUCK_URL = "/assets/splatviewer/truck.ksplat"
 # data area takes no space (ADR 0012), so the area appears with its payload.
 SPLAT_SIZE = ("720px", "460px")
 SHOE_SIZE = ("640px", "420px")
-GRAPH_SIZE = ("100%", "460px")
 
-# The closing graph's renderer options (ADR 0017). The core interprets NONE of
-# these keys — they ride `Canvas.options` and the module merges them over its own
-# defaults, so the DSL stays free of any one library's vocabulary. Sizes are
-# screen pixels: node diameter 3/6/9/12 px by weight tier, edge width 1.4 px.
-GRAPH_OPTIONS = {
-    "nodeSizePx": 4,
-    "nodeSizeStepPx": 4,
-    "linkWidthPx": 1.4,
-    "linkOpacity": 0.85,
-    "fitPaddingPx": 56,
-    "particles": 1,
-}
 
 # The editor area (ADR 0016). An editor is a module host with a definite size like a
 # canvas, and its payload is {code, lang} — "the code as a parameter".
@@ -156,7 +141,7 @@ GRAPH_NODES = [
     {"id": "editor", "name": "editor", "kind": "component", "weight": 6},
     {"id": "rack", "name": "rack", "kind": "component", "weight": 6},
     {"id": "pages", "name": "pages", "kind": "component", "weight": 5},
-    {"id": "forcegraph", "name": "forcegraph", "kind": "module", "weight": 6},
+    {"id": "forcegraph", "name": "forcegraph", "kind": "native", "weight": 7},
     {"id": "browser3d", "name": "3dbrowser", "kind": "module", "weight": 5},
     {"id": "splatviewer", "name": "splatviewer", "kind": "module", "weight": 5},
     {"id": "g2chart", "name": "g2chart", "kind": "module", "weight": 4},
@@ -173,18 +158,19 @@ GRAPH_LINKS = [
     {"source": "canvas", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
     {"source": "chart", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
     {"source": "editor", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
-    {"source": "forcegraph", "target": "canvas", "kind": "mounts", "strength": 4},
+    {"source": "forcegraph", "target": "accrete", "kind": "node", "strength": 3},
     {"source": "browser3d", "target": "canvas", "kind": "mounts", "strength": 4},
     {"source": "splatviewer", "target": "canvas", "kind": "mounts", "strength": 4},
     {"source": "g2chart", "target": "chart", "kind": "mounts", "strength": 3},
     {"source": "monaco", "target": "editor", "kind": "mounts", "strength": 5},
 ]
 
-# (label, node count, link count) — three cumulative snapshots. One frame = one
-# update = one physics push (k10r's measured lesson: per-point frames make the
-# graph jitter); the module diffs by id, so a resent node is a no-op.
+# (label, node count, link count) — cumulative snapshots for the LEFT column. The
+# crate layer is already on screen (00.main.yaml seeds it), so the demo only grows
+# it: components, then external modules. One frame = one update = one physics
+# push; the component diffs by id, so a resent node is a no-op and an append never
+# re-frames the camera.
 GRAPH_BEATS = (
-    ("crate 层", 5, 4),
     ("组件层", 10, 9),
     ("外部模块层", 15, 14),
 )
@@ -249,11 +235,11 @@ PATCH_TEXT = """最后一步换个方向：前面都在"看"，这一段是"改"
 
 试着改一行——比如把 collect() 换成别的东西——然后按 Ctrl/Cmd+S，看 stage 控制台的 `<-` 块。"""
 
-GRAPH_TEXT = """最后一张图不是数据，是这套东西自己。刚才看到的每一样——排版、图表、两个 3D 窗口、编辑器——在实现上都落在同一个组件上：canvas，一个只负责"把一个数据槽交给外部模块"的空壳。下面这张力导向图把它们的依赖关系摊开：圆点是 crate / 组件 / 外部模块，线是"谁渲染谁、谁挂载谁"，点越大、线越粗，表示它在链条上的位置越重。
+GRAPH_TEXT = """最后看一眼左边那张图——它一直在这儿，只是你没注意到。这一页的布局从第一秒就是这个形态：左边一张常驻的关系图，右边一条流。没有菜单，没有标签页，也没有频道列表。原来的界面把"去哪儿"交给分类，而分类是写完就不改的一次性判断；这里把"去哪儿"交给关系，关系是当下的——"和这件事相连的还有谁"，树状菜单天然答不了。
 
-有两处值得看一眼。第一，换渲染器没有换任何 DSL 语法：同一个 canvas 节点，改的是 url 指向的模块；模块自己的配置——节点和边的基础尺寸、力参数、配色——装在一个 options 袋子里原样透传过去，核心一个键都不认识，所以再加十个图库也不用动协议。第二，图是流式长出来的：下面分三批各送一份整份快照，模块按节点 id 求差量——第一批只有 crate 层，第二批长出组件，第三批接上外部模块，已经画出来的点不会重排。
+图里是这套东西自己：圆点是 crate / 组件 / 外部模块，线是"谁渲染谁、谁挂载谁"，点越大、线越粗，表示它在链条上的位置越重。有两处值得看一眼。第一，它不是外包给某个 JS 图库的：渲染、力布局、相机、拾取全在这套 wasm 里，所以旋钮进的是 DSL 的类型化字段（节点尺寸、边的宽度、力参数），不是透传给别人的黑盒配置——也因此没有 three.js 那 1.4 MB。第二，图是长出来的：刚才送的那几份整份快照按节点 id 求差量，组件一批批加进来，已经站好的点不会重排；最后一下是一次距焦——相机飞向那几个节点，别的没消失，只是退到后面。搜索落地时就是这么动的。
 
-左键拖动转视角，滚轮缩放；鼠标停在点上能看到它的类型和权重。"""
+左键拖动转视角，滚轮缩放，点一个节点会往上回一条事件。"""
 
 
 def text_node(slot):
@@ -336,8 +322,10 @@ def frame_message():
                 canvas_node(THREED_URL, SHOE_SLOT, *SHOE_SIZE),
                 text_node(SAY_PATCH),
                 editor_node("patch-editor", CODE_SLOT, *CODE_SIZE),
+                # The graph is NOT part of the stream any more (ADR 0018): it is
+                # the left column of the shell, fed by its own slot. The row ends
+                # with the sentence that explains it.
                 text_node(SAY_GRAPH),
-                canvas_node(GRAPH_URL, GRAPH_SLOT, *GRAPH_SIZE, options=GRAPH_OPTIONS),
             ],
         },
     }
@@ -513,14 +501,6 @@ def main():
     step.wait("发送 00.main.yaml")
     print(f"    send → {push_file('00.main.yaml')}")
 
-    step.wait("发送 00.chat.yaml")
-    print(f"    send → {push_file('00.chat.yaml')}")
-
-    # ADR 0011: remote write into the vals plane — the skeleton has no in-page
-    # writer for `page`, so pages stays blank until this inject lands.
-    step.wait("inject `page` = chat——远程把当前页切到 chat（vals 平面写入）")
-    print(f"    send → {send_json(mirror, {'action': 'inject', 'slot': 'page', 'data': 'chat'})}")
-
     step.wait("整条消息入场（一个 box：引言 / 折线 / 雷达 / 摘要 / 复核表 / 车 / 鞋 / 编辑器 / 关系图，全部绑槽）")
     print(f"    append row → {send_json(mirror, frame_message())}")
     for slot in (ANALYTICS, SUMMARY, SAY_CAR, SAY_SHOE, SAY_PATCH, SAY_GRAPH):
@@ -579,12 +559,24 @@ def main():
     type_out(mirror, SAY_GRAPH, GRAPH_TEXT, delay, "关系图")
 
     for label, n_nodes, n_links in GRAPH_BEATS:
-        step.wait(f"关系图入场：{label}（整份快照写进槽——{n_nodes} 点 / {n_links} 线，模块按 id 求差量）")
-        payload = {"nodes": GRAPH_NODES[:n_nodes], "links": GRAPH_LINKS[:n_links]}
+        step.wait(f"左图生长：{label}（整份快照写进 graph 槽——{n_nodes} 点 / {n_links} 线，组件按 id 求差量、不重排）")
+        payload = {"nodes": GRAPH_NODES[:n_nodes], "links": GRAPH_LINKS[:n_links], "focus": None}
         print(f"    set payload → {send_json(mirror, frame_set_payload(GRAPH_SLOT, payload))}")
         time.sleep(0.8)
 
-    print("\n完成。一个 box 里引言/图表/摘要/复核表/两件商品/编辑器/关系图依次到位；折线 30 天，复核表可提交，编辑器可回传代码，关系图可拖动缩放。")
+    step.wait("左图距焦：把发「搜索」那一下的等价物打出来——相机飞向 accrete/content/transport 这一簇")
+    focus_payload = {
+        "nodes": GRAPH_NODES,
+        "links": GRAPH_LINKS,
+        "focus": {"ids": ["accrete", "content", "transport"], "seq": 1},
+    }
+    print(f"    set payload → {send_json(mirror, frame_set_payload(GRAPH_SLOT, focus_payload))}")
+    time.sleep(1.2)
+
+    print(
+        "\n完成。左边是常驻的关系图（可拖动旋转、滚轮缩放、点节点回事件），右边是消息流；"
+        "折线 30 天，复核表可提交，编辑器可回传代码。"
+    )
 
 
 if __name__ == "__main__":

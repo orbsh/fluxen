@@ -1,0 +1,174 @@
+# 原生力导向图组件（ADR 0018）：`forcegraph` 节点，不是 canvas 模块。
+#
+# 与 19.canvas.forcegraph.yaml 的区别是结构性的，不是配置：
+#   * 没有 `url`——渲染器与布局都在 wasm 里（crates/forcegraph），没有 JS 资产、
+#     没有 mount/update/resize/unmount 契约、没有 3d-force-graph 与 three.js。
+#   * 没有 `options` 动态袋——旋钮是 DSL 里的 `style` 结构，字段类型化、可被
+#     schema 与 patch 校验。
+#   * 取景规则变了：`auto_fit` 只在第一批非空载荷生效，之后的追加不重排、不飞
+#     相机，新点就近落在邻居旁边（布局稳定是导航成立的前提）。
+#
+# 喂数据的方式不变：每帧送一份整份快照（`{nodes, links, focus?}`），组件按节点
+# id 求差量，重复送达幂等。`focus` 是视图指令：`{ids, seq?}`，`seq` 变了同一个
+# 目标可以再飞一次；不抬 `seq` 的重复写入不动相机。
+#
+# 前置：布局侧先发 00.main.yaml + 00.chat.yaml。本文件不依赖任何模块资产。
+
+# ---- 第 1 帧：骨架（空载荷不占位，ADR 0012） ---------------------------------
+- action: append
+  event: chat
+  data:
+    type: forcegraph
+    attrs:
+      width: 100%
+      height: 460px
+    style:
+      node_size_px: 4
+      node_size_step_px: 4
+      link_width_px: 1.4
+      link_opacity: 0.85
+      fit_padding_px: 56
+    bind:
+      value:
+        kind: source
+        source: mfg
+
+# ---- 第 2 帧：crate 层 --------------------------------------------------------
+- action: set
+  event: mfg
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          focus: null
+          nodes:
+            - {id: accrete, name: accrete, kind: crate, weight: 9}
+            - {id: ui_leptos, name: ui_leptos, kind: crate, weight: 8}
+            - {id: content, name: content, kind: crate, weight: 7}
+            - {id: transport, name: transport, kind: crate, weight: 5}
+            - {id: stage, name: stage, kind: crate, weight: 6}
+          links:
+            - {source: ui_leptos, target: accrete, kind: renders, strength: 5}
+            - {source: stage, target: content, kind: encodes, strength: 4}
+            - {source: stage, target: ui_leptos, kind: serves, strength: 3}
+            - {source: transport, target: content, kind: carries, strength: 3}
+
+# ---- 第 3 帧：组件层 ----------------------------------------------------------
+- action: set
+  event: mfg
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          focus: null
+          nodes:
+            - {id: accrete, name: accrete, kind: crate, weight: 9}
+            - {id: ui_leptos, name: ui_leptos, kind: crate, weight: 8}
+            - {id: content, name: content, kind: crate, weight: 7}
+            - {id: transport, name: transport, kind: crate, weight: 5}
+            - {id: stage, name: stage, kind: crate, weight: 6}
+            - {id: canvas, name: canvas, kind: component, weight: 7}
+            - {id: chart, name: chart, kind: component, weight: 6}
+            - {id: editor, name: editor, kind: component, weight: 6}
+            - {id: rack, name: rack, kind: component, weight: 6}
+            - {id: pages, name: pages, kind: component, weight: 5}
+          links:
+            - {source: ui_leptos, target: accrete, kind: renders, strength: 5}
+            - {source: stage, target: content, kind: encodes, strength: 4}
+            - {source: stage, target: ui_leptos, kind: serves, strength: 3}
+            - {source: transport, target: content, kind: carries, strength: 3}
+            - {source: canvas, target: accrete, kind: node, strength: 2}
+            - {source: rack, target: pages, kind: rows, strength: 3}
+            - {source: canvas, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: chart, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: editor, target: ui_leptos, kind: mounted-by, strength: 3}
+
+# ---- 第 4 帧：外部模块层（追加不重排、不飞相机） ------------------------------
+- action: set
+  event: mfg
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          focus: null
+          nodes:
+            - {id: accrete, name: accrete, kind: crate, weight: 9}
+            - {id: ui_leptos, name: ui_leptos, kind: crate, weight: 8}
+            - {id: content, name: content, kind: crate, weight: 7}
+            - {id: transport, name: transport, kind: crate, weight: 5}
+            - {id: stage, name: stage, kind: crate, weight: 6}
+            - {id: canvas, name: canvas, kind: component, weight: 7}
+            - {id: chart, name: chart, kind: component, weight: 6}
+            - {id: editor, name: editor, kind: component, weight: 6}
+            - {id: rack, name: rack, kind: component, weight: 6}
+            - {id: pages, name: pages, kind: component, weight: 5}
+            - {id: forcegraph, name: forcegraph, kind: native, weight: 7}
+            - {id: browser3d, name: 3dbrowser, kind: module, weight: 5}
+            - {id: splatviewer, name: splatviewer, kind: module, weight: 5}
+            - {id: g2chart, name: g2chart, kind: module, weight: 4}
+            - {id: monaco, name: monaco, kind: lib, weight: 7}
+          links:
+            - {source: ui_leptos, target: accrete, kind: renders, strength: 5}
+            - {source: stage, target: content, kind: encodes, strength: 4}
+            - {source: stage, target: ui_leptos, kind: serves, strength: 3}
+            - {source: transport, target: content, kind: carries, strength: 3}
+            - {source: canvas, target: accrete, kind: node, strength: 2}
+            - {source: rack, target: pages, kind: rows, strength: 3}
+            - {source: canvas, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: chart, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: editor, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: forcegraph, target: accrete, kind: node, strength: 3}
+            - {source: browser3d, target: canvas, kind: mounts, strength: 4}
+            - {source: splatviewer, target: canvas, kind: mounts, strength: 4}
+            - {source: g2chart, target: chart, kind: mounts, strength: 3}
+            - {source: monaco, target: editor, kind: mounts, strength: 5}
+
+# ---- 第 5 帧：距焦（搜索那一下的等价物） --------------------------------------
+# 同一份快照 + focus：相机飞向这一簇，其余不消失（高亮由渲染器按 focus 判断）。
+# `seq` 必须变——不然同一目标重复送达不会重新飞。
+- action: set
+  event: mfg
+  data:
+    type: group
+    bind:
+      value:
+        kind: default
+        default:
+          focus: {ids: [accrete, content, transport], seq: 1}
+          nodes:
+            - {id: accrete, name: accrete, kind: crate, weight: 9}
+            - {id: ui_leptos, name: ui_leptos, kind: crate, weight: 8}
+            - {id: content, name: content, kind: crate, weight: 7}
+            - {id: transport, name: transport, kind: crate, weight: 5}
+            - {id: stage, name: stage, kind: crate, weight: 6}
+            - {id: canvas, name: canvas, kind: component, weight: 7}
+            - {id: chart, name: chart, kind: component, weight: 6}
+            - {id: editor, name: editor, kind: component, weight: 6}
+            - {id: rack, name: rack, kind: component, weight: 6}
+            - {id: pages, name: pages, kind: component, weight: 5}
+            - {id: forcegraph, name: forcegraph, kind: native, weight: 7}
+            - {id: browser3d, name: 3dbrowser, kind: module, weight: 5}
+            - {id: splatviewer, name: splatviewer, kind: module, weight: 5}
+            - {id: g2chart, name: g2chart, kind: module, weight: 4}
+            - {id: monaco, name: monaco, kind: lib, weight: 7}
+          links:
+            - {source: ui_leptos, target: accrete, kind: renders, strength: 5}
+            - {source: stage, target: content, kind: encodes, strength: 4}
+            - {source: stage, target: ui_leptos, kind: serves, strength: 3}
+            - {source: transport, target: content, kind: carries, strength: 3}
+            - {source: canvas, target: accrete, kind: node, strength: 2}
+            - {source: rack, target: pages, kind: rows, strength: 3}
+            - {source: canvas, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: chart, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: editor, target: ui_leptos, kind: mounted-by, strength: 3}
+            - {source: forcegraph, target: accrete, kind: node, strength: 3}
+            - {source: browser3d, target: canvas, kind: mounts, strength: 4}
+            - {source: splatviewer, target: canvas, kind: mounts, strength: 4}
+            - {source: g2chart, target: chart, kind: mounts, strength: 3}
+            - {source: monaco, target: editor, kind: mounts, strength: 5}

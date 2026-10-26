@@ -1,12 +1,16 @@
-# 初始 main 布局（完整帧：create 骨架 + home/about 数据行）。单独发送即可起
-# 全套。tab 栏用 box 包裹出内边距；pages
-# 字典 display=dom：切走再切回，页面内滚动/输入状态保持。
-# 菜单行（tabs 槽）与页面行（pages 槽）内容互异；点击 select emit 包装
-# 对象 {event, id?, data} 落 local 槽 `page`，pages 的 select 订阅按
-# /data 取键（ADR 0010；不设标题节点——键不是展示内容）。
-# chat 页不在初始菜单——后续用 00.chat.yaml 动态加入。
-# home 主体绑定事件 home::open：页面内输入框回车即上行（stage console
-# 可见），与 tab 的 local 联动相对照——事件走 transport，联动不走。
+# 初始布局：左图右流（ADR 0018 之后的主界面形态）。
+#
+# 屏幕固定两栏，没有菜单、没有 Tab、没有路由：
+#   左栏  常驻三维力导向图（`forcegraph` 原生组件），管结构、关联和状态；
+#   右栏  一条消息流（rack + chat 数据槽），管阅读、输入和操作。
+# 宽度不够时先收缩左图（见 custom.css 的 .stage-graph / .stage-stream）。
+#
+# 与旧版布局的差别：原先把「聊天」当成 pages 里的一页、左边挂频道 select ——
+# 频道列表按分类寻址，而分类是写完就不改的一次性判断。图按关系寻址，所以
+# 导航要素从左边的图来，不再有 tabs / pages / channel 这三样。
+#
+# 图的数据由后续帧继续喂（整份快照，按 id 求差量）：本文件只铺 crate 层，
+# 让左栏第一屏就有东西可看。
 - action: create
   event: ""
   data:
@@ -14,90 +18,104 @@
     attrs:
       class:
       - maximize
+      - stage-split
+      horizontal: true
     children:
+    # ---- 左栏：常驻关系图 ----------------------------------------------------
     - type: case
       attrs:
         class:
-        - --tabs
-        - nogrow
-        - shadow
-        horizontal: true
+        - stage-graph
       children:
-      - type: select
+      - type: forcegraph
         attrs:
-          horizontal: true
+          width: 100%
+          height: 100%
+        style:
+          fit_padding_px: 56
         bind:
           value:
-            kind: local
-            slot: page
-          options:
             kind: source
-            source: tabs
-    - type: pages
-      id: pager
+            source: graph
+    # ---- 右栏：消息流 --------------------------------------------------------
+    - type: case
       attrs:
         class:
-        - --content
+        - stage-stream
+        - main
         - shrink
-      display: dom
-      bind:
-        value:
-          kind: source
-          source: pages
-        select:
-          kind: local
-          slot: page
-          path: /data
-# ---- 菜单行：id 与页面行同键；box 逐 tab 项加内边距（不是整条 tab 栏） ----
-- action: append
-  event: tabs
+      children:
+      - type: rack
+        attrs:
+          class:
+          - --message
+          - box
+          - ac-start
+          - gap
+          - scrolly
+          scroll: true
+        bind:
+          value:
+            kind: source
+            source: chat
+        item:
+        - type: case
+          attrs:
+            class:
+            - nogrow
+            - as-end
+            - accent
+            - box
+            - border
+            - round
+            - shadow
+            selector: ask
+        - type: case
+          attrs:
+            class:
+            - nogrow
+            - as-stretch
+            - box
+            - border
+            - round
+            - shadow
+      - type: case
+        attrs:
+          class:
+          - --input
+          - nogrow
+          - box
+          horizontal: true
+        children:
+        - type: case
+          attrs:
+            horizontal: true
+          children:
+          - type: input
+            id: test
+            bind:
+              value:
+                kind: event
+                event: message
+
+# ---- 图的初始快照：crate 层 --------------------------------------------------
+- action: set
+  event: graph
   data:
-    type: text
-    id: home
-    attrs:
-      class:
-      - box
+    type: group
     bind:
       value:
         kind: default
-        default: 首页
-- action: append
-  event: tabs
-  data:
-    type: text
-    id: about
-    attrs:
-      class:
-      - box
-    bind:
-      value:
-        kind: default
-        default: 关于
-# ---- 页面行 ----
-- action: append
-  event: pages
-  data:
-    type: case
-    id: home
-    children:
-    - type: text
-      attrs:
-        format: md
-      bind:
-        value:
-          kind: default
-          default: "# 首页\n主体绑定事件 `home::open`：在下面输入框回车即上行（见 stage console）。"
-    - type: input
-      bind:
-        value:
-          kind: event
-          event: home::open
-- action: append
-  event: pages
-  data:
-    type: textarea
-    id: about
-    bind:
-      value:
-        kind: default
-        default: "关于页：dom 模式下切走再切回，这里的草稿不丢。"
+        default:
+          focus: null
+          nodes:
+            - {id: accrete, name: accrete, kind: crate, weight: 9}
+            - {id: ui_leptos, name: ui_leptos, kind: crate, weight: 8}
+            - {id: content, name: content, kind: crate, weight: 7}
+            - {id: transport, name: transport, kind: crate, weight: 5}
+            - {id: stage, name: stage, kind: crate, weight: 6}
+          links:
+            - {source: ui_leptos, target: accrete, kind: renders, strength: 5}
+            - {source: stage, target: content, kind: encodes, strength: 4}
+            - {source: stage, target: ui_leptos, kind: serves, strength: 3}
+            - {source: transport, target: content, kind: carries, strength: 3}

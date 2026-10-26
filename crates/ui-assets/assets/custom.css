@@ -65,4 +65,29 @@
     .hide {
         display: none;
     }
+
+    /* 左图右流：左边常驻关系图，右边消息流。宽度不够时先收缩左边——
+       流那一栏带 620px 的基准宽度且不参与收缩，图这一栏吸收全部压缩；
+       800px 以下把图压到 240px 就不再收，继续窄才允许流自己收窄。 */
+    .stage-graph {
+        flex: 1 1 40%;
+        min-width: 0;
+    }
+
+    .stage-stream {
+        flex: 1 0 620px;
+        min-width: 0;
+    }
+
+    @media (max-width: 1000px) {
+        .stage-graph {
+            flex: 0 0 240px;
+        }
+    }
+
+    @media (max-width: 720px) {
+        .stage-stream {
+            flex-shrink: 1;
+        }
+    }
 }
