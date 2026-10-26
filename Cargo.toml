@@ -6,6 +6,7 @@ members = [
   "crates/ui-assets",
   "crates/accrete_macro",
   "crates/content",
+  "crates/forcegraph",
   "crates/transport",
   "crates/transport-ws",
   "crates/fluxen",
@@ -17,6 +18,7 @@ members = [
 anyhow = "1.0.102"
 accrete = { path = "crates/accrete", version = "^0.1.0" }
 content = { path = "crates/content", version = "^0.1.0" }
+forcegraph = { path = "crates/forcegraph", version = "^0.1.0" }
 transport = { path = "crates/transport", version = "^0.1.0" }
 ui-assets = { path = "crates/ui-assets", version = "^0.1.0" }
 transport-ws = { path = "crates/transport-ws", version = "^0.1.0" }

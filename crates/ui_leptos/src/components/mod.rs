@@ -4,6 +4,8 @@ pub mod case;
 pub use case::{case_, placeholder_};
 pub mod canvas;
 pub use canvas::{canvas_, chart_, editor_};
+pub mod forcegraph;
+pub use forcegraph::forcegraph_;
 pub mod diagram;
 pub use diagram::diagram_;
 pub mod float;

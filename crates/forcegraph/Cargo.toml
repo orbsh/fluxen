@@ -1,0 +1,33 @@
+[package]
+name = "forcegraph"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+# The renderer is WebGL2 in wasm; the maths/picking half stays host-testable.
+web-sys = { workspace = true, features = [
+    "console",
+    "CssStyleDeclaration",
+    "Document",
+    "DomRect",
+    "Element",
+    "EventTarget",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "PointerEvent",
+    "WebGl2RenderingContext",
+    "WebGlBuffer",
+    "WebGlProgram",
+    "WebGlShader",
+    "WebGlUniformLocation",
+    "WebGlVertexArrayObject",
+    "WheelEvent",
+    "Window",
+] }
+
+[lints]
+workspace = true
