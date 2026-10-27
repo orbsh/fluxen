@@ -1,400 +1,284 @@
-//! WebGL2 drawing: instanced spheres for nodes, screen-space quads for links.
+//! three-d drawing backend: instanced spheres for nodes, instanced world-space
+//! quads for links.
 //!
-//! Deliberately small. There is no scene graph, no material system and no
-//! renderer abstraction — the graph is two draw calls, and the point of owning
-//! this code is that a custom behaviour (dimming what is not focused, a
-//! different node shape for a kind) is a shader edit away instead of a fight
-//! with someone else's API.
+//! Host builds compile this module but never draw: the UI crate builds and runs
+//! its tests on the host, and there is no canvas there. Hence the blanket allow
+//! — on the host everything below the constructor stub is unreachable.
+#![cfg_attr(not(target_arch = "wasm32"), allow(dead_code, unused_imports))]
 //!
-//! Two sizing contracts:
-//! - node radii arrive as **CSS pixels** and become world units through the
-//!   camera's own `px_per_unit`, so a sphere keeps its on-screen size at any
-//!   zoom;
-//! - links are **screen-space quads** (two triangles each) whose width is also
-//!   CSS pixels. `gl.LINES` was the first attempt and it is not good enough:
-//!   WebGL clamps line width to 1 device pixel on every real driver, so on a
-//!   HiDPI screen an edge is a hairline you cannot see.
+//! Deliberately dumb. Every decision — size in world units, colour, dimming,
+//! link width — is made in [`crate::frame`]; this module uploads a `Frame` and
+//! issues two instanced draw calls. What it does own is the scene layer: a
+//! camera, materials, depth, later lights and render targets, which is exactly
+//! the part hand-written GL kept getting wrong here: alpha on a transparent
+//! canvas, viewport in CSS versus device pixels, and line width clamped to one
+//! pixel by the driver.
 //!
-//! The GL viewport is set from the drawing buffer (CSS size × device pixel
-//! ratio) while all the maths runs in CSS pixels: mixing the two is how a HiDPI
-//! screen ends up with the graph painted into one quarter of the canvas.
+//! Both batches are instanced, including the links: a link is the unit quad
+//! mapped through an affine matrix, so `u` along the quad is the link's own
+//! length parameter — which is what a flowing dash or a vine shading will read
+//! later.
 
-use wasm_bindgen::JsCast;
+use std::sync::Arc;
+
+use three_d::*;
 use wasm_bindgen::prelude::*;
-use web_sys::{
-    WebGl2RenderingContext as Gl, WebGlBuffer, WebGlProgram, WebGlShader, WebGlUniformLocation,
-};
 
-use crate::camera::Camera;
-use crate::scene::Scene;
-use crate::style::Style;
-
-const NODE_VS: &str = r#"#version 300 es
-layout(location = 0) in vec3 a_pos;
-layout(location = 1) in vec3 a_normal;
-layout(location = 2) in vec3 a_offset;
-layout(location = 3) in float a_radius;
-layout(location = 4) in vec3 a_color;
-uniform mat4 u_view_proj;
-out vec3 v_normal;
-out vec3 v_color;
-void main() {
-    vec3 world_pos = a_pos * a_radius + a_offset;
-    gl_Position = u_view_proj * vec4(world_pos, 1.0);
-    v_normal = normalize(world_pos - a_offset);
-    v_color = a_color;
-}"#;
-
-const NODE_FS: &str = r#"#version 300 es
-precision mediump float;
-in vec3 v_normal;
-in vec3 v_color;
-out vec4 out_color;
-void main() {
-    vec3 n = normalize(v_normal);
-    vec3 light = normalize(vec3(0.35, 0.75, 0.55));
-    float diffuse = max(dot(n, light), 0.0);
-    float rim = pow(1.0 - clamp(n.z, 0.0, 1.0), 2.0) * 0.22;
-    out_color = vec4(v_color * (0.42 + 0.58 * diffuse) + rim, 1.0);
-}"#;
-
-const LINK_VS: &str = r#"#version 300 es
-layout(location = 0) in vec3 a_ndc;   // x/y already in clip space, z = 0..1
-layout(location = 1) in vec3 a_color;
-out vec3 v_color;
-void main() {
-    gl_Position = vec4(a_ndc.xy, a_ndc.z, 1.0);
-    v_color = a_color;
-}"#;
-
-const LINK_FS: &str = r#"#version 300 es
-precision mediump float;
-in vec3 v_color;
-uniform float u_alpha;
-out vec4 out_color;
-void main() {
-    out_color = vec4(v_color, u_alpha);
-}"#;
+use crate::frame::{Frame, Instance, View};
 
 pub struct Renderer {
-    gl: Gl,
-    node_program: WebGlProgram,
-    link_program: WebGlProgram,
-    sphere_vertices: i32,
-    /// Node VAO: unit-sphere attribs (0,1) plus the instanced streams (2-4).
-    node_vao: web_sys::WebGlVertexArrayObject,
-    instance_positions: WebGlBuffer,
-    instance_colors: WebGlBuffer,
-    link_vao: web_sys::WebGlVertexArrayObject,
-    link_buffer: WebGlBuffer,
-    node_view_proj: Option<WebGlUniformLocation>,
-    link_alpha: Option<WebGlUniformLocation>,
-    positions: Vec<f32>,
-    colors: Vec<f32>,
-    link_vertices: Vec<f32>,
-
+    context: Context,
+    /// Unit sphere, shared by every node instance.
+    sphere: CpuMesh,
+    /// Unit quad: u runs along the link, v across it.
+    quad: CpuMesh,
+    nodes: Gm<InstancedMesh, PhysicalMaterial>,
+    links: Gm<InstancedMesh, ColorMaterial>,
+    lights: Vec<DirectionalLight>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Renderer {
-    pub fn new(gl: Gl) -> Option<Self> {
-        let node_program = program(&gl, NODE_VS, NODE_FS)?;
-        let link_program = program(&gl, LINK_VS, LINK_FS)?;
+    /// Host builds compile the view (the UI crate builds and tests on the host)
+    /// but there is no canvas and no GL: mounting yields nothing.
+    pub fn new(_canvas: &web_sys::HtmlCanvasElement) -> Option<Self> {
+        None
+    }
 
-        let (sphere_vertices, sphere_data) = sphere_mesh(10, 16);
-        let node_vao = gl.create_vertex_array()?;
-        gl.bind_vertex_array(Some(&node_vao));
-        let sphere_buffer = gl.create_buffer()?;
-        gl.bind_buffer(Gl::ARRAY_BUFFER, Some(&sphere_buffer));
-        gl.buffer_data_with_array_buffer_view(
-            Gl::ARRAY_BUFFER,
-            &js_sys::Float32Array::from(&sphere_data[..]),
-            Gl::STATIC_DRAW,
+    pub fn draw(&mut self, _frame: &Frame) {}
+
+    pub fn lose_context(_canvas: &web_sys::HtmlCanvasElement) {}
+}
+
+#[cfg(target_arch = "wasm32")]
+impl Renderer {
+    pub fn new(canvas: &web_sys::HtmlCanvasElement) -> Option<Self> {
+        let webgl2 = canvas
+            .get_context("webgl2")
+            .ok()??
+            .dyn_into::<web_sys::WebGl2RenderingContext>()
+            .ok()?;
+        // Same canvas, same GL context: three-d is given the context the DOM
+        // already owns, so it never touches the event loop or the page.
+        let glow = three_d::context::Context::from_webgl2_context(webgl2);
+        // `Arc` is three-d's signature, not a claim about threading: on wasm
+        // there is one thread, and the handle is never shared.
+        #[allow(clippy::arc_with_non_send_sync)]
+        let context = Context::from_gl_context(Arc::new(glow)).ok()?;
+
+        let sphere = CpuMesh::sphere(12);
+        let quad = unit_quad();
+        let empty = Instances {
+            transformations: vec![Mat4::identity()],
+            texture_transformations: None,
+            colors: None,
+        };
+        let nodes = Gm::new(
+            InstancedMesh::new(&context, &empty, &sphere),
+            PhysicalMaterial::new(
+                &context,
+                &CpuMaterial {
+                    albedo: Srgba::WHITE,
+                    roughness: 0.42,
+                    metallic: 0.0,
+                    ..Default::default()
+                },
+            ),
         );
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_with_i32(0, 3, Gl::FLOAT, false, 24, 0);
-        gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_with_i32(1, 3, Gl::FLOAT, false, 24, 12);
-
-        // Instance streams: offset+radius (stride 16) and colour (stride 12).
-        let instance_positions = gl.create_buffer()?;
-        gl.bind_buffer(Gl::ARRAY_BUFFER, Some(&instance_positions));
-        gl.enable_vertex_attrib_array(2);
-        gl.vertex_attrib_pointer_with_i32(2, 3, Gl::FLOAT, false, 16, 0);
-        gl.vertex_attrib_divisor(2, 1);
-        gl.enable_vertex_attrib_array(3);
-        gl.vertex_attrib_pointer_with_i32(3, 1, Gl::FLOAT, false, 16, 12);
-        gl.vertex_attrib_divisor(3, 1);
-
-        let instance_colors = gl.create_buffer()?;
-        gl.bind_buffer(Gl::ARRAY_BUFFER, Some(&instance_colors));
-        gl.enable_vertex_attrib_array(4);
-        gl.vertex_attrib_pointer_with_i32(4, 3, Gl::FLOAT, false, 12, 0);
-        gl.vertex_attrib_divisor(4, 1);
-
-        let link_vao = gl.create_vertex_array()?;
-        gl.bind_vertex_array(Some(&link_vao));
-        let link_buffer = gl.create_buffer()?;
-        gl.bind_buffer(Gl::ARRAY_BUFFER, Some(&link_buffer));
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_with_i32(0, 3, Gl::FLOAT, false, 24, 0);
-        gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_with_i32(1, 3, Gl::FLOAT, false, 24, 12);
-        gl.bind_vertex_array(None);
+        // Links are unlit: a relationship is a line, not a surface, and shading
+        // it would make its brightness depend on which way the graph happens to
+        // be turned. Alpha is separate from the RGB blend, because the canvas is
+        // transparent: with standard alpha blending a 40% link would write 40%
+        // alpha and *also* keep the framebuffer's 0, leaving the line invisible
+        // once the page composites under it.
+        let links = Gm::new(
+            InstancedMesh::new(&context, &empty, &quad),
+            ColorMaterial {
+                color: Srgba::WHITE,
+                texture: None,
+                render_states: RenderStates {
+                    blend: Blend::Enabled {
+                        source_rgb_multiplier: BlendMultiplierType::SrcAlpha,
+                        source_alpha_multiplier: BlendMultiplierType::One,
+                        destination_rgb_multiplier: BlendMultiplierType::OneMinusSrcAlpha,
+                        destination_alpha_multiplier: BlendMultiplierType::OneMinusSrcAlpha,
+                        rgb_equation: BlendEquationType::Add,
+                        alpha_equation: BlendEquationType::Add,
+                    },
+                    depth_test: DepthTest::LessOrEqual,
+                    ..Default::default()
+                },
+                is_transparent: true,
+            },
+        );
+        // Two lights is enough for a sphere to read as a sphere: a key light
+        // from above-left and a weak fill so the dark side is not black.
+        let lights = vec![
+            DirectionalLight::new(&context, 1.0, Srgba::WHITE, vec3(-0.45, -1.0, -0.55)),
+            DirectionalLight::new(&context, 0.35, Srgba::WHITE, vec3(0.8, 0.3, 0.6)),
+        ];
 
         Some(Self {
-            node_view_proj: gl.get_uniform_location(&node_program, "u_view_proj"),
-            link_alpha: gl.get_uniform_location(&link_program, "u_alpha"),
-            gl,
-            node_program,
-            link_program,
-            sphere_vertices,
-            node_vao,
-            instance_positions,
-            instance_colors,
-            link_vao,
-            link_buffer,
-            positions: Vec::new(),
-            colors: Vec::new(),
-            link_vertices: Vec::new(),
-
+            context,
+            sphere,
+            quad,
+            nodes,
+            links,
+            lights,
         })
     }
 
-    /// `viewport_css` is CSS pixels — the same space the camera and the pointer
-    /// use.
-    pub fn draw(
-        &mut self,
-        camera: &Camera,
-        viewport_css: (f32, f32),
-        scene: &Scene,
-        style: &Style,
-    ) {
-        let gl = self.gl.clone();
-        gl.viewport(0, 0, gl.drawing_buffer_width(), gl.drawing_buffer_height());
-        gl.clear_color(0.0, 0.0, 0.0, 0.0);
-        gl.clear(Gl::COLOR_BUFFER_BIT | Gl::DEPTH_BUFFER_BIT);
-        gl.enable(Gl::BLEND);
-        // Separate alpha: the canvas is transparent, so blending the alpha
-        // channel with SRC_ALPHA would square it (0.35 → 0.12) and a link drawn
-        // at 35% ends up 98% washed out once the page composites under it. With
-        // ONE/ONE_MINUS_SRC_ALPHA the framebuffer alpha stays 0.35 and the line
-        // looks like a 35% stroke on the page.
-        gl.blend_func_separate(
-            Gl::SRC_ALPHA,
-            Gl::ONE_MINUS_SRC_ALPHA,
-            Gl::ONE,
-            Gl::ONE_MINUS_SRC_ALPHA,
-        );
+    /// Upload the frame and draw. Two batches, no per-frame allocation of
+    /// programs or buffers beyond the instance streams.
+    pub fn draw(&mut self, frame: &Frame) {
+        let (width, height) = frame.view.viewport_px;
+        // Created per frame on purpose: three-d's render target is a thin view
+        // onto the textures, so holding one would only pin a stale size.
+        let target = RenderTarget::screen(&self.context, width.max(1), height.max(1));
+        target.clear(ClearState::color_and_depth(0.0, 0.0, 0.0, 0.0, 1.0));
 
-        let view_proj = camera.view_proj(viewport_css);
-        let focused = scene.focus.is_some() && !scene.focus_points().is_empty();
-
-        // ---- links -----------------------------------------------------------
-        self.build_links(camera, viewport_css, scene, style, focused);
-        if !self.link_vertices.is_empty() {
-            gl.use_program(Some(&self.link_program));
-            gl.disable(Gl::DEPTH_TEST);
-            gl.bind_vertex_array(Some(&self.link_vao));
-            gl.bind_buffer(Gl::ARRAY_BUFFER, Some(&self.link_buffer));
-            gl.buffer_data_with_array_buffer_view(
-                Gl::ARRAY_BUFFER,
-                &js_sys::Float32Array::from(&self.link_vertices[..]),
-                Gl::DYNAMIC_DRAW,
-            );
-            let alpha = style.link_opacity.clamp(0.05, 1.0);
-            gl.uniform1f(self.link_alpha.as_ref(), alpha);
-            gl.draw_arrays(Gl::TRIANGLES, 0, (self.link_vertices.len() / 6) as i32);
+        if !frame.nodes.is_empty() {
+            self.nodes.geometry.set_instances(&instances(&frame.nodes));
+        }
+        if !frame.links.is_empty() {
+            self.links.geometry.set_instances(&instances(&frame.links));
+        }
+        if frame.nodes.is_empty() && frame.links.is_empty() {
+            return;
         }
 
-        // ---- nodes -----------------------------------------------------------
-        gl.enable(Gl::DEPTH_TEST);
-        gl.depth_func(Gl::LEQUAL);
-        self.positions.clear();
-        self.colors.clear();
-        let mut visible = 0_i32;
-        let max_weight = scene.max_weight();
-        for (index, body) in scene.bodies.iter().enumerate() {
-            let Some(screen) = camera.project(viewport_css, body.pos) else {
-                continue;
-            };
-            let radius_px = style.radius_px(body.weight, max_weight);
-            let radius_world = radius_px / screen.px_per_unit.max(1e-6);
-            self.positions.extend_from_slice(&[
-                body.pos.x,
-                body.pos.y,
-                body.pos.z,
-                radius_world,
-            ]);
-            let mut color = node_color(scene, style, index);
-            if focused && !scene.is_focused(index) {
-                color = [color[0] * 0.35, color[1] * 0.35, color[2] * 0.35];
-            }
-            self.colors.extend_from_slice(&color);
-            visible += 1;
-        }
-        if visible > 0 {
-            gl.use_program(Some(&self.node_program));
-            gl.bind_vertex_array(Some(&self.node_vao));
-            gl.bind_buffer(Gl::ARRAY_BUFFER, Some(&self.instance_positions));
-            gl.buffer_data_with_array_buffer_view(
-                Gl::ARRAY_BUFFER,
-                &js_sys::Float32Array::from(&self.positions[..]),
-                Gl::DYNAMIC_DRAW,
-            );
-            gl.bind_buffer(Gl::ARRAY_BUFFER, Some(&self.instance_colors));
-            gl.buffer_data_with_array_buffer_view(
-                Gl::ARRAY_BUFFER,
-                &js_sys::Float32Array::from(&self.colors[..]),
-                Gl::DYNAMIC_DRAW,
-            );
-            gl.uniform_matrix4fv_with_f32_array(self.node_view_proj.as_ref(), false, &view_proj);
-            gl.draw_arrays_instanced(Gl::TRIANGLES, 0, self.sphere_vertices, visible);
-        }
-        gl.bind_vertex_array(None);
+        let lights: Vec<&dyn Light> = self.lights.iter().map(|l| l as &dyn Light).collect();
+        let objects: Vec<&dyn Object> = vec![&self.nodes, &self.links];
+        target.render(FrameViewer(frame.view), objects, &lights);
     }
 
-    /// Two triangles per link, expanded perpendicular to the projected segment
-    /// in CSS pixels, then converted to clip space.
-    fn build_links(
-        &mut self,
-        camera: &Camera,
-        viewport: (f32, f32),
-        scene: &Scene,
-        style: &Style,
-        focused: bool,
-    ) {
-        self.link_vertices.clear();
-        let half = (style.link_width_px * 0.5).max(0.4);
-        let to_clip = |x: f32, y: f32| -> [f32; 3] {
-            [
-                2.0 * x / viewport.0.max(1.0) - 1.0,
-                1.0 - 2.0 * y / viewport.1.max(1.0),
-                0.0,
-            ]
+    /// Release the GL context on teardown: the canvas is about to be removed and
+    /// a browser keeps only a handful of live WebGL contexts, so dropping one
+    /// without asking the driver to lose it can starve the next view.
+    pub fn lose_context(canvas: &web_sys::HtmlCanvasElement) {
+        let Ok(Some(raw)) = canvas.get_context("webgl2") else {
+            return;
         };
-        for link in &scene.links {
-            let (Some(a), Some(b)) = (scene.bodies.get(link.a), scene.bodies.get(link.b)) else {
-                continue;
-            };
-            let (Some(sa), Some(sb)) = (
-                camera.project(viewport, a.pos),
-                camera.project(viewport, b.pos),
-            ) else {
-                continue;
-            };
-            let (dx, dy) = (sb.x - sa.x, sb.y - sa.y);
-            let len = (dx * dx + dy * dy).sqrt();
-            if len < 0.5 {
-                continue;
-            }
-            let (nx, ny) = (-dy / len * half, dx / len * half);
-            let mut color = node_color(scene, style, link.a);
-            if focused && !(scene.is_focused(link.a) && scene.is_focused(link.b)) {
-                color = [color[0] * 0.3, color[1] * 0.3, color[2] * 0.3];
-            }
-            let p1 = to_clip(sa.x + nx, sa.y + ny);
-            let p2 = to_clip(sa.x - nx, sa.y - ny);
-            let p3 = to_clip(sb.x + nx, sb.y + ny);
-            let p4 = to_clip(sb.x - nx, sb.y - ny);
-            for corner in [p1, p2, p3, p2, p3, p4] {
-                self.link_vertices.extend_from_slice(&corner);
-                self.link_vertices.extend_from_slice(&color);
-            }
+        let Ok(gl) = raw.dyn_into::<web_sys::WebGl2RenderingContext>() else {
+            return;
+        };
+        let Ok(Some(ext)) = gl.get_extension("WEBGL_lose_context") else {
+            return;
+        };
+        let Ok(lose) = js_sys::Reflect::get(&ext, &JsValue::from_str("loseContext")) else {
+            return;
+        };
+        let Ok(lose) = lose.dyn_into::<js_sys::Function>() else {
+            return;
+        };
+        lose.call0(&ext).ok();
+    }
+
+    /// Size of the geometry the backend keeps alive, for the pixel probes and
+    /// for anyone wondering whether the sphere is being rebuilt per frame.
+    pub fn sphere_vertices(&self) -> usize {
+        self.sphere.positions.len() + self.quad.positions.len()
+    }
+}
+
+/// A `Frame`'s viewer, handed to three-d. The matrices come from the same camera
+/// the pointer picks with, so a sphere and its label cannot drift apart.
+struct FrameViewer(View);
+
+impl Viewer for FrameViewer {
+    fn position(&self) -> Vec3 {
+        vec3(self.0.position.x, self.0.position.y, self.0.position.z)
+    }
+
+    fn view(&self) -> Mat4 {
+        mat4(self.0.view)
+    }
+
+    fn projection(&self) -> Mat4 {
+        mat4(self.0.projection)
+    }
+
+    fn viewport(&self) -> Viewport {
+        Viewport {
+            x: 0,
+            y: 0,
+            width: self.0.viewport_px.0.max(1),
+            height: self.0.viewport_px.1.max(1),
         }
     }
-}
 
-fn node_color(scene: &Scene, style: &Style, index: usize) -> [f32; 3] {
-    scene
-        .nodes
-        .get(index)
-        .and_then(|n| n.color.as_deref())
-        .and_then(crate::style::parse_hex)
-        .unwrap_or_else(|| {
-            scene
-                .nodes
-                .get(index)
-                .map(|n| style.color_for(n.kind.as_deref().unwrap_or("")))
-                .unwrap_or([0.3, 0.3, 0.3])
-        })
-}
-
-fn program(gl: &Gl, vertex_src: &str, fragment_src: &str) -> Option<WebGlProgram> {
-    let program = gl.create_program()?;
-    let vs = shader(gl, Gl::VERTEX_SHADER, vertex_src)?;
-    let fs = shader(gl, Gl::FRAGMENT_SHADER, fragment_src)?;
-    gl.attach_shader(&program, &vs);
-    gl.attach_shader(&program, &fs);
-    gl.link_program(&program);
-    let ok = gl
-        .get_program_parameter(&program, Gl::LINK_STATUS)
-        .as_bool()
-        .unwrap_or(false);
-    if !ok {
-        let log = gl
-            .get_program_info_log(&program)
-            .unwrap_or_else(|| "link failed".to_string());
-        web_sys::console::warn_1(&JsValue::from_str(&format!("forcegraph: {log}")));
-        return None;
+    fn z_near(&self) -> f32 {
+        self.0.z_near
     }
-    Some(program)
-}
 
-fn shader(gl: &Gl, kind: u32, source: &str) -> Option<WebGlShader> {
-    let shader = gl.create_shader(kind)?;
-    gl.shader_source(&shader, source);
-    gl.compile_shader(&shader);
-    let ok = gl
-        .get_shader_parameter(&shader, Gl::COMPILE_STATUS)
-        .as_bool()
-        .unwrap_or(false);
-    if !ok {
-        let log = gl
-            .get_shader_info_log(&shader)
-            .unwrap_or_else(|| "compile failed".to_string());
-        web_sys::console::warn_1(&JsValue::from_str(&format!("forcegraph: {log}")));
-        return None;
+    fn z_far(&self) -> f32 {
+        self.0.z_far
     }
-    Some(shader)
-}
 
-/// Unit sphere as a triangle list: `(vertex_count, interleaved pos+normal)`.
-fn sphere_mesh(rings: usize, segments: usize) -> (i32, Vec<f32>) {
-    let mut data = Vec::new();
-    let mut push = |p: [f32; 3]| {
-        data.extend_from_slice(&p);
-        data.extend_from_slice(&p);
-    };
-    for ring in 0..rings {
-        let v0 = ring as f32 / rings as f32;
-        let v1 = (ring + 1) as f32 / rings as f32;
-        let (t0, t1) = (v0 * std::f32::consts::PI, v1 * std::f32::consts::PI);
-        for segment in 0..segments {
-            let u0 = segment as f32 / segments as f32 * std::f32::consts::TAU;
-            let u1 = (segment + 1) as f32 / segments as f32 * std::f32::consts::TAU;
-            let a = unit(t0, u0);
-            let b = unit(t0, u1);
-            let c = unit(t1, u0);
-            let d = unit(t1, u1);
-            for point in [a, c, b, b, c, d] {
-                push(point);
-            }
-        }
+    // Colours arrive as sRGB and are converted to linear for shading, then back
+    // on the way out. Any non-default mapping here would shift the palette.
+    fn color_mapping(&self) -> ColorMapping {
+        ColorMapping::default()
     }
-    ((data.len() / 6) as i32, data)
+
+    fn tone_mapping(&self) -> ToneMapping {
+        ToneMapping::default()
+    }
 }
 
-fn unit(theta: f32, phi: f32) -> [f32; 3] {
-    let (st, ct) = theta.sin_cos();
-    [st * phi.cos(), ct, st * phi.sin()]
+/// Column-major array → three-d's matrix.
+fn mat4(cells: [f32; 16]) -> Mat4 {
+    Mat4::from_cols(
+        vec4(cells[0], cells[1], cells[2], cells[3]),
+        vec4(cells[4], cells[5], cells[6], cells[7]),
+        vec4(cells[8], cells[9], cells[10], cells[11]),
+        vec4(cells[12], cells[13], cells[14], cells[15]),
+    )
 }
 
-/// Grab a WebGL2 context from a canvas, checking the JS type so a missing
-/// context is a value rather than an exception.
-pub fn context(canvas: &web_sys::HtmlCanvasElement) -> Option<Gl> {
-    canvas
-        .get_context("webgl2")
-        .ok()
-        .flatten()
-        .and_then(|obj| obj.dyn_into::<Gl>().ok())
+fn instances(list: &[Instance]) -> Instances {
+    Instances {
+        transformations: list.iter().map(|i| mat4(i.transform)).collect(),
+        texture_transformations: None,
+        colors: Some(
+            list.iter()
+                .map(|i| {
+                    Srgba::new(
+                        to_byte(i.color[0]),
+                        to_byte(i.color[1]),
+                        to_byte(i.color[2]),
+                        to_byte(i.color[3]),
+                    )
+                })
+                .collect(),
+        ),
+    }
+}
+
+fn to_byte(value: f32) -> u8 {
+    (value.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+/// The unit quad: x runs 0..1 along the link, y runs -0.5..0.5 across it, so a
+/// link's affine matrix maps this square onto its world-space parallelogram.
+fn unit_quad() -> CpuMesh {
+    let positions = vec![
+        vec3(0.0, -0.5, 0.0),
+        vec3(1.0, -0.5, 0.0),
+        vec3(1.0, 0.5, 0.0),
+        vec3(0.0, 0.5, 0.0),
+    ];
+    let indices = vec![0, 1, 2, 0, 2, 3];
+    let uvs = vec![
+        vec2(0.0, 0.0),
+        vec2(1.0, 0.0),
+        vec2(1.0, 1.0),
+        vec2(0.0, 1.0),
+    ];
+    CpuMesh {
+        positions: Positions::F32(positions),
+        indices: Indices::U32(indices),
+        uvs: Some(uvs),
+        ..Default::default()
+    }
 }

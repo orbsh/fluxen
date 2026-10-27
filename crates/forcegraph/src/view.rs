@@ -28,7 +28,7 @@ use crate::camera::Camera;
 use crate::force;
 use crate::math::Vec3;
 use crate::pick;
-use crate::render::{self, Renderer};
+use crate::render::Renderer;
 use crate::scene::{Scene, Snapshot};
 use crate::style::Style;
 
@@ -37,9 +37,6 @@ const CLICK_SLOP_PX: f32 = 4.0;
 const ORBIT_RADIANS_PER_PX: f32 = 0.006;
 const PITCH_LIMIT: f32 = 1.45;
 const FLIGHT_MS: f64 = 420.0;
-/// How long the pivot takes to slide to the cloud's centre. Short: it is a
-/// quiet correction, not a camera move the viewer is meant to watch.
-const PIVOT_MS: f64 = 260.0;
 /// How far the camera may drift from "the graph fills the pane" before it is
 /// corrected: a fifth either way is invisible, a factor of two is a graph the
 /// viewer is standing inside.
@@ -100,24 +97,27 @@ struct State {
     /// Set once the user orbits or zooms: after that the camera is theirs.
     camera_touched: bool,
     /// Pixels per world unit at the pivot plane, as of the last collision pass.
-    /// Kept only so the debug attribute can report the enforced gap in px.
-    collide_ppu: f32,
+    /// World-space collision radius, kept only so the debug attribute can
+    /// report it.
+    collide_world: f32,
     /// Whether the pivot has been moved to the settled cloud's centre since the
     /// last time the node set changed.
     pivot_settled: bool,
 }
 
 impl State {
-    /// Collision radii in world units: the sphere the viewer sees, converted
-    /// back through the camera so two nodes can never overlap on screen.
-    /// Padded slightly — spheres that only just touch still read as one blob.
-    fn set_collide_radii(&mut self, viewport: (f32, f32)) {
-        let ppu = self
-            .camera
-            .project(viewport, self.camera.target)
-            .map(|s| s.px_per_unit)
-            .unwrap_or(1.0)
-            .max(1e-6);
+    /// Collision radius in world units.
+    ///
+    /// Deliberately independent of the camera. A radius derived from the current
+    /// zoom closes a loop with auto-fit: the cloud grows, the camera pulls back,
+    /// the pixel-sized radius grows in world units, the cloud grows again. That
+    /// loop has no equilibrium — it ran to 175k world units in seconds. The
+    /// layout is a property of the data; the viewport is not allowed to change
+    /// the shape. What keeps spheres from touching on screen is the framing: at
+    /// the distance that fits the cloud, the projected spacing is an order of
+    /// magnitude above the pixel radius.
+    fn set_collide_radii(&mut self) {
+        let base = (self.style.link_distance * 0.5).max(1e-3);
         let max_weight = self.scene.max_weight();
         let radii: Vec<f32> = self
             .scene
@@ -125,66 +125,18 @@ impl State {
             .iter()
             .map(|n| self.style.radius_px(n.weight.unwrap_or(1.0), max_weight))
             .collect();
-        // Spheres in front of the pivot plane are drawn larger than the radius
-        // measured there, so collision has to use the biggest apparent radius,
-        // not the nominal one: a node at the near edge of the cloud is the one
-        // that visibly overlaps its neighbour.
-        let cloud_radius = self
-            .scene
-            .bodies
-            .iter()
-            .map(|b| (b.pos - self.camera.target).len())
-            .fold(0.0_f32, f32::max);
-        let near_scale = if self.camera.distance > cloud_radius * 1.05 {
-            self.camera.distance / (self.camera.distance - cloud_radius)
-        } else {
-            1.5
-        };
-        self.collide_ppu = ppu;
+        let biggest = radii.iter().copied().fold(1.0_f32, f32::max);
         for (index, body) in self.scene.bodies.iter_mut().enumerate() {
-            let radius_px = radii
+            let px = radii
                 .get(index)
                 .copied()
                 .unwrap_or(self.style.node_size_px);
-            body.collide = radius_px * 1.15 * near_scale / ppu;
+            // Heavier nodes are drawn bigger, so they get proportionally more
+            // room — but never so little that they sit on top of a neighbour.
+            body.collide = base * (px / biggest).max(0.6);
         }
+        self.collide_world = base;
     }
-
-    /// Put the orbit pivot in the middle of the node cloud. Yaw, pitch and
-    /// distance are untouched, so the camera glides sideways instead of
-    /// re-framing: the pivot is what a rotation swings around, and a pivot left
-    /// where the *first* snapshot happened to sit makes every rotate look like
-    /// it turns about a fixed point in empty space.
-    fn recenter_pivot(&mut self, duration_ms: f64) {
-        let points: Vec<Vec3> = self.scene.bodies.iter().map(|b| b.pos).collect();
-        let Some(center) = bounds_center(&points) else {
-            return;
-        };
-        if (center - self.camera.target).len() < 1e-3 {
-            return;
-        }
-        self.flight = Some(Flight {
-            from_target: self.camera.target,
-            from_distance: self.camera.distance,
-            to_target: center,
-            to_distance: self.camera.distance,
-            elapsed_ms: 0.0,
-            duration_ms,
-        });
-    }
-}
-
-/// Middle of the axis-aligned box around `points` — the same centre `fit` uses,
-/// so framing and orbiting agree on where the graph is.
-fn bounds_center(points: &[Vec3]) -> Option<Vec3> {
-    let first = points.first().copied()?;
-    let mut min = first;
-    let mut max = first;
-    for p in points.iter().skip(1) {
-        min = Vec3::new(min.x.min(p.x), min.y.min(p.y), min.z.min(p.z));
-        max = Vec3::new(max.x.max(p.x), max.y.max(p.y), max.z.max(p.z));
-    }
-    Some((min + max) * 0.5)
 }
 
 /// DOM overlay: one label per node plus the hover card. Kept outside leptos on
@@ -253,8 +205,7 @@ impl View {
         card_css.set_property("white-space", "nowrap").ok()?;
         host.append_child(&card).ok()?;
 
-        let gl = render::context(&canvas)?;
-        let renderer = Rc::new(RefCell::new(Renderer::new(gl)?));
+        let renderer = Rc::new(RefCell::new(Renderer::new(&canvas)?));
         let state = Rc::new(RefCell::new(State {
             camera: Camera::default(),
             scene: Scene::default(),
@@ -267,7 +218,7 @@ impl View {
             acc: 0.0,
             settle_fit_pending: true,
             camera_touched: false,
-            collide_ppu: 1.0,
+            collide_world: 0.0,
             pivot_settled: false,
         }));
         let overlay = Rc::new(RefCell::new(Overlay {
@@ -315,7 +266,7 @@ impl View {
         let whole_graph_is_new =
             !state.scene.bodies.is_empty() && diff.added.len() == state.scene.nodes.len();
         if whole_graph_is_new {
-            state.set_collide_radii(viewport);
+            state.set_collide_radii();
             let params = state.style.params();
             let mut alpha = force::ALPHA_START;
             for _ in 0..RELAX_STEPS {
@@ -423,7 +374,7 @@ impl View {
                     }
                 }
 
-                st.set_collide_radii(viewport);
+                st.set_collide_radii();
 
                 let params = st.style.params();
                 st.acc = (st.acc + dt).min(STEP * 4.0);
@@ -484,9 +435,11 @@ impl View {
                     st.settle_fit_pending = false;
                 }
 
-                renderer
-                    .borrow_mut()
-                    .draw(&st.camera, viewport, &st.scene, &st.style);
+                // Decide, then draw: everything about *what* is shown lives in
+                // `frame::build` (pure, host-tested); the backend only uploads.
+                let frame =
+                    crate::frame::build(&st.camera, viewport, dpr, &st.scene, &st.style);
+                renderer.borrow_mut().draw(&frame);
                 update_overlay(&mut overlay.borrow_mut(), st, viewport);
                 // Assertable state for e2e (the canvas has no DOM children).
                 // Assertable state for e2e: computed from the renderer's own
@@ -538,7 +491,7 @@ impl View {
                             .fold(0.0_f32, f32::max),
                         viewport.0,
                         viewport.1,
-                        st.collide_ppu,
+                        st.collide_world,
                         st.scene
                             .bodies
                             .iter()
@@ -801,15 +754,7 @@ impl View {
                 .remove_event_listener_with_callback(name, &function)
                 .ok();
         }
-        if let Some(gl) = render::context(&self.canvas) {
-            if let Ok(Some(ext)) = gl.get_extension("WEBGL_lose_context") {
-                if let Ok(f) = js_sys::Reflect::get(&ext, &JsValue::from_str("loseContext")) {
-                    if let Ok(f) = f.dyn_into::<js_sys::Function>() {
-                        f.call0(&ext).ok();
-                    }
-                }
-            }
-        }
+        Renderer::lose_context(&self.canvas);
         let overlay = self.overlay.borrow();
         overlay.layer.remove();
         overlay.card.remove();

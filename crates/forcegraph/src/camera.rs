@@ -16,6 +16,11 @@ use crate::math::Vec3;
 /// px/unit), so existing frames keep their look.
 pub const DEFAULT_FOV_Y: f32 = 50.0 * PI / 180.0;
 
+/// Near and far planes. Shared with the renderer, which needs the same values
+/// the projection matrix was built with.
+pub const Z_NEAR: f32 = 0.1;
+pub const Z_FAR: f32 = 100_000.0;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
     pub target: Vec3,
@@ -122,13 +127,14 @@ impl Camera {
         self.distance = (radius * half_h / (tan * usable)).max(1.0);
     }
 
-    /// Column-major view-projection matrix for WebGL. Built from the same
-    /// orbit state `project()` uses, so the GPU and the CPU agree on where a
-    /// node is (a label and its sphere cannot drift apart).
-    pub fn view_proj(&self, viewport: (f32, f32)) -> [f32; 16] {
+    /// Column-major view matrix: world → eye space. The renderer's viewer wants
+    /// view and projection separately, while picking wants their product, so the
+    /// matrix is built in two pieces and composed once here rather than written
+    /// out twice.
+    pub fn view_matrix(&self) -> [f32; 16] {
         let eye = self.eye();
         let basis = self.basis();
-        let view = [
+        let rows = [
             [
                 basis.right.x,
                 basis.right.y,
@@ -144,22 +150,53 @@ impl Camera {
             ],
             [0.0, 0.0, 0.0, 1.0],
         ];
+        let mut out = [0.0_f32; 16];
+        for (row, cells) in rows.iter().enumerate() {
+            for (col, cell) in cells.iter().enumerate() {
+                out[col * 4 + row] = *cell;
+            }
+        }
+        out
+    }
+
+    /// Column-major perspective matrix: eye space → clip space.
+    pub fn projection_matrix(&self, viewport: (f32, f32)) -> [f32; 16] {
         let aspect = (viewport.0 / viewport.1.max(1.0)).max(f32::EPSILON);
         let focal = 1.0 / (self.fov_y * 0.5).tan();
-        let (near, far) = (0.1_f32, 100_000.0_f32);
+        let (near, far) = (Z_NEAR, Z_FAR);
         let nf = 1.0 / (near - far);
-        let proj = [
-            [focal / aspect, 0.0, 0.0, 0.0],
-            [0.0, focal, 0.0, 0.0],
-            [0.0, 0.0, (far + near) * nf, 2.0 * far * near * nf],
-            [0.0, 0.0, -1.0, 0.0],
-        ];
+        [
+            focal / aspect,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            focal,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            (far + near) * nf,
+            -1.0,
+            0.0,
+            0.0,
+            2.0 * far * near * nf,
+            0.0,
+        ]
+    }
+
+    /// Column-major view-projection matrix. Composed from the two matrices
+    /// above, so the GPU, the CPU projection and the labels cannot disagree
+    /// about where a node is.
+    pub fn view_proj(&self, viewport: (f32, f32)) -> [f32; 16] {
+        let view = self.view_matrix();
+        let projection = self.projection_matrix(viewport);
         let mut out = [0.0_f32; 16];
-        for (row, proj_row) in proj.iter().enumerate() {
-            for col in 0..4 {
+        for col in 0..4 {
+            for row in 0..4 {
                 let mut sum = 0.0;
-                for (k, proj_cell) in proj_row.iter().enumerate() {
-                    sum += proj_cell * view[k][col];
+                for k in 0..4 {
+                    sum += projection[k * 4 + row] * view[col * 4 + k];
                 }
                 out[col * 4 + row] = sum;
             }
@@ -175,7 +212,7 @@ impl Camera {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 

@@ -20,7 +20,6 @@ const GOLDEN_ANGLE: f32 = 2.399_963_2;
 
 /// Relaxation budget used by the tests: the same 200 steps the view runs before
 /// a brand-new graph is painted for the first time.
-const RELAX_STEPS_FOR_TESTS: usize = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Body {
@@ -123,6 +122,10 @@ pub const ALPHA_START: f32 = 1.0;
 /// Reheat on new data / a dragged node. d3's own restart uses a fraction of a
 /// full alpha, not the whole bang.
 pub const ALPHA_REHEAT: f32 = 0.5;
+/// Steps a test runs to settle a layout. Test-only: the view drives cooling
+/// from frames, and a constant in the library would exist for nobody.
+#[cfg(test)]
+const RELAX_STEPS_FOR_TESTS: usize = 200;
 /// Collision resolution passes per tick. More than one, because a push can
 /// create the next overlap.
 const COLLISION_PASSES: usize = 3;
