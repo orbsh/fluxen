@@ -383,9 +383,8 @@ pub struct ForceGraphStyle {
     /// 斥力，负值 = 相互推开。
     pub charge: f32,
     pub link_distance: f32,
-    pub spring: f32,
-    pub center: f32,
-    pub damping: f32,
+    pub link_strength: Option<f32>,
+    pub velocity_decay: f32,
     /// 常显名字标签层。
     pub labels: bool,
     pub label_px: f32,
@@ -412,11 +411,10 @@ impl Default for ForceGraphStyle {
             // when the width went to 16 px).
             link_width_px: 2.5,
             link_opacity: 0.6,
-            charge: -2600.0,
-            link_distance: 70.0,
-            spring: 1.2,
-            center: 0.03,
-            damping: 2.6,
+            charge: -30.0,
+            link_distance: 30.0,
+            link_strength: None,
+            velocity_decay: 0.4,
             labels: true,
             label_px: 12.0,
             label_max_nodes: 150,

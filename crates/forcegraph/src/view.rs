@@ -37,18 +37,39 @@ const CLICK_SLOP_PX: f32 = 4.0;
 const ORBIT_RADIANS_PER_PX: f32 = 0.006;
 const PITCH_LIMIT: f32 = 1.45;
 const FLIGHT_MS: f64 = 420.0;
+/// How long the pivot takes to slide to the cloud's centre. Short: it is a
+/// quiet correction, not a camera move the viewer is meant to watch.
+const PIVOT_MS: f64 = 260.0;
+/// How far the camera may drift from "the graph fills the pane" before it is
+/// corrected: a fifth either way is invisible, a factor of two is a graph the
+/// viewer is standing inside.
+const FIT_RATIO_LOW: f32 = 0.8;
+const FIT_RATIO_HIGH: f32 = 1.25;
+const FIT_MS: f64 = 320.0;
 /// Padding used when framing a focus target, in CSS pixels.
 const FOCUS_PADDING_PX: f32 = 80.0;
 /// Fixed physics step; the accumulator feeds it whole steps only.
 const STEP: f32 = 1.0 / 60.0;
+/// Simulated steps run before a brand-new graph is first painted. Cooling is
+/// frame-based, so skipping this leaves the layout half-relaxed when it freezes.
+const RELAX_STEPS: usize = 200;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DragMode {
+    /// Left drag on empty space.
+    Orbit,
+    /// Right or middle drag: slide the camera target across the view plane.
+    Pan,
+    /// Left drag that started on a node.
+    Node(usize),
+}
 
 struct Drag {
     pointer_id: i32,
     x: f32,
     y: f32,
     moved: bool,
-    /// `Some(index)` = dragging that node, `None` = orbiting the camera.
-    node: Option<usize>,
+    mode: DragMode,
 }
 
 struct Flight {
@@ -72,6 +93,98 @@ struct State {
     alpha: f32,
     /// Leftover time not yet consumed by a fixed physics step.
     acc: f32,
+    /// One refit is allowed after the first layout settles — the seed sphere is
+    /// much larger than the settled cloud, so fitting only at the first
+    /// snapshot leaves the graph as a small knot in the middle of the pane.
+    settle_fit_pending: bool,
+    /// Set once the user orbits or zooms: after that the camera is theirs.
+    camera_touched: bool,
+    /// Pixels per world unit at the pivot plane, as of the last collision pass.
+    /// Kept only so the debug attribute can report the enforced gap in px.
+    collide_ppu: f32,
+    /// Whether the pivot has been moved to the settled cloud's centre since the
+    /// last time the node set changed.
+    pivot_settled: bool,
+}
+
+impl State {
+    /// Collision radii in world units: the sphere the viewer sees, converted
+    /// back through the camera so two nodes can never overlap on screen.
+    /// Padded slightly — spheres that only just touch still read as one blob.
+    fn set_collide_radii(&mut self, viewport: (f32, f32)) {
+        let ppu = self
+            .camera
+            .project(viewport, self.camera.target)
+            .map(|s| s.px_per_unit)
+            .unwrap_or(1.0)
+            .max(1e-6);
+        let max_weight = self.scene.max_weight();
+        let radii: Vec<f32> = self
+            .scene
+            .nodes
+            .iter()
+            .map(|n| self.style.radius_px(n.weight.unwrap_or(1.0), max_weight))
+            .collect();
+        // Spheres in front of the pivot plane are drawn larger than the radius
+        // measured there, so collision has to use the biggest apparent radius,
+        // not the nominal one: a node at the near edge of the cloud is the one
+        // that visibly overlaps its neighbour.
+        let cloud_radius = self
+            .scene
+            .bodies
+            .iter()
+            .map(|b| (b.pos - self.camera.target).len())
+            .fold(0.0_f32, f32::max);
+        let near_scale = if self.camera.distance > cloud_radius * 1.05 {
+            self.camera.distance / (self.camera.distance - cloud_radius)
+        } else {
+            1.5
+        };
+        self.collide_ppu = ppu;
+        for (index, body) in self.scene.bodies.iter_mut().enumerate() {
+            let radius_px = radii
+                .get(index)
+                .copied()
+                .unwrap_or(self.style.node_size_px);
+            body.collide = radius_px * 1.15 * near_scale / ppu;
+        }
+    }
+
+    /// Put the orbit pivot in the middle of the node cloud. Yaw, pitch and
+    /// distance are untouched, so the camera glides sideways instead of
+    /// re-framing: the pivot is what a rotation swings around, and a pivot left
+    /// where the *first* snapshot happened to sit makes every rotate look like
+    /// it turns about a fixed point in empty space.
+    fn recenter_pivot(&mut self, duration_ms: f64) {
+        let points: Vec<Vec3> = self.scene.bodies.iter().map(|b| b.pos).collect();
+        let Some(center) = bounds_center(&points) else {
+            return;
+        };
+        if (center - self.camera.target).len() < 1e-3 {
+            return;
+        }
+        self.flight = Some(Flight {
+            from_target: self.camera.target,
+            from_distance: self.camera.distance,
+            to_target: center,
+            to_distance: self.camera.distance,
+            elapsed_ms: 0.0,
+            duration_ms,
+        });
+    }
+}
+
+/// Middle of the axis-aligned box around `points` — the same centre `fit` uses,
+/// so framing and orbiting agree on where the graph is.
+fn bounds_center(points: &[Vec3]) -> Option<Vec3> {
+    let first = points.first().copied()?;
+    let mut min = first;
+    let mut max = first;
+    for p in points.iter().skip(1) {
+        min = Vec3::new(min.x.min(p.x), min.y.min(p.y), min.z.min(p.z));
+        max = Vec3::new(max.x.max(p.x), max.y.max(p.y), max.z.max(p.z));
+    }
+    Some((min + max) * 0.5)
 }
 
 /// DOM overlay: one label per node plus the hover card. Kept outside leptos on
@@ -152,6 +265,10 @@ impl View {
             last_ts: 0.0,
             alpha: force::ALPHA_START,
             acc: 0.0,
+            settle_fit_pending: true,
+            camera_touched: false,
+            collide_ppu: 1.0,
+            pivot_settled: false,
         }));
         let overlay = Rc::new(RefCell::new(Overlay {
             layer,
@@ -189,10 +306,38 @@ impl View {
             state.camera.fit(&points, padding, viewport);
             state.scene.fitted = true;
         }
-        // New nodes need the layout to move again — otherwise they sit on the
-        // neighbour centroid and never settle into place.
-        if !diff.added.is_empty() || diff.removed > 0 {
-            state.alpha = state.alpha.max(force::ALPHA_REHEAT);
+
+        // A graph that arrives whole is relaxed before it is first painted.
+        // Cooling runs on frames, so without this the viewer watches a random
+        // seed cloud drift for three seconds — and the frame budget is often
+        // spent before the springs have won, which is what "the forces feel
+        // weak, the layout is a tangle" actually was.
+        let whole_graph_is_new =
+            !state.scene.bodies.is_empty() && diff.added.len() == state.scene.nodes.len();
+        if whole_graph_is_new {
+            state.set_collide_radii(viewport);
+            let params = state.style.params();
+            let mut alpha = force::ALPHA_START;
+            for _ in 0..RELAX_STEPS {
+                let scene = &mut state.scene;
+                force::step(&mut scene.bodies, &scene.links, &params, alpha);
+                alpha = (alpha * force::ALPHA_DECAY).max(force::ALPHA_FLOOR);
+            }
+            // Kill the leftover velocity: forces stop at the alpha floor, but
+            // velocity keeps integrating, so a pre-relaxed graph *keeps
+            // drifting* after it was framed — which is why the camera distance
+            // matched a cloud twice as small as the one on screen, and why the
+            // orbit pivot sat off to one side.
+            for body in state.scene.bodies.iter_mut() {
+                body.vel = Vec3::ZERO;
+            }
+            state.alpha = alpha;
+            state.settle_fit_pending = true;
+        } else if !diff.added.is_empty() || diff.removed > 0 {
+            // New nodes need the layout to move again — otherwise they sit on
+            // the neighbour centroid and never settle into place.
+            state.alpha = state.alpha.max(force::ALPHA_START);
+            state.pivot_settled = false;
         }
         if diff.focus_changed {
             state.alpha = state.alpha.max(force::ALPHA_REHEAT);
@@ -208,6 +353,7 @@ impl View {
                     .map(f64::from)
                     .unwrap_or(FLIGHT_MS)
                     .max(1.0);
+                state.camera_touched = true;
                 state.flight = Some(Flight {
                     from_target: state.camera.target,
                     from_distance: state.camera.distance,
@@ -277,15 +423,65 @@ impl View {
                     }
                 }
 
+                st.set_collide_radii(viewport);
+
                 let params = st.style.params();
                 st.acc = (st.acc + dt).min(STEP * 4.0);
                 let mut steps = 0;
                 while st.acc >= STEP && steps < 4 {
                     let scene = &mut st.scene;
-                    force::step(&mut scene.bodies, &scene.links, &params, STEP, st.alpha);
+                    force::step(&mut scene.bodies, &scene.links, &params, st.alpha);
                     st.acc -= STEP;
                     st.alpha = (st.alpha * force::ALPHA_DECAY).max(force::ALPHA_FLOOR);
                     steps += 1;
+                }
+
+                // The seed cloud is far wider than the settled one, so the fit
+                // done at the first snapshot frames a graph that then shrinks.
+                // Frame it once more when it has come to rest, and only if the
+                // user has not taken the camera over.
+                // Auto-fit is a standing rule, not a one-off. The layout keeps
+                // growing after every append, and a camera framed once around
+                // the *seed* cloud ends up inside the graph: the pivot then sits
+                // below the surface, so a drag looks like the graph swinging
+                // around a fixed point in empty space instead of turning about
+                // its own middle. Reframe whenever the ratio has drifted far
+                // enough to matter, and never while the user owns the camera.
+                if st.style.auto_fit && !st.camera_touched && st.drag.is_none() {
+                    let points: Vec<Vec3> = st.scene.bodies.iter().map(|b| b.pos).collect();
+                    if points.len() > 1 {
+                        let mut want = st.camera;
+                        want.fit(&points, st.style.fit_padding_px, viewport);
+                        let ratio = st.camera.distance / want.distance.max(1e-3);
+                        if !(FIT_RATIO_LOW..=FIT_RATIO_HIGH).contains(&ratio) {
+                            for body in st.scene.bodies.iter_mut() {
+                                body.vel = Vec3::ZERO;
+                            }
+                            st.flight = Some(Flight {
+                                from_target: st.camera.target,
+                                from_distance: st.camera.distance,
+                                to_target: want.target,
+                                to_distance: want.distance,
+                                elapsed_ms: 0.0,
+                                duration_ms: FIT_MS,
+                            });
+                        }
+                    }
+                }
+
+                if st.settle_fit_pending
+                    && !st.camera_touched
+                    && st.style.auto_fit
+                    && st.alpha <= force::ALPHA_FLOOR * 1.6
+                {
+                    let points: Vec<Vec3> =
+                        st.scene.bodies.iter().map(|b| b.pos).collect();
+                    if points.len() > 1 {
+                        let mut camera = st.camera;
+                        camera.fit(&points, st.style.fit_padding_px, viewport);
+                        st.camera = camera;
+                    }
+                    st.settle_fit_pending = false;
                 }
 
                 renderer
@@ -293,15 +489,65 @@ impl View {
                     .draw(&st.camera, viewport, &st.scene, &st.style);
                 update_overlay(&mut overlay.borrow_mut(), st, viewport);
                 // Assertable state for e2e (the canvas has no DOM children).
+                // Assertable state for e2e: computed from the renderer's own
+                // projection, never from the DOM overlay — labels hide at the
+                // edges, and a checker that read them measured whatever was
+                // visible rather than what the layout did.
+                let projected: Vec<(f32, f32)> = st
+                    .scene
+                    .bodies
+                    .iter()
+                    .filter_map(|b| st.camera.project(viewport, b.pos).map(|s| (s.x, s.y)))
+                    .collect();
+                let mut min_px = f32::INFINITY;
+                for i in 0..projected.len() {
+                    for j in (i + 1)..projected.len() {
+                        let (a, b) = (projected[i], projected[j]);
+                        min_px = min_px.min(((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt());
+                    }
+                }
+                let (cloud_cx, cloud_cy, cloud_w, cloud_h) = if projected.is_empty() {
+                    (0.0, 0.0, 0.0, 0.0)
+                } else {
+                    let n = projected.len() as f32;
+                    let cx = projected.iter().map(|p| p.0).sum::<f32>() / n;
+                    let cy = projected.iter().map(|p| p.1).sum::<f32>() / n;
+                    let w = projected.iter().map(|p| p.0).fold(f32::NEG_INFINITY, f32::max)
+                        - projected.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
+                    let h = projected.iter().map(|p| p.1).fold(f32::NEG_INFINITY, f32::max)
+                        - projected.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
+                    (cx, cy, w, h)
+                };
                 let _ = canvas.set_attribute(
                     "data-fg",
                     &format!(
-                        "nodes={} links={} alpha={:.3}",
+                        "nodes={} links={} alpha={:.3} min_px={:.1} c={:.0},{:.0} spread={:.0}x{:.0} d={:.0} r={:.1} vp={:.0}x{:.0} ppu={:.2} cl={:.1} touch={}",
                         st.scene.nodes.len(),
                         st.scene.links.len(),
-                        st.alpha
+                        st.alpha,
+                        min_px,
+                        cloud_cx,
+                        cloud_cy,
+                        cloud_w,
+                        cloud_h,
+                        st.camera.distance,
+                        st.scene
+                            .bodies
+                            .iter()
+                            .map(|b| (b.pos - st.camera.target).len())
+                            .fold(0.0_f32, f32::max),
+                        viewport.0,
+                        viewport.1,
+                        st.collide_ppu,
+                        st.scene
+                            .bodies
+                            .iter()
+                            .map(|b| b.collide)
+                            .fold(f32::INFINITY, f32::min),
+                        u8::from(st.camera_touched)
                     ),
                 );
+
             }
 
             if let Some(window) = web_sys::window() {
@@ -344,22 +590,34 @@ impl View {
                 .iter()
                 .map(|b| st.style.radius_px(b.weight, max_weight))
                 .collect();
-            // A press that lands on a node drags that node; anywhere else
-            // orbits the camera. Without this the graph is read-only.
             let node = pick::pick(&st.camera, viewport, &st.scene.bodies, &radii, point);
-            if let Some(index) = node {
-                if let Some(body) = st.scene.bodies.get_mut(index) {
-                    body.pinned = true;
-                    body.vel = Vec3::ZERO;
-                }
-                st.alpha = force::ALPHA_REHEAT;
+            // Left on a node drags it, left on nothing orbits, right (or middle)
+            // pans — the split every 3D editor uses, and the only way to reach
+            // a part of the graph that orbiting alone cannot bring into view.
+            let mode = match event.button() {
+                1 | 2 => DragMode::Pan,
+                _ => match node {
+                    Some(index) => {
+                        if let Some(body) = st.scene.bodies.get_mut(index) {
+                            body.pinned = true;
+                            body.vel = Vec3::ZERO;
+                        }
+                        st.alpha = force::ALPHA_REHEAT;
+                        DragMode::Node(index)
+                    }
+                    None => DragMode::Orbit,
+                },
+            };
+            if event.button() != 0 {
+                // No middle-click autoscroll, no right-click menu mid-pan.
+                event.prevent_default();
             }
             st.drag = Some(Drag {
                 pointer_id: event.pointer_id(),
                 x: point.0,
                 y: point.1,
                 moved: false,
-                node,
+                mode,
             });
             canvas.set_pointer_capture(event.pointer_id()).ok();
         });
@@ -397,8 +655,8 @@ impl View {
                         drag.moved = true;
                     }
                     if drag.moved {
-                        match drag.node {
-                            Some(index) => {
+                        match drag.mode {
+                            DragMode::Node(index) => {
                                 // Move the node on the plane through it, parallel
                                 // to the screen: screen delta / px_per_unit.
                                 if let Some(body) = st.scene.bodies.get(index).copied() {
@@ -415,10 +673,26 @@ impl View {
                                 }
                                 st.alpha = force::ALPHA_REHEAT.max(0.35);
                             }
-                            None => {
+                            DragMode::Orbit => {
+                                st.camera_touched = true;
                                 st.camera.yaw -= dx * ORBIT_RADIANS_PER_PX;
                                 st.camera.pitch = (st.camera.pitch + dy * ORBIT_RADIANS_PER_PX)
                                     .clamp(-PITCH_LIMIT, PITCH_LIMIT);
+                                st.flight = None;
+                            }
+                            DragMode::Pan => {
+                                // Grab-the-scene: the point under the cursor
+                                // stays under the cursor, so dragging right
+                                // moves the target left.
+                                st.camera_touched = true;
+                                let per_px = st
+                                    .camera
+                                    .project(viewport, st.camera.target)
+                                    .map(|s| 1.0 / s.px_per_unit.max(1e-6))
+                                    .unwrap_or(1.0);
+                                let basis = st.camera.basis();
+                                st.camera.target -= basis.right * (dx * per_px);
+                                st.camera.target += basis.up * (dy * per_px);
                                 st.flight = None;
                             }
                         }
@@ -439,26 +713,31 @@ impl View {
         let state = Rc::clone(&self.state);
         let emit = Rc::clone(&self.emit);
         let on_up = Closure::<dyn FnMut(PointerEvent)>::new(move |_event: PointerEvent| {
-            let (hit, dragged_node) = {
+            // Only a left press on a node that did not turn into a drag counts
+            // as a click. The background is not an event source: releasing
+            // there says nothing a producer can act on.
+            let click = {
                 let mut guard = state.borrow_mut();
                 let st: &mut State = &mut guard;
                 let Some(drag) = st.drag.take() else {
                     return;
                 };
-                if let Some(index) = drag.node {
+                if let DragMode::Node(index) = drag.mode {
                     if let Some(body) = st.scene.bodies.get_mut(index) {
                         body.pinned = false;
                     }
                     st.alpha = force::ALPHA_REHEAT;
                 }
                 if drag.moved {
-                    (None, drag.node)
+                    None
                 } else {
-                    (drag.node, None)
+                    match drag.mode {
+                        DragMode::Node(index) => Some(index),
+                        DragMode::Orbit | DragMode::Pan => None,
+                    }
                 }
             };
-            let _ = dragged_node;
-            match hit {
+            match click {
                 Some(index) => {
                     let st = state.borrow();
                     let node = st.scene.nodes.get(index);
@@ -473,15 +752,19 @@ impl View {
                         }),
                     );
                 }
-                None => emit(
-                    "background-click",
-                    serde_json::json!({ "at": "background" }),
-                ),
+                None => {}
             }
         });
         let function = on_up.as_ref().unchecked_ref::<js_sys::Function>().clone();
         on_up.forget();
         self.listen("pointerup", function);
+
+        let on_menu = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+            event.prevent_default();
+        });
+        let function = on_menu.as_ref().unchecked_ref::<js_sys::Function>().clone();
+        on_menu.forget();
+        self.listen("contextmenu", function);
 
         let state = Rc::clone(&self.state);
         let on_wheel = Closure::<dyn FnMut(WheelEvent)>::new(move |event: WheelEvent| {
@@ -489,6 +772,7 @@ impl View {
             let mut guard = state.borrow_mut();
             let st: &mut State = &mut guard;
             st.flight = None;
+            st.camera_touched = true;
             let factor = (event.delta_y() as f32 * 0.001).exp();
             st.camera.distance = (st.camera.distance * factor).clamp(1.0, 100_000.0);
         });
@@ -600,6 +884,11 @@ fn update_overlay(overlay: &mut Overlay, st: &State, viewport: (f32, f32)) {
         if label.text_content().as_deref() != Some(text.as_str()) {
             label.set_text_content(Some(&text));
         }
+        // Screen coordinates also go into data attributes: reading them back
+        // is how a headless check knows where the layout put each node without
+        // parsing CSS transforms.
+        let _ = label.set_attribute("data-x", &format!("{:.1}", screen.x));
+        let _ = label.set_attribute("data-y", &format!("{:.1}", screen.y));
         let css = label.style();
         css.set_property("display", "block").ok();
         css.set_property(
