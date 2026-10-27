@@ -64,6 +64,16 @@ impl Vec3 {
     pub fn lerp(self, other: Self, t: f32) -> Self {
         self + (other - self) * t
     }
+
+    /// Rodrigues rotation about a unit axis. Used by the camera to turn its own
+    /// frame, which is why it takes an axis rather than Euler angles: turning
+    /// about the *screen's* axes is what keeps a drag following the pointer at
+    /// any orientation, and there is no gimbal to hit because nothing is stored
+    /// as two angles.
+    pub fn rotate(self, axis: Self, angle: f32) -> Self {
+        let (sin, cos) = angle.sin_cos();
+        self * cos + axis.cross(self) * sin + axis * (axis.dot(self) * (1.0 - cos))
+    }
 }
 
 impl Add for Vec3 {

@@ -21,13 +21,21 @@ pub const DEFAULT_FOV_Y: f32 = 50.0 * PI / 180.0;
 pub const Z_NEAR: f32 = 0.1;
 pub const Z_FAR: f32 = 100_000.0;
 
+/// Orientation is stored as a frame, not as yaw/pitch angles.
+///
+/// Two angles describe every orientation except the poles, and a pole is exactly
+/// where a vertical drag ends up: that is why the old camera had to clamp its
+/// pitch at ±83° and why, near the limit, a horizontal drag stopped matching the
+/// pointer. A frame has no poles: turning about the screen's own axes works at
+/// any orientation, and it can keep going past vertical (the view simply ends up
+/// upside down, which is what unbounded rotation means).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
     pub target: Vec3,
-    /// Rotation about world up. 0 places the eye on the +Z axis.
-    pub yaw: f32,
-    /// Elevation above the XZ plane, in radians.
-    pub pitch: f32,
+    /// Unit vector from the eye towards the target.
+    pub forward: Vec3,
+    /// Screen up, unit and perpendicular to `forward`.
+    pub up: Vec3,
     /// Eye distance from `target`, in world units.
     pub distance: f32,
     /// Vertical field of view, in radians.
@@ -36,10 +44,12 @@ pub struct Camera {
 
 impl Default for Camera {
     fn default() -> Self {
+        let pitch = 0.35_f32;
+        let (sin, cos) = pitch.sin_cos();
         Self {
             target: Vec3::ZERO,
-            yaw: 0.0,
-            pitch: 0.35,
+            forward: Vec3::new(0.0, -sin, -cos),
+            up: Vec3::new(0.0, cos, -sin),
             distance: 1000.0,
             fov_y: DEFAULT_FOV_Y,
         }
@@ -66,21 +76,37 @@ pub struct Screen {
 
 impl Camera {
     pub fn eye(&self) -> Vec3 {
-        let (sin_p, cos_p) = (self.pitch.sin(), self.pitch.cos());
-        self.target
-            + Vec3::new(cos_p * self.yaw.sin(), sin_p, cos_p * self.yaw.cos()) * self.distance
+        self.target - self.forward * self.distance
     }
 
     pub fn basis(&self) -> Basis {
-        let forward = (self.target - self.eye())
-            .unit()
-            .unwrap_or(Vec3::new(0.0, 0.0, -1.0));
-        let right = forward.cross(Vec3::UP).unit().unwrap_or(Vec3::new(1.0, 0.0, 0.0));
         Basis {
-            forward,
-            right,
-            up: right.cross(forward),
+            forward: self.forward,
+            right: self.forward.cross(self.up),
+            up: self.up,
         }
+    }
+
+    /// Turn the camera by the drag's angles: `yaw` about the screen's vertical
+    /// axis, `pitch` about its horizontal one.
+    ///
+    /// Both are unbounded and both rotate the frame the drag is measured in, so
+    /// content follows the pointer horizontally no matter how far the view has
+    /// been tipped, and a vertical drag never jams. Re-orthonormalised each time
+    /// so a long drag cannot drift the frame.
+    pub fn orbit(&mut self, yaw: f32, pitch: f32) {
+        if yaw != 0.0 {
+            self.forward = self.forward.rotate(self.up, yaw);
+        }
+        if pitch != 0.0 {
+            let right = self.forward.cross(self.up);
+            self.forward = self.forward.rotate(right, pitch).unit().unwrap_or(self.forward);
+            self.up = self.up.rotate(right, pitch).unit().unwrap_or(self.up);
+        }
+        // Re-derive up from the new forward and the old right, which is cheaper
+        // and steadier than trusting two rotated vectors to stay perpendicular.
+        let right = self.forward.cross(self.up).unit().unwrap_or(Vec3::new(1.0, 0.0, 0.0));
+        self.up = right.cross(self.forward).unit().unwrap_or(Vec3::UP);
     }
 
     /// Project a world point. `None` means behind the near plane — callers
@@ -235,7 +261,8 @@ mod tests {
     #[test]
     fn points_behind_the_camera_are_not_projected() {
         let mut cam = Camera::default();
-        cam.pitch = 0.0;
+        cam.forward = Vec3::new(0.0, 0.0, -1.0);
+        cam.up = Vec3::UP;
         let behind = cam.eye() + Vec3::new(0.0, 0.0, 10.0);
         assert!(cam.project((800.0, 600.0), behind).is_none());
     }
@@ -243,8 +270,8 @@ mod tests {
     #[test]
     fn right_of_target_lands_right_of_centre() {
         let mut cam = Camera::default();
-        cam.pitch = 0.0;
-        cam.yaw = 0.0;
+        cam.forward = Vec3::new(0.0, 0.0, -1.0);
+        cam.up = Vec3::UP;
         cam.distance = 100.0;
         let right = cam.target + Vec3::new(10.0, 0.0, 0.0);
         let screen = cam.project((800.0, 600.0), right).unwrap();
@@ -268,16 +295,55 @@ mod tests {
         }
     }
 
+    /// A horizontal drag must move content horizontally — that was the whole
+    /// point of turning about the screen's own axis instead of world up, which
+    /// tilted everything whenever the view was pitched.
+    #[test]
+    fn a_horizontal_drag_moves_content_horizontally() {
+        let mut cam = Camera::default();
+        let viewport = (800.0, 600.0);
+        let basis = cam.basis();
+        // A point on the pivot plane cannot show direction — turning either way
+        // only foreshortens it towards the centre — so probe the near side,
+        // which is the surface a viewer is actually grabbing.
+        let probe = cam.target + basis.right * 60.0 - basis.forward * 80.0;
+        let before = cam.project(viewport, probe).expect("in front");
+        // What a rightward drag does (see the orbit call in the view).
+        cam.orbit(-0.25, 0.0);
+        let after = cam.project(viewport, probe).expect("in front");
+        assert!(
+            (after.y - before.y).abs() < 0.5,
+            "horizontal drag tilted content: {before:?} -> {after:?}"
+        );
+        assert!(after.x > before.x, "content should follow the drag right");
+    }
+
+    /// No pole, no clamp: two full turns of vertical drag leave a usable frame,
+    /// and a quarter turn past vertical is just an upside-down view.
+    #[test]
+    fn vertical_rotation_is_unbounded_and_keeps_the_frame_orthonormal() {
+        let mut cam = Camera::default();
+        for _ in 0..8 {
+            cam.orbit(0.0, std::f32::consts::FRAC_PI_4);
+            let b = cam.basis();
+            for v in [b.forward, b.up, b.right] {
+                assert!((v.len() - 1.0).abs() < 1e-3, "not unit: {v:?}");
+                assert!(v.x.is_finite() && v.y.is_finite() && v.z.is_finite());
+            }
+            assert!(b.forward.dot(b.up).abs() < 1e-3, "not perpendicular");
+            assert!(cam.project((800.0, 600.0), cam.target).is_some());
+        }
+    }
+
     /// The GPU path uses `view_proj`; labels, picking and labels sizing use
     /// `project`. If they disagree, spheres and labels drift apart.
     #[test]
     fn view_proj_agrees_with_project() {
-        let camera = Camera {
-            yaw: 0.4,
-            pitch: 0.3,
+        let mut camera = Camera {
             distance: 300.0,
             ..Camera::default()
         };
+        camera.orbit(0.4, 0.3);
         let viewport = (800.0, 600.0);
         let m = camera.view_proj(viewport);
         let points = [
