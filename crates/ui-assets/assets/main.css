@@ -379,6 +379,12 @@
         }
     }
 
+    /* The forcegraph is the panel: canvas geometry (fit, picking, labels) is
+       measured against this box, so any padding here is inset canvas. */
+    .box.fg-host {
+        padding: 0;
+    }
+
     .__circle > *,
     .circle {
         aspect-ratio: 1 / 1;

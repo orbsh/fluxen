@@ -367,6 +367,32 @@ pub struct ForceGraph {
 /// 图渲染器的旋钮。语义与 canvas 的 `options` 同级：挂载期配置，改它要
 /// 重新挂载（不进 update 腿）。区别只在于这是自家渲染器的词表，所以可以
 /// 类型化、可以被 schema 和 patch 校验。
+/// 边的走向。两种朝向都是"节点上的接口"：连线从一个朝向离开，再从另一端的
+/// 朝向进入，中间用三次曲线接起来。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum LinkShape {
+    #[default]
+    Straight,
+    /// 直角坐标系：±x ±y ±z 六个朝向。
+    Axes,
+    /// 正四面体：四个顶点到中心的方向。
+    Tetra,
+}
+
+/// 图所在的底色。两套配色只差明度：莫兰迪色低彩度，同一套色在浅底上够
+/// 对比就会在深底上糊成一团，反之亦然。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    Light,
+    /// 默认：节点是光团、边是光线，光需要暗底才成立。
+    #[default]
+    Dark,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 // 结构级 default：帧里只写想改的旋钮，其余取 `Default::default()`。
@@ -374,11 +400,17 @@ pub struct ForceGraph {
 #[serde(default)]
 pub struct ForceGraphStyle {
     /// 节点基础半径（屏幕像素）。
+    /// 节点半径（屏幕像素）；0 = 由 `node_size_ratio` 推导。
     pub node_size_px: f32,
+    /// 节点球直径相对边宽的倍数（默认 2）。
+    pub node_size_ratio: f32,
     /// 每档权重增加的半径（屏幕像素）；档数见 `node_tiers`。
     pub node_size_step_px: f32,
     pub node_tiers: u8,
     pub link_width_px: f32,
+    /// 边的走向：`straight` 直连；`axes` 从六个坐标朝向里取最近的一个；
+    /// `tetra` 从正四面体的四个顶点方向里取最近的。
+    pub link_shape: LinkShape,
     pub link_opacity: f32,
     /// 斥力，负值 = 相互推开。
     pub charge: f32,
@@ -395,22 +427,32 @@ pub struct ForceGraphStyle {
     pub fit_padding_px: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub background: Option<String>,
-    /// 节点配色，按 `kind` 轮取；空 = 用内置的暗色方案。
+    /// 节点配色，按 `kind` 轮取；空 = 用 `theme` 对应的内置莫兰迪方案。
     #[serde(default)]
     pub palette: Vec<String>,
+    /// 底色：浅底 / 深底。只换配色与面板背景，不改布局。
+    pub theme: Theme,
+    /// 高亮节点的标记强度：光晕核心与每一圈波纹的峰值不透明度。
+    pub glow_alpha: f32,
+    /// 高亮可达路径（从选中/聚焦节点向外 `reach_hops` 条边），而不是压暗其它部分。
+    pub highlight_reach: bool,
+    /// 可达的跳数。
+    pub reach_hops: u32,
 }
 
 impl Default for ForceGraphStyle {
     fn default() -> Self {
         Self {
-            node_size_px: 7.0,
-            node_size_step_px: 3.0,
+            node_size_px: 0.0,
+            node_size_ratio: 2.0,
+            node_size_step_px: 0.6,
             node_tiers: 3,
             // 2.5 px / 0.6 alpha: at 1.5 px and 0.35 the edges were drawn but
             // invisible on a light page (measured: 540 → 2486 coloured pixels
             // when the width went to 16 px).
             link_width_px: 2.5,
-            link_opacity: 0.6,
+            link_shape: LinkShape::Straight,
+            link_opacity: 0.8,
             charge: -30.0,
             link_distance: 30.0,
             link_strength: None,
@@ -422,6 +464,10 @@ impl Default for ForceGraphStyle {
             fit_padding_px: 40.0,
             background: None,
             palette: Vec::new(),
+            theme: Theme::default(),
+            glow_alpha: 0.45,
+            highlight_reach: true,
+            reach_hops: 1,
         }
     }
 }
