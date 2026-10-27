@@ -82,6 +82,34 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
             }
         }
 
+        // 主题通道（可选）：`bind.theme` 绑本地槽或 source，载荷直接是
+        // `true/false` 或 `"dark"/"light"`——事件的 data 本来就是裸 Value，
+        // 布尔值不需要任何包装。这里只翻译成枚举并换表现：场景、相机、布局
+        // 都不动，所以切主题不会拉着画面重排。
+        let ctx_theme = ctx_load.clone();
+        let accrete_theme = accrete_load.clone();
+        let view_theme = Rc::clone(&view_load);
+        Effect::new(move |_| {
+            let Some(value) = hooks::use_source(&ctx_theme, &accrete_theme, "theme") else {
+                return;
+            };
+            let theme = match &value {
+                Value::Bool(true) => Some(forcegraph::style::Theme::Dark),
+                Value::Bool(false) => Some(forcegraph::style::Theme::Light),
+                Value::String(s) if s.eq_ignore_ascii_case("dark") => {
+                    Some(forcegraph::style::Theme::Dark)
+                }
+                Value::String(s) if s.eq_ignore_ascii_case("light") => {
+                    Some(forcegraph::style::Theme::Light)
+                }
+                _ => None,
+            };
+            let Some(theme) = theme else { return };
+            if let Some(view) = view_theme.borrow_mut().as_mut() {
+                view.set_theme(theme);
+            }
+        });
+
         // 数据区：载荷是 `{nodes, links, focus?}`，整份快照推给渲染器。
         // 空载荷 = 不占位（ADR 0012），与 canvas/chart 同一条规则。
         let ctx2 = ctx_load.clone();
@@ -118,7 +146,9 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
         });
     });
 
-    let mut classes = vec!["box"];
+    // `fg-host` drops the padding `.box` carries: the canvas measures itself
+    // against this element, so padding becomes inset canvas rather than margin.
+    let mut classes = vec!["box", "fg-host"];
     if !css.is_empty() {
         classes.push(css.as_str());
     }
@@ -136,6 +166,12 @@ fn style_of(style: &ForceGraphStyle) -> forcegraph::Style {
         node_size_step_px: style.node_size_step_px,
         node_tiers: style.node_tiers,
         link_width_px: style.link_width_px,
+        link_shape: match style.link_shape {
+            accrete::LinkShape::Straight => forcegraph::frame::LinkShape::Straight,
+            accrete::LinkShape::Axes => forcegraph::frame::LinkShape::Axes,
+            accrete::LinkShape::Tetra => forcegraph::frame::LinkShape::Tetra,
+        },
+        node_size_ratio: style.node_size_ratio,
         link_opacity: style.link_opacity,
         charge: style.charge,
         link_distance: style.link_distance,
@@ -148,6 +184,13 @@ fn style_of(style: &ForceGraphStyle) -> forcegraph::Style {
         fit_padding_px: style.fit_padding_px,
         background: style.background.clone(),
         palette: style.palette.clone(),
+        glow_alpha: style.glow_alpha,
+        highlight_reach: style.highlight_reach,
+        reach_hops: style.reach_hops,
+        theme: match style.theme {
+            accrete::Theme::Light => forcegraph::style::Theme::Light,
+            accrete::Theme::Dark => forcegraph::style::Theme::Dark,
+        },
     }
 }
 

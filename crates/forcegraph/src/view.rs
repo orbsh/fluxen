@@ -30,7 +30,8 @@ use crate::math::Vec3;
 use crate::pick;
 use crate::render::Renderer;
 use crate::scene::{Scene, Snapshot};
-use crate::style::Style;
+use crate::frame::LinkShape;
+use crate::style::{Style, Theme};
 
 /// Pointer travel (CSS px) below which press-and-release counts as a click.
 const CLICK_SLOP_PX: f32 = 4.0;
@@ -140,6 +141,62 @@ impl State {
     }
 }
 
+/// Repaint everything the theme owns: the panel behind the canvas, the label
+/// scrim and text, and the switch's own caption. The palette is read by
+/// `frame::build`, so the next frame picks it up without touching the layout.
+fn apply_theme(
+    style: &Style,
+    host: &HtmlElement,
+    canvas: &HtmlCanvasElement,
+    overlay: &Overlay,
+    button: &HtmlElement,
+) {
+    let background = style.background();
+    for css in [canvas.style(), host.style()] {
+        match &background {
+            Some(color) => css.set_property("background", color).ok(),
+            None => css.set_property("background", "").ok(),
+        };
+    }
+    let (foreground, scrim) = style.label_colors();
+    overlay
+        .layer
+        .style()
+        .set_property("color", foreground)
+        .ok();
+    for label in &overlay.labels {
+        let css = label.style();
+        css.set_property("color", foreground).ok();
+        css.set_property("background", scrim).ok();
+    }
+    // The caption names the mode a click switches *to*.
+    let (caption, mode) = match style.theme {
+        Theme::Dark => ("亮", "dark"),
+        Theme::Light => ("暗", "light"),
+    };
+    button.set_text_content(Some(caption));
+    host.set_attribute("data-theme", mode).ok();
+}
+
+/// The label switch's caption: whether the names are being drawn.
+fn label_caption(labels: bool) -> &'static str {
+    if labels {
+        "字"
+    } else {
+        "无字"
+    }
+}
+
+/// The link-shape switch's caption: one character per shape, because the panel is
+/// 240 px wide and the switch sits next to the theme one.
+fn shape_label(shape: LinkShape) -> &'static str {
+    match shape {
+        LinkShape::Straight => "直",
+        LinkShape::Axes => "轴",
+        LinkShape::Tetra => "四面",
+    }
+}
+
 /// DOM overlay: one label per node plus the hover card. Kept outside leptos on
 /// purpose — it is rewritten every frame.
 struct Overlay {
@@ -150,6 +207,10 @@ struct Overlay {
 
 pub struct View {
     canvas: HtmlCanvasElement,
+    /// Kept so a theme change from outside (a bind, an event) repaints the same
+    /// surface the switch does, without re-mounting the view.
+    host: HtmlElement,
+    button: HtmlElement,
     renderer: Rc<RefCell<Renderer>>,
     state: Rc<RefCell<State>>,
     overlay: Rc<RefCell<Overlay>>,
@@ -167,7 +228,12 @@ impl View {
     ) -> Option<Self> {
         let document = web_sys::window()?.document()?;
         // Overlay children are absolutely positioned against the host.
+        // The graph is the panel: no padding of its own, so the canvas fills what
+        // the layout gave the element and the fit routine frames the whole box.
         host.style().set_property("position", "relative").ok()?;
+        host.style().set_property("padding", "0").ok()?;
+        host.style().set_property("margin", "0").ok()?;
+        host.style().set_property("overflow", "hidden").ok()?;
 
         let canvas = document
             .create_element("canvas")
@@ -228,8 +294,143 @@ impl View {
             labels: Vec::new(),
         }));
 
+        // The theme switch lives inside the panel: it repaints the surface, the
+        // labels and the palette, so the same graph can be read on a light or a
+        // dark page without touching the layout.
+        let button = document
+            .create_element("button")
+            .ok()?
+            .dyn_into::<HtmlElement>()
+            .ok()?;
+        button.set_class_name("fg-theme");
+        {
+            let css = button.style();
+            css.set_property("position", "absolute").ok();
+            css.set_property("top", "6px").ok();
+            css.set_property("right", "8px").ok();
+            css.set_property("z-index", "3").ok();
+            css.set_property("font", "11px/1.6 system-ui, sans-serif").ok();
+            css.set_property("padding", "0 6px").ok();
+            css.set_property("border", "0").ok();
+            css.set_property("border-radius", "4px").ok();
+            css.set_property("cursor", "pointer").ok();
+            css.set_property("background", "rgba(127,127,127,0.18)").ok();
+            css.set_property("color", "inherit").ok();
+        }
+        button
+            .set_attribute("data-fg-theme", "switch")
+            .ok();
+        host.append_child(&button).ok();
+
+        // Second switch: which way the links leave their nodes.
+        let shape_button = document
+            .create_element("button")
+            .ok()?
+            .dyn_into::<HtmlElement>()
+            .ok()?;
+        shape_button.set_class_name("fg-shape");
+        {
+            let css = shape_button.style();
+            css.set_property("position", "absolute").ok();
+            css.set_property("top", "6px").ok();
+            css.set_property("right", "52px").ok();
+            css.set_property("z-index", "3").ok();
+            css.set_property("font", "11px/1.6 system-ui, sans-serif").ok();
+            css.set_property("padding", "0 6px").ok();
+            css.set_property("border", "0").ok();
+            css.set_property("border-radius", "4px").ok();
+            css.set_property("cursor", "pointer").ok();
+            css.set_property("background", "rgba(127,127,127,0.18)").ok();
+            css.set_property("color", "inherit").ok();
+        }
+        // Third switch: the labels. `style.labels` is read every frame by the
+        // overlay, so flipping it here takes effect on the next frame — no remount,
+        // no relayout.
+        let labels_button = document
+            .create_element("button")
+            .ok()?
+            .dyn_into::<HtmlElement>()
+            .ok()?;
+        labels_button.set_class_name("fg-labels-toggle");
+        {
+            let css = labels_button.style();
+            css.set_property("position", "absolute").ok();
+            css.set_property("top", "6px").ok();
+            css.set_property("right", "96px").ok();
+            css.set_property("z-index", "3").ok();
+            css.set_property("font", "11px/1.6 system-ui, sans-serif").ok();
+            css.set_property("padding", "0 6px").ok();
+            css.set_property("border", "0").ok();
+            css.set_property("border-radius", "4px").ok();
+            css.set_property("cursor", "pointer").ok();
+            css.set_property("background", "rgba(127,127,127,0.18)").ok();
+            css.set_property("color", "inherit").ok();
+        }
+        labels_button
+            .set_attribute("data-fg-labels", "switch")
+            .ok();
+        labels_button.set_text_content(Some(label_caption(state.borrow().style.labels)));
+        host.append_child(&labels_button).ok();
+        {
+            let state_btn = Rc::clone(&state);
+            let caption_btn = labels_button.clone();
+            let cb = Closure::<dyn FnMut()>::new(move || {
+                let labels = {
+                    let mut state = state_btn.borrow_mut();
+                    state.style.labels = !state.style.labels;
+                    state.style.labels
+                };
+                caption_btn.set_text_content(Some(label_caption(labels)));
+            });
+            labels_button
+                .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
+                .ok();
+            cb.forget();
+        }
+
+        shape_button.set_attribute("data-fg-shape", "switch").ok();
+        shape_button.set_text_content(Some(shape_label(state.borrow().style.link_shape)));
+        host.append_child(&shape_button).ok();
+        {
+            let state_btn = Rc::clone(&state);
+            let label_btn = shape_button.clone();
+            let cb = Closure::<dyn FnMut()>::new(move || {
+                let next = {
+                    let mut state = state_btn.borrow_mut();
+                    state.style.link_shape = match state.style.link_shape {
+                        LinkShape::Straight => LinkShape::Axes,
+                        LinkShape::Axes => LinkShape::Tetra,
+                        LinkShape::Tetra => LinkShape::Straight,
+                    };
+                    state.style.link_shape
+                };
+                label_btn.set_text_content(Some(shape_label(next)));
+            });
+            shape_button
+                .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
+                .ok();
+            cb.forget();
+        }
+        apply_theme(&state.borrow().style, &host, &canvas, &overlay.borrow(), &button);
+        {
+            let state_btn = Rc::clone(&state);
+            let overlay_btn = Rc::clone(&overlay);
+            let (host_btn, canvas_btn, button_btn) = (host.clone(), canvas.clone(), button.clone());
+            let cb = Closure::<dyn FnMut()>::new(move || {
+                state_btn.borrow_mut().style.toggle_theme();
+                let style = state_btn.borrow().style.clone();
+                apply_theme(&style, &host_btn, &canvas_btn, &overlay_btn.borrow(), &button_btn);
+            });
+            button
+                .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
+                .ok();
+            cb.forget();
+        }
+
         let mut view = Self {
             canvas,
+            host: host.clone(),
+            button,
             renderer,
             state,
             overlay,
@@ -241,6 +442,25 @@ impl View {
         view.install_input();
         view.start_loop();
         Some(view)
+    }
+
+    /// Switch the palette from outside the panel — a `theme` bind, an event the
+    /// page turned into a patch. Presentation only: the scene, the camera and the
+    /// layout are untouched, so nothing jumps when the theme flips.
+    pub fn set_theme(&mut self, theme: Theme) {
+        if self.state.borrow().style.theme == theme {
+            return;
+        }
+        {
+            let mut state = self.state.borrow_mut();
+            state.style.theme = theme;
+        }
+        let style = self.state.borrow().style.clone();
+        apply_theme(&style, &self.host, &self.canvas, &self.overlay.borrow(), &self.button);
+    }
+
+    pub fn theme(&self) -> Theme {
+        self.state.borrow().style.theme
     }
 
     /// Feed a payload snapshot. Surviving ids keep their position; only the
@@ -293,7 +513,21 @@ impl View {
         }
         if diff.focus_changed {
             state.alpha = state.alpha.max(force::ALPHA_REHEAT);
-            let focused = state.scene.focus_points();
+            // Frame the highlighted nodes *and* the paths that lead out of them:
+            // fitting to the selected node alone zooms so far in that the rest of
+            // the graph spills off the panel.
+            let mut focused = state.scene.focus_points();
+            if state.style.highlight_reach {
+                let (nodes, _) = crate::frame::reachable(&state.scene, state.style.reach_hops);
+                let mut points: Vec<crate::math::Vec3> = nodes
+                    .iter()
+                    .filter_map(|index| state.scene.bodies.get(*index).map(|body| body.pos))
+                    .collect();
+                if !points.is_empty() {
+                    points.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
+                    focused = points;
+                }
+            }
             if !focused.is_empty() {
                 let mut probe = state.camera;
                 probe.fit(&focused, FOCUS_PADDING_PX, viewport);
@@ -376,6 +610,9 @@ impl View {
                 }
 
                 st.set_collide_radii();
+                // The halo's clock: rings are derived from it in `frame::build`,
+                // so the animation costs no state beyond one phase per lit node.
+                st.scene.advance_glow(dt);
 
                 let params = st.style.params();
                 st.acc = (st.acc + dt).min(STEP * 4.0);
@@ -475,7 +712,7 @@ impl View {
                 let _ = canvas.set_attribute(
                     "data-fg",
                     &format!(
-                        "nodes={} links={} alpha={:.3} min_px={:.1} c={:.0},{:.0} spread={:.0}x{:.0} d={:.0} r={:.1} vp={:.0}x{:.0} ppu={:.2} cl={:.1} touch={}",
+                        "nodes={} links={} alpha={:.3} min_px={:.1} c={:.0},{:.0} spread={:.0}x{:.0} d={:.0} r={:.1} vp={:.0}x{:.0} ppu={:.2} cl={:.1} touch={} sel={} halo={} domes={} ph={:.2}",
                         st.scene.nodes.len(),
                         st.scene.links.len(),
                         st.alpha,
@@ -498,7 +735,14 @@ impl View {
                             .iter()
                             .map(|b| b.collide)
                             .fold(f32::INFINITY, f32::min),
-                        u8::from(st.camera_touched)
+                        u8::from(st.camera_touched),
+                        st.scene
+                            .selected
+                            .map(|i| i.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                        frame.haloes.len(),
+                        frame.domes.len(),
+                        st.scene.glow_phase()
                     ),
                 );
 
@@ -551,14 +795,13 @@ impl View {
             let mode = match event.button() {
                 1 | 2 => DragMode::Pan,
                 _ => match node {
-                    Some(index) => {
-                        if let Some(body) = st.scene.bodies.get_mut(index) {
-                            body.pinned = true;
-                            body.vel = Vec3::ZERO;
-                        }
-                        st.alpha = force::ALPHA_REHEAT;
-                        DragMode::Node(index)
-                    }
+                    // Nothing is pinned and nothing is reheated on press: a
+                    // press that never moves is a *click* (selection), and doing
+                    // either made the graph jog under the pointer — measured 11px
+                    // of drift, which moved the node out from under the next
+                    // click and made the halo look like it had moved. Both belong
+                    // to the first real movement.
+                    Some(index) => DragMode::Node(index),
                     None => DragMode::Orbit,
                 },
             };
@@ -607,6 +850,15 @@ impl View {
                     let (dx, dy) = (point.0 - drag.x, point.1 - drag.y);
                     if !drag.moved && (dx.abs() > CLICK_SLOP_PX || dy.abs() > CLICK_SLOP_PX) {
                         drag.moved = true;
+                        // A drag is what needs the layout awake and the node held
+                        // still; a click needs neither.
+                        if let DragMode::Node(index) = drag.mode {
+                            if let Some(body) = st.scene.bodies.get_mut(index) {
+                                body.pinned = true;
+                                body.vel = Vec3::ZERO;
+                            }
+                            st.alpha = force::ALPHA_REHEAT;
+                        }
                     }
                     if drag.moved {
                         match drag.mode {
@@ -682,11 +934,16 @@ impl View {
                 let Some(drag) = st.drag.take() else {
                     return;
                 };
-                if let DragMode::Node(index) = drag.mode {
-                    if let Some(body) = st.scene.bodies.get_mut(index) {
-                        body.pinned = false;
+                // Only a real drag changed anything: unpinning a node that was
+                // never pinned and reheating a layout that nobody moved made the
+                // graph jog ~11px on every click.
+                if drag.moved {
+                    if let DragMode::Node(index) = drag.mode {
+                        if let Some(body) = st.scene.bodies.get_mut(index) {
+                            body.pinned = false;
+                        }
+                        st.alpha = force::ALPHA_REHEAT;
                     }
-                    st.alpha = force::ALPHA_REHEAT;
                 }
                 if drag.moved {
                     None
@@ -699,6 +956,14 @@ impl View {
             };
             match click {
                 Some(index) => {
+                    // Clicking a node picks it: the halo is the view's own
+                    // answer to "which one am I looking at", so it does not
+                    // wait for the producer to send anything back.
+                    {
+                        let mut st = state.borrow_mut();
+                        let already = st.scene.selected == Some(index);
+                        st.scene.select(if already { None } else { Some(index) });
+                    }
                     let st = state.borrow();
                     let node = st.scene.nodes.get(index);
                     emit(
@@ -799,8 +1064,11 @@ fn update_overlay(overlay: &mut Overlay, st: &State, viewport: (f32, f32)) {
                         &format!("{}px/1.2 system-ui, sans-serif", st.style.label_px),
                     )
                     .ok();
-                    css.set_property("color", "#0f172a").ok();
-                    css.set_property("background", "rgba(255,255,255,0.72)").ok();
+                    // Colour and scrim come from the theme, applied to the
+                    // layer and re-applied here for labels created later.
+                    let (fg, scrim) = st.style.label_colors();
+                    css.set_property("color", fg).ok();
+                    css.set_property("background", scrim).ok();
                     css.set_property("padding", "0 3px").ok();
                     css.set_property("border-radius", "3px").ok();
                     overlay.layer.append_child(&el).ok();

@@ -110,9 +110,82 @@ pub struct Scene {
     /// Set once the caller has framed the graph; later snapshots must not
     /// re-frame it (that would move the camera under the user's hands).
     pub fitted: bool,
+    /// Node the viewer picked with a click. A view state, not data: a snapshot
+    /// must not clear it, or clicking a node would lose its halo the next time
+    /// the producer sent the same graph.
+    pub selected: Option<usize>,
+    /// Seconds on the scene clock, **not** wrapped. Each node reads it through its
+    /// own offset and rate (`breath_phase`), and a wrapping clock would make every
+    /// node whose rate is not exactly 1.0 jump when the wrap happened — the breath
+    /// would snap from smallest to largest instead of growing back.
+    pub glow_clock: f64,
+}
+
+/// Seconds for one breath of a halo: out and back. Slow enough to read as light
+/// rather than as a pulse.
+pub const BREATH_PERIOD: f32 = 3.4;
+
+/// FNV-1a: a stable 64-bit hash, used to give each node its own breath. Any hash
+/// would do — what matters is that it is the same every frame and every reload.
+fn fnv1a(text: &str) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in text.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
 }
 
 impl Scene {
+    /// Click selection: same node again clears it, a different node replaces it.
+    /// Dropping the id when the node disappears keeps the halo from pointing at
+    /// a body that no longer exists.
+    pub fn select(&mut self, index: Option<usize>) {
+        self.selected = match index {
+            Some(i) if i < self.bodies.len() => Some(i),
+            _ => None,
+        };
+    }
+
+    /// Advance the halo clock. Highlighted nodes get a phase; nodes that lose
+    /// the highlight lose their phase too, so re-picking a node starts its
+    /// ripple from the middle of the node rather than wherever it left off.
+    pub fn advance_glow(&mut self, dt: f32) {
+        self.glow_clock += f64::from(dt);
+    }
+
+    /// Where the clock is, as 0..1 — the scene-wide fraction, not any one halo's.
+    pub fn glow_phase(&self) -> f32 {
+        (self.glow_clock / f64::from(BREATH_PERIOD)).rem_euclid(1.0) as f32
+    }
+
+    /// Where *this* node's breath is, 0..1. Offset and rate both come from the id,
+    /// so the values differ per node but never change: a per-frame random phase
+    /// would flicker, and a single shared phase makes the graph pulse as one lamp.
+    pub fn breath_phase(&self, index: usize) -> f32 {
+        let seed = self
+            .nodes
+            .get(index)
+            .map(|node| fnv1a(&node.id))
+            .unwrap_or(0);
+        let offset = (seed % 997) as f32 / 997.0;
+        // 0.75..1.25 times the nominal tempo: same slow breath, its own rhythm.
+        let rate = 0.7 + ((seed >> 10) % 101) as f32 / 200.0; // 0.70..1.20
+        (self.glow_clock / f64::from(BREATH_PERIOD) * f64::from(rate) + f64::from(offset))
+            .rem_euclid(1.0) as f32
+    }
+
+    /// Whether this node is highlighted: picked by hand, or named by the focus
+    /// directive. The halo and the dimming read the same answer, so a node can
+    /// never look focused and dim at once.
+    pub fn is_highlighted(&self, index: usize) -> bool {
+        self.selected == Some(index) || self.is_focused(index)
+    }
+
+    pub fn is_highlighted_any(&self) -> bool {
+        (0..self.bodies.len()).any(|index| self.is_highlighted(index))
+    }
+
     pub fn index_of(&self, id: &str) -> Option<usize> {
         self.nodes.iter().position(|n| n.id == id)
     }
@@ -417,6 +490,17 @@ mod tests {
             dx > widest * 0.15 && dy > widest * 0.15 && dz > widest * 0.15,
             "collapsed to a plane/line: {dx:.1} x {dy:.1} x {dz:.1}"
         );
+    }
+
+    /// The clock keeps one phase per highlighted node, wraps instead of growing
+    fn the_breath_clock_wraps_and_never_resets() {
+        let mut scene = Scene::default();
+        scene.advance_glow(0.85);
+        assert!((scene.glow_phase() - 0.25).abs() < 1e-6, "{}", scene.glow_phase());
+        scene.advance_glow(BREATH_PERIOD);
+        assert!((scene.glow_phase() - 0.25).abs() < 1e-6, "a full breath is a no-op");
+        scene.advance_glow(BREATH_PERIOD * 10.0);
+        assert!((0.0..1.0).contains(&scene.glow_phase()));
     }
 
     #[test]
