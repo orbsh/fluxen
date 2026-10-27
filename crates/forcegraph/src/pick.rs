@@ -60,8 +60,8 @@ mod tests {
     fn flat_camera() -> Camera {
         Camera {
             distance: 100.0,
-            pitch: 0.0,
-            yaw: 0.0,
+            forward: Vec3::new(0.0, 0.0, -1.0),
+            up: Vec3::UP,
             ..Camera::default()
         }
     }

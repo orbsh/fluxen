@@ -35,7 +35,8 @@ use crate::style::Style;
 /// Pointer travel (CSS px) below which press-and-release counts as a click.
 const CLICK_SLOP_PX: f32 = 4.0;
 const ORBIT_RADIANS_PER_PX: f32 = 0.006;
-const PITCH_LIMIT: f32 = 1.45;
+// No pitch limit: a frame has no pole to hit, so the drag can tip past vertical
+// and keep going (see `Camera::orbit`).
 const FLIGHT_MS: f64 = 420.0;
 /// How far the camera may drift from "the graph fills the pane" before it is
 /// corrected: a fifth either way is invisible, a factor of two is a graph the
@@ -628,9 +629,15 @@ impl View {
                             }
                             DragMode::Orbit => {
                                 st.camera_touched = true;
-                                st.camera.yaw -= dx * ORBIT_RADIANS_PER_PX;
-                                st.camera.pitch = (st.camera.pitch + dy * ORBIT_RADIANS_PER_PX)
-                                    .clamp(-PITCH_LIMIT, PITCH_LIMIT);
+                                // Grab the scene: dragging right turns the
+                                // camera left, so what is under the pointer
+                                // travels with it; dragging down tips the view
+                                // down onto the graph. Both axes are the
+                                // screen's own, and neither is bounded.
+                                st.camera.orbit(
+                                    -dx * ORBIT_RADIANS_PER_PX,
+                                    -dy * ORBIT_RADIANS_PER_PX,
+                                );
                                 st.flight = None;
                             }
                             DragMode::Pan => {
