@@ -17,7 +17,22 @@ use crate::force::{self, Body, Link};
 use crate::math::Vec3;
 
 /// Radius of the golden-spiral seed sphere for nodes with no placed neighbour.
-const SEED_RADIUS: f32 = 120.0;
+/// Same order as a link's rest length: d3 seeds inside the graph's own scale,
+/// and a seed cloud much wider than `link_distance` spends its whole alpha
+/// budget just pulling itself together.
+const SEED_RADIUS: f32 = 30.0;
+/// How far off the neighbour centroid a new node starts, as a fraction of the
+/// seed radius: close enough to belong to the cluster, far enough that no two
+/// nodes ever share a position.
+const SEED_OFFSET: f32 = 0.25;
+/// How many points on a new node's spiral to try before accepting a crowded
+/// one. A golden-angle walk can revisit a spot it has already visited, and two
+/// nodes seeded in the same place give the layout no direction to separate
+/// along.
+const SEED_ATTEMPTS: usize = 8;
+/// Two seeded nodes closer than this are treated as coincident. A fifth of the
+/// seed radius: well under a link's rest length, well over a rounding error.
+const MIN_SEPARATION: f32 = SEED_RADIUS * 0.2;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Node {
@@ -212,7 +227,28 @@ impl Scene {
                 seeds.get(i).copied().unwrap_or(Vec3::ZERO)
             } else {
                 let sum = placed.iter().fold(Vec3::ZERO, |acc, p| acc + *p);
-                sum * (1.0 / placed.len() as f32)
+                let centroid = sum * (1.0 / placed.len() as f32);
+                // Off the centroid, not on it. A node whose only placed
+                // neighbour is its parent has a centroid exactly on that
+                // parent, and a whole chain of such nodes lands on one point;
+                // the layout then only has collision pushes to separate them,
+                // which is how a graph becomes a line.
+                let step = SEED_RADIUS * SEED_OFFSET;
+                let mut candidate = centroid + force::spiral_dir(i) * step;
+                // ...and not on a node that is already there either: the spiral
+                // is a deterministic walk, and it revisits. Rotate along it
+                // until the point is clear.
+                for attempt in 1..SEED_ATTEMPTS {
+                    let crowded = positions
+                        .iter()
+                        .flatten()
+                        .any(|p| (*p - candidate).len() < MIN_SEPARATION);
+                    if !crowded {
+                        break;
+                    }
+                    candidate = centroid + force::spiral_dir(i * SEED_ATTEMPTS + attempt) * step;
+                }
+                candidate
             };
             if let Some(slot) = positions.get_mut(i) {
                 *slot = Some(pos);
@@ -230,6 +266,9 @@ impl Scene {
                     vel: Vec3::ZERO,
                     weight: node.weight.unwrap_or(1.0).max(0.01),
                     pinned,
+                    // Filled by the view from the rendered radius; a scene on
+                    // its own knows nothing about pixels.
+                    collide: 0.0,
                 }
             })
             .collect();
@@ -297,8 +336,15 @@ mod tests {
         for (i, pos) in before.iter().enumerate() {
             assert_eq!(scene.bodies[i].pos, *pos, "node {i} moved");
         }
-        // The new node lands next to its neighbour, not at the origin.
-        assert_eq!(scene.bodies[3].pos, before[2]);
+        // The new node lands next to its neighbour, not on it and not at the
+        // origin: an exact landing point would put every appended node inside
+        // its parent.
+        let landing = scene.bodies[3].pos;
+        let gap = (landing - before[2]).len();
+        assert!(
+            gap > 1.0 && gap < SEED_RADIUS,
+            "new node landed {gap} from its neighbour"
+        );
     }
 
     #[test]
@@ -311,6 +357,66 @@ mod tests {
         assert_eq!(scene.links.len(), 1);
         assert_eq!(scene.links[0].a, 0);
         assert_eq!(scene.links[0].b, 1);
+    }
+
+    /// The browser's real path: nodes arrive one at a time, each linked to a
+    /// node that is already placed. Before the seed offset, every new node
+    /// landed exactly on its parent, so the whole graph collapsed onto one
+    /// point and only collision pushes (all along one axis) separated it — a
+    /// vertical line instead of a graph.
+    #[test]
+    fn nodes_added_one_by_one_never_share_a_position() {
+        let mut scene = Scene::default();
+        let mut nodes: Vec<Node> = Vec::new();
+        let mut links: Vec<GraphLink> = Vec::new();
+        for i in 0..8 {
+            nodes.push(Node {
+                id: format!("n{i}"),
+                name: Some(format!("n{i}")),
+                weight: Some(5.0),
+                ..Node::default()
+            });
+            if i > 0 {
+                links.push(GraphLink {
+                    source: format!("n{}", i - 1),
+                    target: format!("n{i}"),
+                    strength: Some(1.0),
+                    ..GraphLink::default()
+                });
+            }
+            let diff = scene.apply(Snapshot {
+                nodes: nodes.clone(),
+                links: links.clone(),
+                ..Snapshot::default()
+            });
+            assert_eq!(diff.added.len(), 1, "one node per push");
+        }
+
+        for i in 0..scene.bodies.len() {
+            for j in (i + 1)..scene.bodies.len() {
+                let gap = (scene.bodies[i].pos - scene.bodies[j].pos).len();
+                assert!(gap > 1.0, "nodes {i} and {j} start on one point ({gap})");
+            }
+        }
+
+        // And it relaxes into three dimensions, not into a line.
+        let params = force::Params::default();
+        let mut alpha = force::ALPHA_START;
+        for _ in 0..400 {
+            force::step(&mut scene.bodies, &scene.links, &params, alpha);
+            alpha = (alpha * force::ALPHA_DECAY).max(force::ALPHA_FLOOR);
+        }
+        let span = |f: fn(Vec3) -> f32| {
+            let values: Vec<f32> = scene.bodies.iter().map(|b| f(b.pos)).collect();
+            values.iter().copied().fold(f32::NEG_INFINITY, f32::max)
+                - values.iter().copied().fold(f32::INFINITY, f32::min)
+        };
+        let (dx, dy, dz) = (span(|p| p.x), span(|p| p.y), span(|p| p.z));
+        let widest = dx.max(dy).max(dz);
+        assert!(
+            dx > widest * 0.15 && dy > widest * 0.15 && dz > widest * 0.15,
+            "collapsed to a plane/line: {dx:.1} x {dy:.1} x {dz:.1}"
+        );
     }
 
     #[test]

@@ -17,9 +17,9 @@ pub struct Style {
     pub link_opacity: f32,
     pub charge: f32,
     pub link_distance: f32,
-    pub spring: f32,
-    pub center: f32,
-    pub damping: f32,
+    /// `None` keeps d3's `1 / min(degree)`.
+    pub link_strength: Option<f32>,
+    pub velocity_decay: f32,
     pub labels: bool,
     pub label_px: f32,
     pub label_max_nodes: u32,
@@ -40,15 +40,13 @@ impl Default for Style {
             // when the width went to 16 px).
             link_width_px: 2.5,
             link_opacity: 0.6,
-            // Calm by construction: repulsion strong enough to separate
-            // clusters, springs loose enough not to fight it, damping high
-            // enough that the alpha cooling actually settles instead of
-            // ringing. These are the numbers after the first browser pass.
-            charge: -2600.0,
-            link_distance: 70.0,
-            spring: 1.2,
-            center: 0.03,
-            damping: 2.6,
+            // 3d-force-graph's defaults, i.e. d3-force-3d's: charge -30,
+            // link distance 30, velocity decay 0.4. Inventing these numbers by
+            // eye is what produced a layout that looked wrong at every zoom.
+            charge: -30.0,
+            link_distance: 30.0,
+            link_strength: None,
+            velocity_decay: 0.4,
             labels: true,
             label_px: 12.0,
             label_max_nodes: 150,
@@ -65,9 +63,8 @@ impl Style {
         force::Params {
             charge: self.charge,
             link_distance: self.link_distance,
-            spring: self.spring,
-            center: self.center,
-            damping: self.damping,
+            link_strength: self.link_strength,
+            velocity_decay: self.velocity_decay,
             ..force::Params::default()
         }
     }
