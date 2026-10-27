@@ -17,15 +17,15 @@ Steps (each waits for one Enter; --auto runs unattended, --delay paces the text)
  12  TYPE the code-review paragraph, then set the editor's {code, lang} payload
      (Monaco is pulled at THAT moment — ADR 0015) and press Ctrl/Cmd+S to watch
      the uplink land on the stage console
- 13  TYPE the graph paragraph, then grow the relationship graph in three
-     snapshots — the same canvas host pointed at the forcegraph module, its
-     renderer options (sizes, physics, palette) riding Canvas.options (ADR 0017)
+ 13  TYPE the graph paragraph — the left graph has been growing all along: every
+     beat above pushed a cumulative snapshot, so a chart appearing on the right
+     also added its node on the left (ADR 0018)
 
 The box in child order (what the reader watches fill in):
 
     intro text | line chart | radar group | summary text | review form |
     car text | splat canvas | shoe text | shoe canvas | patch text | code editor |
-    graph text | graph canvas
+    graph text
 
 Frames go to the mirror's POST /send, so no WS handshake is needed and the stage
 console echoes each one. The typewriter is a per-token PATCH stream (3 chars per
@@ -59,7 +59,9 @@ Implementation choices worth naming:
   lands (ADR 0015) — Monaco is ~4.5 MB and must never ride the page load. Its save
   is Ctrl/Cmd+S in the editor, which uplinks `{code, lang}` over the same leg the
   review form submits through (ADR 0016).
-- The graph is the LEFT COLUMN, not a message (ADR 0018): a native `forcegraph`
+- The graph is the LEFT COLUMN, not a message (ADR 0018), and it is not a finale:
+  each beat above pushes the snapshot for what has appeared so far, so the two
+  halves advance together. A native `forcegraph`
   component with its own WebGL2 renderer — no JS asset, no `url`, no module
   contract, no three.js. Its knobs are typed DSL (`style`), not an opaque options
   bag, because the renderer is ours. Cumulative snapshots (not per-node patches)
@@ -130,50 +132,115 @@ PATCH_CODE = """pub fn render(nodes: &[Node]) -> Frame {
 # (that file is the standalone carrier; this table keeps the demo free of a YAML
 # parser). `weight` drives node size, `strength` drives edge width — both in the
 # module, both configurable through options.
-GRAPH_NODES = [
-    {"id": "accrete", "name": "accrete", "kind": "crate", "weight": 9},
-    {"id": "ui_leptos", "name": "ui_leptos", "kind": "crate", "weight": 8},
-    {"id": "content", "name": "content", "kind": "crate", "weight": 7},
-    {"id": "transport", "name": "transport", "kind": "crate", "weight": 5},
-    {"id": "stage", "name": "stage", "kind": "crate", "weight": 6},
-    {"id": "canvas", "name": "canvas", "kind": "component", "weight": 7},
-    {"id": "chart", "name": "chart", "kind": "component", "weight": 6},
-    {"id": "editor", "name": "editor", "kind": "component", "weight": 6},
-    {"id": "rack", "name": "rack", "kind": "component", "weight": 6},
-    {"id": "pages", "name": "pages", "kind": "component", "weight": 5},
-    {"id": "forcegraph", "name": "forcegraph", "kind": "native", "weight": 7},
-    {"id": "browser3d", "name": "3dbrowser", "kind": "module", "weight": 5},
-    {"id": "splatviewer", "name": "splatviewer", "kind": "module", "weight": 5},
-    {"id": "g2chart", "name": "g2chart", "kind": "module", "weight": 4},
-    {"id": "monaco", "name": "monaco", "kind": "lib", "weight": 7},
+# The graph is the project's own structure, not decoration: crates, the nodes
+# they render, the modules that ride inside them, and the libraries underneath.
+# Roughly forty nodes in five clusters — small graphs all look like a blob, and
+# a blob is exactly what this view must not look like.
+_CRATES = [
+    ("accrete", 9), ("ui_leptos", 8), ("stage", 6), ("content", 7),
+    ("transport", 5), ("transport_ws", 4), ("forcegraph", 7), ("ui_assets", 4),
+    ("accrete_macro", 3), ("ui_leptos_macro", 3), ("fluxen", 6),
 ]
+_NODES = [
+    ("case", "component", 7), ("canvas", "component", 7), ("rack", "component", 6),
+    ("pages", "component", 5), ("form", "component", 6), ("diagram", "component", 5),
+    ("popup", "component", 4), ("layer", "component", 5), ("fold", "component", 4),
+    ("svg", "component", 4), ("portal", "component", 3),
+    ("3dbrowser", "module", 5), ("splatviewer", "module", 5), ("g2chart", "module", 4),
+    ("monaco", "module", 6), ("mermaid", "module", 3),
+    ("leptos", "lib", 7), ("wasm_bindgen", "lib", 6), ("web_sys", "lib", 6),
+    ("serde", "lib", 5), ("tokio", "lib", 4), ("binaryen", "tool", 3), ("trunk", "tool", 3),
+]
+GRAPH_NODES = (
+    [{"id": name, "name": name, "kind": "crate", "weight": w} for name, w in _CRATES]
+    + [{"id": name, "name": name, "kind": kind, "weight": w} for name, kind, w in _NODES]
+)
 
 GRAPH_LINKS = [
+    # the crate layer: who compiles into whom, who serves whom
     {"source": "ui_leptos", "target": "accrete", "kind": "renders", "strength": 5},
-    {"source": "stage", "target": "content", "kind": "encodes", "strength": 4},
-    {"source": "stage", "target": "ui_leptos", "kind": "serves", "strength": 3},
+    {"source": "ui_leptos", "target": "ui_leptos_macro", "kind": "generates", "strength": 3},
+    {"source": "accrete", "target": "accrete_macro", "kind": "generates", "strength": 3},
+    {"source": "ui_leptos", "target": "ui_assets", "kind": "loads", "strength": 3},
+    {"source": "ui_leptos", "target": "forcegraph", "kind": "mounts", "strength": 4},
+    {"source": "forcegraph", "target": "accrete", "kind": "node", "strength": 4},
+    {"source": "stage", "target": "content", "kind": "encodes", "strength": 5},
+    {"source": "stage", "target": "ui_leptos", "kind": "serves", "strength": 4},
+    {"source": "stage", "target": "transport", "kind": "bridges", "strength": 3},
+    {"source": "transport", "target": "transport_ws", "kind": "extends", "strength": 3},
     {"source": "transport", "target": "content", "kind": "carries", "strength": 3},
-    {"source": "canvas", "target": "accrete", "kind": "node", "strength": 2},
-    {"source": "rack", "target": "pages", "kind": "rows", "strength": 3},
+    {"source": "content", "target": "serde", "kind": "derives", "strength": 3},
+    {"source": "transport", "target": "serde", "kind": "derives", "strength": 2},
+    {"source": "transport_ws", "target": "tokio", "kind": "runs-on", "strength": 3},
+    {"source": "fluxen", "target": "stage", "kind": "starts", "strength": 4},
+    {"source": "fluxen", "target": "transport_ws", "kind": "starts", "strength": 3},
+    # components the shell mounts, and the accrete nodes they are
+    {"source": "case", "target": "accrete", "kind": "node", "strength": 5},
+    {"source": "case", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
     {"source": "canvas", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
-    {"source": "chart", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
-    {"source": "editor", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
-    {"source": "forcegraph", "target": "accrete", "kind": "node", "strength": 3},
-    {"source": "browser3d", "target": "canvas", "kind": "mounts", "strength": 4},
+    {"source": "rack", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
+    {"source": "rack", "target": "pages", "kind": "rows", "strength": 3},
+    {"source": "pages", "target": "case", "kind": "arranges", "strength": 2},
+    {"source": "form", "target": "accrete", "kind": "node", "strength": 3},
+    {"source": "form", "target": "ui_leptos", "kind": "mounted-by", "strength": 2},
+    {"source": "diagram", "target": "ui_leptos", "kind": "mounted-by", "strength": 2},
+    {"source": "diagram", "target": "accrete", "kind": "node", "strength": 3},
+    {"source": "popup", "target": "ui_leptos", "kind": "mounted-by", "strength": 2},
+    {"source": "layer", "target": "ui_leptos", "kind": "mounted-by", "strength": 2},
+    {"source": "fold", "target": "layer", "kind": "stacks-in", "strength": 2},
+    {"source": "svg", "target": "ui_leptos", "kind": "mounted-by", "strength": 2},
+    {"source": "portal", "target": "layer", "kind": "escapes-to", "strength": 2},
+    # modules ride inside components
+    {"source": "3dbrowser", "target": "canvas", "kind": "mounts", "strength": 4},
     {"source": "splatviewer", "target": "canvas", "kind": "mounts", "strength": 4},
-    {"source": "g2chart", "target": "chart", "kind": "mounts", "strength": 3},
-    {"source": "monaco", "target": "editor", "kind": "mounts", "strength": 5},
+    {"source": "g2chart", "target": "canvas", "kind": "mounts", "strength": 3},
+    {"source": "monaco", "target": "canvas", "kind": "mounts", "strength": 5},
+    {"source": "mermaid", "target": "diagram", "kind": "renders", "strength": 3},
+    # the platform underneath
+    {"source": "leptos", "target": "wasm_bindgen", "kind": "compiles-to", "strength": 4},
+    {"source": "web_sys", "target": "wasm_bindgen", "kind": "binds", "strength": 4},
+    {"source": "ui_leptos", "target": "leptos", "kind": "built-with", "strength": 5},
+    {"source": "forcegraph", "target": "web_sys", "kind": "draws-with", "strength": 5},
+    {"source": "forcegraph", "target": "wasm_bindgen", "kind": "binds", "strength": 3},
+    {"source": "trunk", "target": "ui_leptos", "kind": "builds", "strength": 3},
+    {"source": "trunk", "target": "binaryen", "kind": "shrinks-with", "strength": 2},
+    {"source": "binaryen", "target": "wasm_bindgen", "kind": "optimises", "strength": 2},
 ]
 
-# (label, node count, link count) — cumulative snapshots for the LEFT column. The
-# crate layer is already on screen (00.main.yaml seeds it), so the demo only grows
-# it: components, then external modules. One frame = one update = one physics
-# push; the component diffs by id, so a resent node is a no-op and an append never
+# What the first frame already shows: the crate layer and the shell that renders
+# it, twenty nodes. The rest arrives with the beats that name it, so the graph
+# grows while the stream talks — an edge appears only once BOTH ends are on
+# screen.
+# Cumulative snapshots — one write = one physics push; the component diffs by
+# node id, so re-sending what is already there is a no-op and an append never
 # re-frames the camera.
-GRAPH_BEATS = (
-    ("组件层", 10, 9),
-    ("外部模块层", 15, 14),
+GRAPH_SEED = {
+    "accrete", "ui_leptos", "stage", "content", "transport", "transport_ws",
+    "forcegraph", "ui_assets", "accrete_macro", "ui_leptos_macro", "fluxen",
+    "case", "canvas", "rack", "pages", "form", "diagram", "layer",
+    "leptos", "wasm_bindgen", "web_sys", "serde",
+}
+
+# (beat label, node ids that arrive with it)
+GRAPH_REVEAL = (
+    ("分析引言", ("g2chart", "fold")),
+    ("图表落位", ("svg", "mermaid")),
+    ("复核表与表单", ("popup", "portal")),
+    ("泼溅车", ("3dbrowser", "splatviewer")),
+    ("鞋的网格模型", ("monaco",)),
+    ("代码编辑器", ("trunk", "binaryen", "tokio")),
+    ("关系图段落", ()),
 )
+
+def graph_payload(revealed):
+    """The cumulative snapshot for the ids on screen; links need both ends."""
+    nodes = [node for node in GRAPH_NODES if node["id"] in revealed]
+    links = [
+        link
+        for link in GRAPH_LINKS
+        if link["source"] in revealed and link["target"] in revealed
+    ]
+    return {"nodes": nodes, "links": links, "focus": None}
 
 # The two chart bands. A chart is sized by its container (ADR 0009), so the band
 # is a borderless container with a definite track height given through `attrs.grid`
@@ -498,6 +565,20 @@ def main():
     def push_file(fname):
         return mirror.send(open(f"examples/yaml/{fname}", encoding="utf-8").read())
 
+    # The graph grows with the stream: every beat that makes something appear on
+    # the right also adds its node on the left, so the reader watches the two
+    # halves tell the same story instead of a reveal at the end.
+    revealed = set(GRAPH_SEED)
+
+    def grow(label):
+        ids = next((ids for name, ids in GRAPH_REVEAL if name == label), ())
+        revealed.update(ids)
+        snapshot = graph_payload(revealed)
+        print(
+            f"    graph ← {label}：{len(snapshot['nodes'])} 点 / {len(snapshot['links'])} 线 → "
+            f"{send_json(mirror, frame_set_payload(GRAPH_SLOT, snapshot))}"
+        )
+
     step.wait("发送 00.main.yaml")
     print(f"    send → {push_file('00.main.yaml')}")
 
@@ -508,9 +589,11 @@ def main():
 
     step.wait("打字机：分析引言")
     type_out(mirror, ANALYTICS, ANALYTICS_TEXT, delay, "引言")
+    grow("分析引言")
 
     step.wait("两个图表入场（发 00.radar.yaml 的 set 帧：折线 spec + 三个雷达 spec）")
     print(f"    send chart data → {mirror.send(chart_data())}")
+    grow("图表落位")
 
     step.wait(f"逐日 patch 追加后 {len(TAIL_DAYS)} 天（折线长到 30 天）")
     for i, (day, rd, mkt, ops) in enumerate(TAIL_DAYS, start=1):
@@ -526,6 +609,7 @@ def main():
 
     step.wait("复核表 + 表单入场（append 进这一行里的 rack 槽）")
     print(f"    append form → {send_json(mirror, frame_review_form())}")
+    grow("复核表与表单")
 
     step.wait("打字机：第一件商品（泼溅车）")
     type_out(mirror, SAY_CAR, CAR_TEXT, delay, "车")
@@ -535,6 +619,7 @@ def main():
         "    set payload → "
         f"{send_json(mirror, frame_set_payload(CAR_SLOT, {'assets': {'scene': TRUCK_URL}, 'camera': TRUCK_CAMERA}))}"
     )
+    grow("泼溅车")
 
     step.wait("打字机：第二件商品（鞋）")
     type_out(mirror, SAY_SHOE, SHOE_TEXT, delay, "鞋")
@@ -543,6 +628,7 @@ def main():
     print(
         f"    set payload → {send_json(mirror, frame_set_payload(SHOE_SLOT, {'assets': {'shoe': SHOE_URL}}))}"
     )
+    grow("鞋的网格模型")
 
     step.wait("打字机：待审的那段代码的说明")
     type_out(mirror, SAY_PATCH, PATCH_TEXT, delay, "代码说明")
@@ -552,24 +638,17 @@ def main():
         "    set payload → "
         f"{send_json(mirror, frame_set_payload(CODE_SLOT, {'code': PATCH_CODE, 'lang': 'rust'}))}"
     )
+    grow("代码编辑器")
 
     step.wait("在编辑器里改两笔、按 Ctrl/Cmd+S：stage 控制台出现 `<-` submit + 本节点 id + {code, lang}")
 
     step.wait("打字机：最后一段——关系图（这套东西自己长成一张图）")
     type_out(mirror, SAY_GRAPH, GRAPH_TEXT, delay, "关系图")
-
-    for label, n_nodes, n_links in GRAPH_BEATS:
-        step.wait(f"左图生长：{label}（整份快照写进 graph 槽——{n_nodes} 点 / {n_links} 线，组件按 id 求差量、不重排）")
-        payload = {"nodes": GRAPH_NODES[:n_nodes], "links": GRAPH_LINKS[:n_links], "focus": None}
-        print(f"    set payload → {send_json(mirror, frame_set_payload(GRAPH_SLOT, payload))}")
-        time.sleep(0.8)
+    grow("关系图段落")
 
     step.wait("左图距焦：把发「搜索」那一下的等价物打出来——相机飞向 accrete/content/transport 这一簇")
-    focus_payload = {
-        "nodes": GRAPH_NODES,
-        "links": GRAPH_LINKS,
-        "focus": {"ids": ["accrete", "content", "transport"], "seq": 1},
-    }
+    focus_payload = graph_payload(revealed)
+    focus_payload["focus"] = {"ids": ["accrete", "content", "transport"], "seq": 1}
     print(f"    set payload → {send_json(mirror, frame_set_payload(GRAPH_SLOT, focus_payload))}")
     time.sleep(1.2)
 
