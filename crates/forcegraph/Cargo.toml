@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Scene layer: meshes, materials, cameras, render targets. `default-features`
+# off drops the desktop window stack (winit/glutin) — the canvas stays owned by
+# the DOM, and three-d is handed the GL context it already created.
+three-d = { version = "0.19", default-features = false }
 serde.workspace = true
 serde_json.workspace = true
 js-sys.workspace = true

@@ -18,9 +18,14 @@
 //!   the layout, because spatial memory is what makes the view navigable.
 //! - [`pick`] resolves a pointer position to a node by projecting, not by
 //!   reading pixels back from the GPU.
+//! - [`frame::build`] turns camera + scene + style into the numbers a backend
+//!   draws (instances, link quads, matrix). It is pure and host-testable, so
+//!   "what the viewer is shown" is reviewable without a GPU, and a backend swap
+//!   cannot change the picture.
 
 pub mod camera;
 pub mod force;
+pub mod frame;
 pub mod math;
 pub mod pick;
 pub mod scene;
