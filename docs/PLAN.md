@@ -1020,3 +1020,35 @@ independent of its parent, so it survives a parent re-render. The obvious
 alternative — pruning container children so a layout write skips untouched
 subtrees — was measured unreachable in this rendering stack (§14 实测否证), so
 this is not a "cheaper later" choice but the only working mechanism.
+
+### The graph's renderer is a scene layer, and its edges live in the scene — done 2026-10-26 (ADR 0018)
+
+`frame::build` is now the seam between layout and graphics: a pure function
+(camera + viewport + dpr + scene + style) that returns the viewer's matrices and
+two instance batches. Five host tests pin it — one instance per node and per
+link, node size converted to world units at its own depth, link width a world
+length that still projects to the requested pixel width, focus dimming, and the
+CSS-versus-device viewport split. The backend uploads those numbers and issues
+two instanced draw calls; nothing decides anything there.
+
+Edges stopped being clip-space quads. Each link is the unit quad mapped through
+an affine matrix onto its world-space parallelogram: constant on-screen width,
+real depth, occluded by nodes, and `u` along the quad is the link's own length
+parameter — which is where flow, vines and trunks will attach. The old
+hand-written WebGL2 renderer is deleted rather than kept as a second backend.
+
+Cost, measured on the real component and not on a toy: wasm 2,348,320 →
+2,739,031 B (+16.6%), gzip 709,984 → 851,259 B (+19.9%). The earlier estimate of
++41 KB gzip was three times optimistic because a real component also pulls the
+PBR material, lighting, render targets and effect shaders.
+
+One bug found by the migration, worth keeping: the collision radius used to be
+the drawn pixel radius converted to world units through the *current* camera. With
+a standing auto-fit that closes a loop — the cloud grows, the camera pulls back,
+the world radius grows, the cloud grows — and it ran to 175k world units in
+seconds. Collision is now derived from the layout's own scale, so the viewport
+cannot change the shape of the graph.
+
+Verified headless (34 nodes / 44 links, 220×473 viewport, SwiftShader): stable at
+`d=565 r=204`, real-edge midpoints painted 72/80 against 32/80 for non-edges, 6888
+coloured pixels with the DOM overlay hidden.
