@@ -388,7 +388,9 @@
             value: 4.4
           coordinate:
             type: polar
-          padding: auto
+          # 极坐标的轴标签画在外圈之外，`auto` 不为它们留位：末端维度（150°）的
+          # 标签会顶到画布边缘被裁掉，那块区域也就没有可悬停的对象。给固定内边距。
+          padding: 14
           scale:
             x:
               type: point
@@ -427,6 +429,17 @@
               lineWidth: 2
               join: round
               cap: round
+          # 顶点标记：area 只填 0.15 透明度、line 只有 2px 描边，两者在某个维度上
+          # 的可命中范围都很窄，最后一个维度（150°）尤其落空——悬停没提示就是因为
+          # 那里没有可命中的图元。点标记给每个维度一个明确的悬停目标。
+          - type: point
+            encode:
+              x: dim
+              y: value
+              color: name
+            style:
+              r: 2.5
+              lineWidth: 0
           interaction:
             tooltip: {}
 - action: set
@@ -513,7 +526,9 @@
             value: 3.6
           coordinate:
             type: polar
-          padding: auto
+          # 极坐标的轴标签画在外圈之外，`auto` 不为它们留位：末端维度（150°）的
+          # 标签会顶到画布边缘被裁掉，那块区域也就没有可悬停的对象。给固定内边距。
+          padding: 14
           scale:
             x:
               type: point
@@ -552,6 +567,17 @@
               lineWidth: 2
               join: round
               cap: round
+          # 顶点标记：area 只填 0.15 透明度、line 只有 2px 描边，两者在某个维度上
+          # 的可命中范围都很窄，最后一个维度（150°）尤其落空——悬停没提示就是因为
+          # 那里没有可命中的图元。点标记给每个维度一个明确的悬停目标。
+          - type: point
+            encode:
+              x: dim
+              y: value
+              color: name
+            style:
+              r: 2.5
+              lineWidth: 0
           interaction:
             tooltip: {}
 - action: set
@@ -662,7 +688,9 @@
             value: 3.5
           coordinate:
             type: polar
-          padding: auto
+          # 极坐标的轴标签画在外圈之外，`auto` 不为它们留位：末端维度（150°）的
+          # 标签会顶到画布边缘被裁掉，那块区域也就没有可悬停的对象。给固定内边距。
+          padding: 14
           scale:
             x:
               type: point
@@ -701,5 +729,16 @@
               lineWidth: 2
               join: round
               cap: round
+          # 顶点标记：area 只填 0.15 透明度、line 只有 2px 描边，两者在某个维度上
+          # 的可命中范围都很窄，最后一个维度（150°）尤其落空——悬停没提示就是因为
+          # 那里没有可命中的图元。点标记给每个维度一个明确的悬停目标。
+          - type: point
+            encode:
+              x: dim
+              y: value
+              color: name
+            style:
+              r: 2.5
+              lineWidth: 0
           interaction:
             tooltip: {}
