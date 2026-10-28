@@ -87,7 +87,7 @@ pub struct Frame {
 
 /// Halo radius as a multiple of the node's own radius: the light reaches much
 /// further than the ball it surrounds.
-const HALO_SCALE: f32 = 4.6;
+const HALO_SCALE: f32 = 5.45;
 
 /// How far the halo swells and shrinks around `HALO_SCALE` over one breath, and how
 /// much its brightness rides along: size alone reads as a slow zoom, size plus
@@ -112,8 +112,6 @@ const REACH_GAIN: f32 = 1.7;
 const REACH_SCALE: f32 = 1.12;
 const REACH_INK: f32 = 1.5;
 const REACH_WIDTH: f32 = 1.45;
-const HALO_SELECTED_GAIN: f32 = 1.6;
-
 /// The glass over the selection, as a multiple of the selection's own halo. Just
 /// inside the halo's edge rather than beyond it: the ring is a frame around the
 /// light, and drawn any wider it starts to read as a separate object.
@@ -125,10 +123,6 @@ const DOME_ALPHA: f32 = 0.05;
 /// Its rim, which is the whole effect: glass is visible at the edge, where the
 /// surface turns away, and nowhere else.
 const DOME_RIM_ALPHA: f32 = 0.30;
-
-/// The selected halo is also a little wider, so "marked" survives a frame caught
-/// at the bottom of the breath.
-const HALO_SELECTED_SCALE: f32 = 1.18;
 
 /// Decide the frame. No GL, no DOM, no clock.
 ///
@@ -189,10 +183,9 @@ pub fn build(
             halo_alpha = (halo_alpha * REACH_GAIN).min(1.0);
             halo_scale *= REACH_SCALE;
         }
-        if selected {
-            halo_scale *= HALO_SELECTED_SCALE;
-            halo_alpha = style.glow_alpha * HALO_SELECTED_GAIN * pulse;
-        }
+        // Selection changes nothing about the light: same size, same brightness.
+        // What marks a node is the ring outside it (and the glass it names), so a
+        // selection cannot be confused with a node that simply happens to be hot.
         if style.theme == crate::style::Theme::Light {
             // Light cannot be added to a white page: the halo becomes a tint, and
             // a faint tint of a muted colour over white is invisible, so it takes
@@ -228,7 +221,7 @@ pub fn build(
         }
         if selected {
             // The glass does not breathe: it is a frame the light moves inside.
-            let dome_side = 2.0 * radius * HALO_SCALE * HALO_SELECTED_SCALE * DOME_SCALE;
+            let dome_side = 2.0 * radius * HALO_SCALE * DOME_SCALE;
             domes.push(Instance {
                 transform: billboard(body.pos, &basis, dome_side),
                 color: [color[0], color[1], color[2], halo_alpha * DOME_ALPHA],
@@ -635,17 +628,16 @@ mod tests {
         );
     }
 
-    /// Every node sits in a halo, the halo is a billboard, and the selection is
-    /// the one that burns brighter and wider — that difference is the only thing
-    /// saying "this node".
+    /// Every node sits in a halo, the halo is a billboard, and selecting a node
+    /// changes nothing about that light — the ring outside it is the whole mark.
     #[test]
-    fn every_node_sits_in_a_halo_and_the_selection_burns_brighter() {
+    fn every_node_sits_in_a_halo_and_the_selection_only_adds_a_ring() {
         let camera = Camera::default();
         let mut scene = scene_of(3, &[]);
         let style = Style::default();
         let frame = build(&camera, (800.0, 600.0), 1.0, &scene, &style);
         assert_eq!(frame.haloes.len(), scene.bodies.len(), "one halo per node");
-        let rest = frame.haloes[0].color[3];
+        let before = (frame.haloes[1].color[3], scale_of(&frame.haloes[1].transform));
 
         // The halo is a billboard: its x axis is the camera's right.
         let x = Vec3::new(
@@ -663,12 +655,13 @@ mod tests {
         scene.select(Some(1));
         let frame = build(&camera, (800.0, 600.0), 1.0, &scene, &style);
         let lit = frame.haloes[1];
-        assert!(lit.color[3] > rest, "the selection is not brighter");
-        assert!(
-            scale_of(&lit.transform) > scale_of(&frame.haloes[0].transform),
-            "the selection is not wider"
+        // Same node, same clock: the light must be byte-identical.
+        assert_eq!(lit.color[3], before.0, "the selection changed the halo's light");
+        assert_eq!(
+            scale_of(&lit.transform),
+            before.1,
+            "the selection changed the halo's size"
         );
-        assert!(frame.haloes[0].color[3] <= rest + 1e-6, "the rest changed");
         // And it is the only node with a shield around it.
         assert_eq!(frame.domes.len(), 1, "no glass over the selection");
         assert_eq!(frame.dome_rims.len(), 1, "glass without an edge is haze");
