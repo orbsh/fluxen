@@ -4,7 +4,7 @@
 
 AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set/append/patch/remove）+ CBOR 编码。自 Fluxora 拆出（事件总线/Gateway 半区成为 [Prism](../prism/)；Fluxora 本体迁向 Leptos 并保留原名）。
 
-设计文档：[Fluxora 架构](../../.hermes/wiki/projects/fluxora-architecture.md)（wiki —— Accrete DSL、操作协议、codec 决策均在彼处）。
+设计文档：[Fluxora 架构](https://github.com/orbsh/wiki/blob/main/projects/fluxora-architecture.md)（wiki —— Accrete DSL、操作协议、codec 决策均在彼处）。
 
 ## 迁入内容
 

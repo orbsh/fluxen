@@ -4,7 +4,7 @@
 
 AI-native UI rendering library: Accrete DSL + Leptos rendering + operation protocol (create/set/append/patch/remove) + CBOR codec. Carved out of Fluxora (the event-bus/Gateway half became [Prism](../prism/); Fluxora itself is migrating to Leptos and keeps its name).
 
-Design: [Fluxora 架构](../../.hermes/wiki/projects/fluxora-architecture.md) (wiki — Accrete DSL, operation protocol, codec decisions all documented there).
+Design: [Fluxora 架构](https://github.com/orbsh/wiki/blob/main/projects/fluxora-architecture.md) (wiki — Accrete DSL, operation protocol, codec decisions all documented there).
 
 ## What moved in
 
