@@ -79,6 +79,13 @@
         min-width: 0;
     }
 
+    /* 贴右边缘的落点（ADR 0019）：展开向左长——面板默认锚在自己的左边，
+       贴边时会直接长到屏幕外。 */
+    .--rail > .dock-panel {
+        left: auto;
+        right: 0;
+    }
+
     @media (max-width: 1000px) {
         .stage-graph {
             flex: 0 0 240px;
