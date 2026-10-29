@@ -1,8 +1,8 @@
 # 外部集成
 
 写给任何把本渲染器送到浏览器的一方：Rust 网关、Python 宿主、一个内嵌页面。它说明复用哪些、
-必须自备哪些、线上说什么，以及两个实例——prism 会场（Rust，重新包装核心）与 reflux
-（Python，钉住发布产物）。
+必须自备哪些、线上说什么、一帧怎么变成画面，以及两个实例——prism 会场（Rust，重新包装核心）与
+reflux（Python，钉住发布产物）。
 
 全文只讲一条规则：**渲染器不为任何宿主适配。** 适配的是宿主——它提供 transport 与 boot，
 并说渲染器的线上格式。
@@ -35,13 +35,14 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
 
 ## 2. 线上格式
 
-下行（宿主 → 页面）：`content::Message { ev, sender, created?, content }`。
+下行，渲染器消费的只有一样东西：**动作列表**——`create` / `set` / `append` / `remove` / `patch` /
+`inject` / `tmpl` / `empty` 八个动作按序组成的数组。
 
-- `ev == "draw"` 才渲染；**其余 `ev` 值渲染器忽略**（记 debug 日志）。这就是操作通道
-  （ADR 0003），也是宿主自己的动词住的地方——`connected`、`login.result`、`error`、`turn.delta`。
-  一个 socket，一种帧形状。
-- `content` 是八个动作的列表：`create` / `set` / `append` / `remove` / `patch` / `inject` /
-  `tmpl` / `empty`。
+外面那层信封是**使用方的包装**。stage、prism、reflux 各自装自己的
+`Message { ev, sender, created?, content }`；`sender` 与 `created` 渲染器一个字段都不读，那是宿主
+自己的事。唯一被读的信封字段是 `ev`，而且只用来判断这帧是不是给渲染器的：`ev == "draw"` 才渲染，
+其余值记 debug 日志后原样留给宿主自己的动词（`connected`、`login.result`、`error`、`turn.delta`
+——ADR 0003 的操作通道）。一个 socket，一种信封；渲染真正需要的只有里面那份动作列表。
 
 上行（页面 → 宿主）：`content::Outflow { event, id?, data }`。
 
@@ -51,7 +52,97 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
 画出一半。reflux 仓的 `reflux/wire.py` 是这道闸的完整例子——词汇封闭性加取值域检查，都发生在
 帧被构建的地方。
 
-## 3. boot，以及它为什么该独立成 crate
+## 3. 渲染流程——进来的是字节，出去的是画面
+
+帧不是对 DOM 的补丁。它是对一个信号的写入，重画的也是那个信号。两个方向都穿过同一处接缝：以下
+全部发生在 `ui-core` 加上你自备的 transport 之内。
+
+### 3.1 下行：宿主 → 页面 → 屏幕
+
+1. **字节。** `WsTransport::new(url, codec)` 打开 socket 并拆成写、读两半，一个读循环把每条入站
+   消息推进无界通道——`Text` 取其 UTF-8 字节，`Bytes` 原样。`Transport::on()` 把这个通道暴露为
+   `Stream<Vec<u8>>`。你的 transport 到此为止：不编码，不解帧。
+2. **字节进队列。** `Ctx::new` 起一个循环，把每帧字节 push 进 `ctx.transport.frame`——那是待处理的
+   **队列**（`RwSignal<Vec<Vec<u8>>>`），不是「最近一帧」信号。读循环一次可以连取多帧，而 Effect
+   要等微任务边界才跑；用单值信号就是后到覆盖先到，症状是连上就推的布局丢掉、页面空白。次序在这里
+   是语义，队列把它守住。socket 因此在渲染路径之外，调度归 Leptos。
+3. **解码。** 该队列上一个 `Effect` 取走整批，逐帧调 `ActiveCodec::decode_auto::<Message<Accrete>>`：
+   首字节定格式——`{` 是 JSON，`0xA0..=0xBF` 是 CBOR——与页面为上行为钉住的编码无关，所以宿主可以
+   在同一路数据里换格式。解不出的帧记日志后丢弃，绝不半应用。
+4. **`ev` 闸。** `dispatch_msg` 对 `draw` 以外的 `ev` 立即返回（ADR 0003）。宿主动词——
+   `connected`、`login.result`、`turn.delta`——走同一个 socket，在这里按设计被忽略。
+5. **应用。** 动作列表按序应用，每个动作只写一个信号：
+
+   | 动作 | 写入 | 细节 |
+   |:--|:--|:--|
+   | `tmpl` | 模板表 | `{{key}}` 替换，在 `create`/`set`/`append` 时执行（ADR 0006） |
+   | `create` | `ctx.layout` | 根文档；页面的响应式根重画 |
+   | `set` | 数据槽 `event` | 一个具名节点 |
+   | `append` | 列表槽 `event` | 行身份取自 `data.id`；重复 id 拒收；`position` 从尾往内数（0 = 末尾） |
+   | `remove` | 列表槽 `event` | 按行 id |
+   | `patch` | 布局根、某一行、或数据槽 | 对节点的**线上形状**打 JSON Pointer（RFC 6901）；`event: ""` 是根，带 `id` 是那一行，其余是具名槽 |
+   | `inject` | vals 槽 | local 平面；同值短路 |
+
+   这些写入一律先 untracked 读、再 `set`：dispatch 运行在消费该帧的 Effect 里，tracked 读会让
+   这个 Effect 订阅自己马上要写的槽。
+6. **渲染。** 树是数据。`render::dispatch` 把节点映射到组件（`gen_dispatch!` 由 `accrete` 的枚举
+   生成匹配），每个组件把自己的主体放进一个读取它所需槽的闭包里——`text_` 经 `use_source_value`，
+   `rack` 读它的列表槽。于是 `set` 或 `append` 只重画绑在该槽上的节点：没有 diff，没有虚拟 DOM
+   ——信号图**就是**更新范围。空的 data 槽不渲染、不占空间（ADR 0012），所以流式段落可以先出现，
+   它的框后长出来。
+
+一个洞，以及谁来填。布局按名字声明槽，生产端就写那个名字：
+
+```yaml
+# 布局里（create）
+- type: text
+  bind: { value: { kind: source, source: intro, default: "" } }
+```
+```yaml
+# 之后某一帧
+action: set
+event: intro
+data: { type: text, bind: { value: { kind: default, default: "hello" } } }
+```
+`set` 写这个槽，读 `intro` 的节点重新渲染。要让同一段继续长，用 `patch` 带 `event: intro` 和指向
+槽节点字段的指针——`patch` 是流式动词，`set` 是整值动词。列表则由布局给壳和行模板：
+
+```yaml
+- type: rack
+  bind: { value: { kind: source, source: chat } }
+  item:
+  - type: case
+    attrs: { class: [as-stretch, box, border, round] }
+```
+此后每次 `append { event: chat, data: { id: m42, ... } }` 加一行，按 `data.id` 认身份，所以追加
+不会重建它上面的行。
+
+### 3.2 上行：页面 → 宿主
+
+1. **组件发射。** `bind["value"]` 是 `Event { event }` 或 `Local { slot }` 的节点，经 `use_target`
+   调 `ctx.emit(variant, id, payload)`。`id` 是发射节点自己的 id（`node_id`，空串即无）；
+   `payload` 是该组件产出的东西——表单值、拖拽货物、页码。
+2. **`Event` 上线。** `ctx.send` → `Transport::emit(transport::Event)` → `WsTransport::emit`：组装
+   `content::Outflow { event, id?, data }`，用页面构建时钉住的编码（JSON → text 帧，CBOR → 二进制
+   帧）编码后发出。`send` 是 future：socket 尚在连接时 gloo 的 sink 挂起、open 时唤醒，所以抢在
+   `open` 之前的发射不会丢。
+3. **`Local` 不出页面。** 同一个 `Outflow` 形状的对象被写进那个 `vals` 槽，订阅方分不出这是本地
+   emit 还是远端 `inject`（ADR 0010、0011）——整条链因此可以在没有 socket 的情况下演练。
+4. **页面自己的把手。** boot 发布 `window.fluxen.send(name, data)`，它汇入同一个 `Ctx::send`。
+   页面脚本与组件共用一条上行、一种帧形状。
+5. **宿主收到的只有** `Outflow`：`id` 是发射者，`data` 自由，完全属于产出它的那个组件。渲染器
+   不加自己的信封，也不加自己的元数据。
+
+### 3.3 这套流程承诺什么，假定什么
+
+- **次序。** 一帧之内动作按列表顺序应用；帧之间按到达顺序应用。
+- **失败按动作计，且留痕。** 被拒的动作记日志、同帧其余动作照常应用；解不出的帧记日志、一个动作
+  也不应用。形状错误由生产端负责（§2）——解出来但字段错的帧只能被跳过，不能被修补。
+- **地址必须先存在。** 往空槽 `patch`、删不存在的行、用重复 id `append`，一律「跳过并告警」。
+  生产端可以连着发 `create` 与 `patch`；但不能指望渲染器替它重放或改写任何东西。
+- **transport 里没有状态。** 重连就重发布局；页面只是它挂载以来收到那些帧的投影。
+
+## 4. boot，以及它为什么该独立成 crate
 
 今天 `ui_leptos::mount()` 是唯一的 boot：读 `#main` 的 `data-host` / `data-path` / `data-codec` /
 `data-token`，开 `ws://<host><path>`，挂响应式根，并把 `window.fluxen.send` 发布成页面级上行把手。
@@ -70,10 +161,11 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
 | 核心 + 自己的 boot | prism（Rust，进程内） | `ui-core`、`accrete`、`content`、`forcegraph`、`ui-assets` | 自己的 transport、自己的页面入口 |
 | boot + 自己的帧 | reflux（Python，钉住产物） | 由示例里的 boot 构建出的 bundle | 帧本身，走自己的 socket |
 
-## 4. 实例一：prism，会场
+## 5. 实例一：prism，会场
 
-prism 是 WS 连接面（网关、身份、turn）。它的 UI 腿是 `/ws`，而这条腿说**本文件这套**线上格式，
-不是 prism 自己的 `{ev, args}` 动词帧：
+prism 是 WS 连接面（网关、身份、turn）。它的渲染器腿是 `/ui`，这条腿说**本文件这套**线上格式，
+不是 prism 自己的 `{ev, args}` 动词帧（那些留在 `/ws`——CLI 与对端的程序腿；先例是 stage：
+页面走 `/channel`，对端走 `/cli`）：
 
 - **布局。** 客户端第一个上行是 `Outflow { event: "init" }`。prism 用普通的 `create` 帧答布局：
   `file:` 来源把 YAML 帧列表原样送出，`event:` 来源提交给一个全局摊位并把返回值转发。没有布局
@@ -85,11 +177,11 @@ prism 是 WS 连接面（网关、身份、turn）。它的 UI 腿是 `/ws`，�
   摊位，渲染器保持通用，槽名不编进 bundle。
 - **认证。** 连接即有 device 身份，`login` 只是普通上行，没有登录墙：认证是逐 event 的业务
   决策，纯阅读的布局一个都不声明。
-- **prism 自备：** transport（它的 `/ws` 腿）、boot（自己的 `index.html` 加一个很小的 wasm 入口，
-  用该 transport 挂 `ui-core`）、帧（布局 + 摊位输出）。
+- **prism 自备：** transport（它的 `/channel` 腿）、帧（布局 + 应用的 view 事件），以及——只在它想要时
+  才需要——自己的页面。客户端一侧什么都不用索取：**连上就推布局**，所以示例 bundle 不改一行就能配 prism。
 - **prism 不许做：** 教会 `ui-core` 认 `{ev,args}`，或者自带第二个渲染器。
 
-## 5. 实例二：reflux，Python 宿主
+## 6. 实例二：reflux，Python 宿主
 
 reflux 是"钉住产物"这条路的参考宿主：Python 生产端用 SDK 节点与八个动作构建帧
 （`reflux/wire.py`），静态壳（`www/`）加载钉住的渲染器 bundle，页面上行走 `window.fluxen.send`
@@ -107,7 +199,7 @@ reflux 是"钉住产物"这条路的参考宿主：Python 生产端用 SDK 节�
 - **上行把手属于 `boot`。** `reflux.js` 依赖 `window.fluxen.send`；这个名字或契约若要改，改在
   `boot`，reflux 跟着 crate 走，不是反过来。
 
-## 6. 本文不是
+## 7. 本文不是
 
 - 不是第二种协议。渲染器的词汇**就是**线上词汇；宿主需要更多东西就发更多 Accrete，不发新帧型。
 - 不是对生产端语言的限定。Python、Rust，或任何能写 JSON/CBOR 的东西。
