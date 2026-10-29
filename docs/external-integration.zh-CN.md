@@ -44,6 +44,10 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
 其余值记 debug 日志后原样留给宿主自己的动词（`connected`、`login.result`、`error`、`turn.delta`
 ——ADR 0003 的操作通道）。一个 socket，一种信封；渲染真正需要的只有里面那份动作列表。
 
+已决定、尚未落地（ADR 0021 决策 6）：信封本身也归宿主——`content::Message` 移进 `stage`，prism 与
+reflux 各自定义自己的；渲染器那一侧届时直接解动作列表，`ev` 闸随之消失。落地之前，下行仍按
+`Message` 发。
+
 上行（页面 → 宿主）：`content::Outflow { event, id?, data }`。
 
 编解码：默认 CBOR；读侧按帧首字节逐帧自适应，`?codec=` 只钉客户端**发**什么。宿主可以自由混用。
@@ -170,8 +174,9 @@ prism 是 WS 连接面（网关、身份、turn）。它的渲染器腿是 `/ui`
 - **布局。** 客户端第一个上行是 `Outflow { event: "init" }`。prism 用普通的 `create` 帧答布局：
   `file:` 来源把 YAML 帧列表原样送出，`event:` 来源提交给一个全局摊位并把返回值转发。没有布局
   信封，也没有第二种形状——布局就是第一个视图操作。
-- **prism 自己的动词**走 `Message { ev: "<verb>", content: [] }`；渲染器按设计忽略它们，在意的
-  客户端（比如登录表单）读它们。同一个 socket 上没有第二种帧形状。
+- **prism 自己的动词**走**它自己的**信封，不是渲染器的——今天恰好是同一个
+  `Message { ev: "<verb>", content: [] }` 形状，因为渲染器还在解 `Message` 并把它丢掉；决策 6
+  落地后，动词完全留在 prism 一侧，渲染腿只运动作列表。在意的客户端（比如登录表单）自己读。
 - **流式。** 格式由生产端决定。gravity 的 turn 调用带一个 `protocol` 参数：默认 `data`（裸
   delta，给非 UI 消费者），`fluxen`（视图帧——对布局声明的槽做 `append`/`set`）。应用知识留在
   摊位，渲染器保持通用，槽名不编进 bundle。

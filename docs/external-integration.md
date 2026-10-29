@@ -50,6 +50,10 @@ which is where a host's own verbs ride (`connected`, `login.result`, `error`, `t
 the operation channel). One socket, one envelope, and the only part that has to be right for
 rendering is the action list inside it.
 
+Decided, not yet landed (ADR 0021 decision 6): the envelope itself belongs to the host too —
+`content::Message` moves into `stage`, prism and reflux define their own, and this side then decodes
+the action list directly, with the `ev` gate gone. Until that lands, send `Message`.
+
 Upstream (page → host): `content::Outflow { event, id?, data }`.
 
 Codec: CBOR by default; the reading side auto-detects the format per frame from its first byte, and
@@ -194,8 +198,10 @@ leg for the CLI and peers — the stage precedent: `/channel` for the page, `/cl
   layout as ordinary `create` frames: a `file:` source delivers the YAML frame list verbatim, an
   `event:` source submits to a global booth and forwards what it returns. There is no layout
   envelope and no second shape — the layout is just the first view operation.
-- **Prism's own verbs** ride `Message { ev: "<verb>", content: [] }`; the renderer ignores them by
-  design, and a client that cares (a login form) reads them. No second frame shape on the socket.
+- **Prism's own verbs** ride its **own** envelope, not the renderer's — today that happens to be the
+  same `Message { ev: "<verb>", content: [] }` shape, because the renderer still decodes `Message` and
+  drops it; once decision 6 lands, verbs stay entirely on prism's side and the render leg carries
+  action lists only. A client that cares (a login form) reads them.
 - **Streaming.** The producer decides the format. Gravity's turn call takes a `protocol` argument:
   default `data` (raw deltas, for non-UI consumers), `fluxen` (view frames — `append`/`set` against
   the slot the layout declares). Application knowledge stays in the booth; the renderer stays
