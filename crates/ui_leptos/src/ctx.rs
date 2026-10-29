@@ -27,6 +27,17 @@ pub type DataSlot = RwSignal<Option<std::sync::Arc<Accrete>>>;
 /// 与 data（Accrete）分平面。
 pub type ValueSlot = RwSignal<Option<Value>>;
 
+/// 拖拽会话的载荷（ADR 0019）：源的**行身份** + 货物的标签与内容。
+///
+/// `item` 取 `grab.id`——它是行的身份（rack 的 keyed diff 用同一个），也是
+/// 上行帧里唯一能用来指回那一行的东西；`payload` 是生产者自己写的货物。
+#[derive(Clone, Debug, PartialEq)]
+pub struct DragCargo {
+    pub item: Option<String>,
+    pub kind: Option<String>,
+    pub payload: Option<Value>,
+}
+
 #[derive(Clone)]
 pub struct Ctx {
     pub transport: LeptosTransport,
@@ -36,6 +47,11 @@ pub struct Ctx {
     pub list: RwSignal<HashMap<String, ListSlot>>,
     /// local 平面：`kind: local` 事件落点与订阅共用的具名 Value 槽。
     pub vals: RwSignal<HashMap<String, ValueSlot>>,
+    /// 拖拽会话（ADR 0019）：`Some` 即「有拖拽在飞」。这是渲染器里唯一一份
+    /// 跨组件的瞬态态——源和落点隔着别的节点，本地信号到不了对面。它不进任何
+    /// 槽、不上线：「谁在飞、悬在谁上面」是浏览器的事实，不是生产者的树。
+    /// 只能有这一份，组件各自维护一份就是这条设计的反面。
+    pub drag: RwSignal<Option<DragCargo>>,
     /// 槽位的永久 owner：Ctx::new 时捕获的 app 根作用域。
     /// 槽若建在消费帧的 Effect 作用域里，Effect 重跑会 dispose 其存储，
     /// 外层 map 里留下的就是死句柄（panic: already disposed）。
@@ -66,6 +82,7 @@ impl Ctx {
         let data = RwSignal::new(HashMap::new());
         let list = RwSignal::new(HashMap::new());
         let vals = RwSignal::new(HashMap::new());
+        let drag = RwSignal::new(None);
 
         // 读循环：transport.on() -> frame 信号
         {
@@ -89,6 +106,7 @@ impl Ctx {
             data,
             list,
             vals,
+            drag,
             owner: Owner::current().expect("Ctx::new requires a reactive owner"),
             form: None,
         };

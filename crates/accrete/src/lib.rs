@@ -951,6 +951,94 @@ pub struct Template {
     data: Map<String, Value>,
 }
 
+/// 拖拽的源（ADR 0019）：一层**无样式、不占位**的包装（它自己不加 padding、
+/// 边框、背景，也不消费额外尺寸——尺寸全由 children 给），唯一职责是把
+/// 「这件东西可以被拖走」和它的货物说清楚。
+///
+/// 拖动本身不上报：`dragstart` 只把「谁在飞、带什么、是什么」写进渲染器的
+/// 页面级拖拽会话，上行发生在落点（`dock`）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+pub struct Grab {
+    /// 行身份（可选但强烈建议）：`rack` 的 keyed diff 用**行节点自己**的 id，
+    /// 没有就退 `#{idx}` 位置键——中间删一行会让后面所有行重建、本地态丢。
+    /// grab 就是「一层无样式包装」，可以当行的根节点，所以 id 落在这里。
+    /// 渲染器不替它从子节点借 id：那会造出两个同 id 的节点，按 id 定位的行
+    /// 操作（append／remove／patch）从此指向不明——身份只能生产者给。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// 货物的标签，供落点配对（`dock.attrs.accept`）。缺省 = 没有标签：
+    /// 不限定的落点照收，写了 `accept` 的落点不收（配不上就是配不上）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    /// 货物本身：任意 JSON，原样进上行帧的 `payload`。写的是声明时的快照，
+    /// 渲染器不校验它与任何槽是否一致——一致性是生产者的编排责任。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<Accrete>>,
+}
+
+/// 落点常态的形态（ADR 0019）。闭枚举：两个取值就是两种可用策略，不给自由值。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum DockExpand {
+    /// 默认：常态一条细条，拖拽在飞时展开。零宽的盒子没有命中区，所以展开的
+    /// 触发面是 `dragstart`（全局），不是悬停——先看得见才落得进去。
+    #[default]
+    Reveal,
+    /// 提前占好位：常态就是完整尺寸，拖拽在飞与悬停只做高亮，不动几何。
+    Reserved,
+}
+
+/// 缺省值不进 wire（ADR 0012 的空即无；与 forcegraph 的 style 同款）。
+fn dock_expand_is_reveal(e: &DockExpand) -> bool {
+    *e == DockExpand::Reveal
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
+pub struct DockAttr {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "dock_expand_is_reveal"
+    )]
+    pub expand: DockExpand,
+    /// 收哪些 `grab.kind`。缺席 = 全收（只有一个落点时不必写）；写了就是闭集合
+    /// 比对，配不上的拖拽落在这里等于没落（不发射、不高亮）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accept: Option<Vec<String>>,
+}
+
+/// 拖拽的落点（ADR 0019）：`children` = 已放下的内容（生产者随后往里追加钉住的
+/// 流）。事件名与落点身份在这一侧定义，于是多个 dock 天然可分；释放时由本节点
+/// 发射，`id` 是它自己的 id，「被拖来的是什么」进 `data`。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+pub struct Dock {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<DockAttr>,
+    /// `bind["value"]`：`event` 上行（事件名就是这里的名字），或 `local` 写槽
+    /// （包装与上行同形，ADR 0010）。`default` 在这条 bind 上是落点元数据，随帧
+    /// 上行成 `meta`。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bind: Option<HashMap<String, Bind>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<Accrete>>,
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -999,6 +1087,12 @@ pub enum Accrete {
     text(Text),
     textarea(TextArea),
     template(Template),
+    /// 拖拽的两端（ADR 0019）：手势、飞行态与落点高亮都在渲染器里，两端各一个
+    /// 角色——源可以被提起，落点接受释放并发射那一帧。源不领兜底 id：身份只有
+    /// 生产者给的才算数（合成的 `grab-N` 进不了帧）；落点领，因为它要发那一帧。
+    grab(Grab),
+    #[ui_acrete(has_id = "true")]
+    dock(Dock),
 }
 
 #[cfg(feature = "ops")]
