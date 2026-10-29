@@ -1,0 +1,84 @@
+# ADR 0019: 拖拽的两端。
+# 左边两行可拖（grab 当行根，id 就是行的身份，payload 是货物），右边两个落点：
+# rail 只收 kind=message、发 pin，并带一份元数据；trash 只收 kind=note——这次拖的
+# 两个都配不上它，落上去等于没落。同页多落点靠事件名分开，不用额外寻址。
+action: create
+event: ""
+data:
+  type: case
+  attrs:
+    class:
+    - maximize
+    horizontal: true
+  children:
+  - type: case
+    attrs:
+      class:
+      - box
+      - gap
+    children:
+    - type: text
+      attrs:
+        class:
+        - bold
+      bind:
+        value:
+          kind: default
+          default: 信息流
+    - type: grab
+      id: m42
+      kind: message
+      payload:
+        item: m42
+      children:
+      - type: text
+        attrs:
+          class:
+          - box
+          - border
+          - round
+        bind:
+          value:
+            kind: default
+            default: 批量导出一万多条的时候，进度条就不动了
+    - type: grab
+      id: m43
+      kind: message
+      payload:
+        item: m43
+      children:
+      - type: text
+        attrs:
+          class:
+          - box
+          - border
+          - round
+        bind:
+          value:
+            kind: default
+            default: 同一件事，另一家客户也报了
+  - type: dock
+    id: rail
+    attrs:
+      class:
+      - box
+      accept:
+      - message
+    bind:
+      value:
+        kind: event
+        event: pin
+        default:
+          rail: engineering
+  - type: dock
+    id: trash
+    attrs:
+      expand: reserved
+      class:
+      - box
+      accept:
+      - note
+    bind:
+      value:
+        kind: event
+        event: archive
