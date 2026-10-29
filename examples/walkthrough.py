@@ -400,7 +400,7 @@ def frame_message():
     """The whole demo as ONE chat row: the nine children, in reading order."""
     return {
         "action": "append",
-        "event": "chat",
+        "slot": "chat",
         "data": {
             "type": "case",
             "children": [
@@ -438,7 +438,7 @@ def frame_seed_text(slot):
     """Create the slot as an empty string — the first append needs a target."""
     return {
         "action": "set",
-        "event": slot,
+        "slot": slot,
         "data": {"type": "text", "bind": {"value": {"kind": "default", "default": ""}}},
     }
 
@@ -446,14 +446,14 @@ def frame_seed_text(slot):
 def frame_set_payload(slot, payload):
     return {
         "action": "set",
-        "event": slot,
+        "slot": slot,
         "data": {"type": "group", "bind": {"value": {"kind": "default", "default": payload}}},
     }
 
 
 def frame_patch(slot, path, value):
     """Patch into a data slot (no row id: slots are addressed by name)."""
-    return {"action": "patch", "event": slot, "path": path, "op": "append", "value": value}
+    return {"action": "patch", "slot": slot, "path": path, "op": "append", "value": value}
 
 
 def frame_review_form():
@@ -481,11 +481,11 @@ def frame_review_form():
 
     return {
         "action": "append",
-        "event": REVIEW,
+        "slot": REVIEW,
         "data": {
             "type": "form",
             "id": "review-form",
-            "bind": {"value": {"kind": "event", "event": "review"}},
+            "bind": {"value": {"kind": "dest", "dest": "review"}},
             "children": [
                 {
                     "type": "text",
