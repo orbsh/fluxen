@@ -86,13 +86,20 @@ impl ActiveCodec {
     }
 
     /// Receive-side auto-detect: the frame's first byte decides the wire
-    /// format, independent of this codec's pinned send format. JSON messages
-    /// are objects ('{'); CBOR top-level maps start in the 0xA0-0xBF major
-    /// type 5 range. Anything else (or a shape mismatch) fails.
+    /// format, independent of this codec's pinned send format. A frame is an
+    /// **action list** (ADR 0021 decision 6), so the only accepted shapes are
+    /// a JSON array ('[') and a CBOR array (major type 4, 0x80-0x9F). Anything
+    /// else — including the retired `Message` envelope, whose JSON form starts
+    /// with '{' and whose CBOR form is a map — is refused here with a message
+    /// that names the reason instead of surfacing as a serde error.
     pub fn decode_auto<T: DeserializeOwned>(&self, bytes: &[u8]) -> Result<T, CodecError> {
         match bytes.first() {
-            Some(b'{') => Self::decode_json(bytes),
-            Some(b) if (0xA0..=0xBF).contains(b) => Self::decode_cbor(bytes),
+            Some(b'[') => Self::decode_json(bytes),
+            Some(b) if (0x80..=0x9F).contains(b) => Self::decode_cbor(bytes),
+            Some(b'{') | Some(0xA0..=0xBF) => Err(CodecError::Decode(
+                "frame is an envelope (map), not an action list — the envelope belongs to the host"
+                    .into(),
+            )),
             _ => Err(CodecError::Decode("frame not json/cbor".into())),
         }
     }

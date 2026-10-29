@@ -7,8 +7,9 @@
 //!                         peers. No dedicated client needed — curl works.
 //!
 //! The mirror does not parse accrete/content for routing; POST /send is the one
-//! place that converts (YAML → Message<Accrete>) since its input is a file, not
-//! a peer.
+//! place that converts (YAML → stage's `Message`), and what it puts on the
+//! socket is that frame's action list — the renderer decodes nothing else
+//! (ADR 0021 decision 6).
 
 use axum::extract::ws::Message;
 use axum::extract::ws::{WebSocket, WebSocketUpgrade};
@@ -83,7 +84,17 @@ async fn http_send(
     let frame = crate::proto::parse_yaml_to_frame(&body);
     match frame {
         Ok(frame) => {
-            let text = frame.to_string();
+            // 渲染器只收动作列表（ADR 0021 决策 6）：信封留在 stage 里。
+            let text = match serde_json::to_string(frame.wire()) {
+                Ok(t) => t,
+                Err(e) => {
+                    return (
+                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("error: {e}\n"),
+                    )
+                        .into_response();
+                }
+            };
             let mut ui = ctx.ui.lock().await;
             let mut cli = ctx.cli.lock().await;
             let all = ui.iter_mut().chain(cli.iter_mut());

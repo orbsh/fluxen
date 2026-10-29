@@ -39,20 +39,19 @@ Above it nothing knows where bytes come from; below it nothing knows Accrete.
 
 ## 2. The wire
 
-Downstream, the renderer consumes one thing: an **action list** — the eight actions (`create` /
-`set` / `append` / `remove` / `patch` / `inject` / `tmpl` / `empty`) as an ordered array.
+Downstream, a frame **is** the action list — the eight actions (`create` / `set` / `append` /
+`remove` / `patch` / `inject` / `tmpl` / `empty`) as an ordered array. There is no envelope on this
+side (ADR 0021 decision 6): `content::Message` lives in `stage` now, prism and reflux wrap their own,
+and `content` keeps only the actions and `Outflow`.
 
-The envelope around that list is **your packaging**. Stage, prism and reflux each build their own
-`Message { ev, sender, created?, content }`; `sender` and `created` the renderer never reads — they
-are the host's business. The one envelope field it looks at is `ev`, and only to decide whether the
-frame is addressed to it: `ev == "draw"` renders, any other value is debug-logged and left alone —
-which is where a host's own verbs ride (`connected`, `login.result`, `error`, `turn.delta`; ADR 0003,
-the operation channel). One socket, one envelope, and the only part that has to be right for
-rendering is the action list inside it.
+A frame is therefore an array, always — one action is a one-element array — and it arrives as either
+a JSON array or a CBOR array. Anything else is refused where it enters, with a message that names the
+reason: the old envelope shape (a JSON object or a CBOR map) decodes to `frame is an envelope (map),
+not an action list`, so a host that still sends `Message` sees why instead of a blank page.
 
-Decided, not yet landed (ADR 0021 decision 6): the envelope itself belongs to the host too —
-`content::Message` moves into `stage`, prism and reflux define their own, and this side then decodes
-the action list directly, with the `ev` gate gone. Until that lands, send `Message`.
+Host verbs (`connected`, `login.result`, `turn.delta`) ride the host's own envelope, on the host's
+own leg. The renderer never sees them and offers no filter — ADR 0003's `ev` gate left with the
+envelope.
 
 Upstream (page → host): `content::Outflow { event, id?, data }`.
 
@@ -82,13 +81,11 @@ directions pass through one seam: everything below is `ui-core` plus the transpo
    connect disappears and the page stays blank. Order is semantics here, so the queue holds it. The
    socket is therefore never on the render path — Leptos does the scheduling.
 3. **Decode.** An `Effect` on that queue drains the batch and decodes each frame with
-   `ActiveCodec::decode_auto::<Message<Accrete>>`. The first byte picks the format — `{` = JSON,
-   `0xA0..=0xBF` = CBOR — regardless of the codec the page pinned for its uplink, so a host may switch
-   formats mid-stream. A frame that does not decode is logged and dropped; it is never half-applied.
-4. **The `ev` gate.** `dispatch_msg` returns immediately for any `ev` other than `draw` (ADR 0003).
-   Host verbs — `connected`, `login.result`, `turn.delta` — travel on the same socket and are
-   ignored here by design.
-5. **Apply.** The action list applies in order, and each action writes exactly one signal:
+   `ActiveCodec::decode_auto::<Vec<Content<Accrete>>>`. The first byte picks the format — `[` = JSON
+   array, `0x80..=0x9F` = CBOR array — regardless of the codec the page pinned for its uplink, so a
+   host may switch formats mid-stream. A frame that does not decode is logged and dropped; it is
+   never half-applied.
+4. **Apply.** The action list applies in order, and each action writes exactly one signal:
 
    | action | writes | detail |
    |:--|:--|:--|
@@ -102,7 +99,7 @@ directions pass through one seam: everything below is `ui-core` plus the transpo
 
    These writes read untracked and then `set`: dispatch runs inside the effect that consumes the
    frame, so a tracked read would subscribe that effect to the slots it is about to write.
-6. **Render.** The tree is data. `render::dispatch` maps a node to its component (`gen_dispatch!`
+5. **Render.** The tree is data. `render::dispatch` maps a node to its component (`gen_dispatch!`
    generates the match from `accrete`'s enum), and each component puts its body inside a closure over
    the slots it reads — `text_` through `use_source_value`, `rack` over its list slot. A `set` or
    `append` therefore re-renders the nodes bound to that slot and nothing else: no diff, no virtual
@@ -198,10 +195,10 @@ leg for the CLI and peers — the stage precedent: `/channel` for the page, `/cl
   layout as ordinary `create` frames: a `file:` source delivers the YAML frame list verbatim, an
   `event:` source submits to a global booth and forwards what it returns. There is no layout
   envelope and no second shape — the layout is just the first view operation.
-- **Prism's own verbs** ride its **own** envelope, not the renderer's — today that happens to be the
-  same `Message { ev: "<verb>", content: [] }` shape, because the renderer still decodes `Message` and
-  drops it; once decision 6 lands, verbs stay entirely on prism's side and the render leg carries
-  action lists only. A client that cares (a login form) reads them.
+- **Prism's own verbs** ride its **own** envelope, not the renderer's. Today that envelope happens to
+  look like `Message { ev: "<verb>", content: [] }`, but the renderer no longer decodes `Message` at
+  all (decision 6 landed) — prism's verbs therefore stay entirely on prism's side, and the render leg
+  carries action lists only. A client that cares (a login form) reads them.
 - **Streaming.** The producer decides the format. Gravity's turn call takes a `protocol` argument:
   default `data` (raw deltas, for non-UI consumers), `fluxen` (view frames — `append`/`set` against
   the slot the layout declares). Application knowledge stays in the booth; the renderer stays

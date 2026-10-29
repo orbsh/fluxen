@@ -1,9 +1,10 @@
-//! Codec wire-format contract: Json/CBOR round-trips of Message/Content,
-//! plus the `OneOrMany` shape the gateway wire relies on.
+//! Codec wire-format contract: Json/CBOR round-trips of the action list,
+//! plus the receive-side auto-detect that tells an action list apart from a
+//! host envelope (ADR 0021 decision 6).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use content::codec::{ActiveCodec, CodecType};
-use content::{AppendOp, Content, Influx, Message, PatchKind, PatchOp, RemoveOp};
+use content::{AppendOp, Content, Influx, PatchKind, PatchOp, RemoveOp};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -13,20 +14,18 @@ struct Payload {
     s: String,
 }
 
-fn sample() -> Message<Payload> {
-    Message {
-        ev: "draw".into(),
-        sender: "stage".into(),
-        created: None,
-        content: vec![Content::Append(AppendOp {
-            event: "chat".into(),
-            position: 0,
-            data: Payload {
-                n: 7,
-                s: "hi".into(),
-            },
-        })],
-    }
+/// A frame is the action list itself — there is no envelope in this crate.
+type Frame<T> = Vec<Content<T>>;
+
+fn sample() -> Frame<Payload> {
+    vec![Content::Append(AppendOp {
+        event: "chat".into(),
+        position: 0,
+        data: Payload {
+            n: 7,
+            s: "hi".into(),
+        },
+    })]
 }
 
 fn codec(t: CodecType) -> ActiveCodec {
@@ -34,11 +33,11 @@ fn codec(t: CodecType) -> ActiveCodec {
 }
 
 #[test]
-fn json_roundtrip_preserves_message() {
+fn json_roundtrip_preserves_the_action_list() {
     let c = codec(CodecType::Json);
     let m = sample();
     let bytes = c.encode(&m).expect("encode");
-    let back: Message<Payload> = c.decode(&bytes).expect("decode");
+    let back: Frame<Payload> = c.decode(&bytes).expect("decode");
     assert_eq!(
         serde_json::to_value(&back).unwrap(),
         serde_json::to_value(&m).unwrap()
@@ -46,11 +45,11 @@ fn json_roundtrip_preserves_message() {
 }
 
 #[test]
-fn cbor_roundtrip_preserves_message() {
+fn cbor_roundtrip_preserves_the_action_list() {
     let c = codec(CodecType::Cbor);
     let m = sample();
     let bytes = c.encode(&m).expect("encode");
-    let back: Message<Payload> = c.decode(&bytes).expect("decode");
+    let back: Frame<Payload> = c.decode(&bytes).expect("decode");
     assert_eq!(
         serde_json::to_value(&back).unwrap(),
         serde_json::to_value(&m).unwrap()
@@ -126,40 +125,41 @@ fn influx_no_longer_carries_method_or_channel() {
 }
 
 #[test]
-fn content_tagged_by_action_and_accepts_single_or_array() {
-    let m = sample();
-    let v = serde_json::to_value(&m).unwrap();
-    // OneOrMany: single element serializes as a bare object
-    assert!(
-        v["content"].is_object(),
-        "single content collapses to object"
+fn a_frame_is_an_array_and_a_bare_action_is_not_a_frame() {
+    let v = serde_json::to_value(sample()).unwrap();
+    assert!(v.is_array(), "the frame itself is the array");
+    assert_eq!(v[0]["action"], json!("append"));
+    // One action on its own is not a frame: the wire is a list, always.
+    assert!(serde_json::from_value::<Frame<Value>>(json!({ "action": "empty" })).is_err());
+    assert_eq!(
+        serde_json::from_value::<Frame<Value>>(json!([{ "action": "empty" }]))
+            .unwrap()
+            .len(),
+        1
     );
-    assert_eq!(v["content"]["action"], json!("append"));
-    // and the bare-object form deserializes back into a one-item vec
-    let back: Message<Payload> = serde_json::from_value(v).unwrap();
-    assert_eq!(back.content.len(), 1);
-    // array form also accepted (stage emits arrays)
-    let arr = json!({ "ev": "draw", "sender": "s", "content": [ { "action": "empty" } ] });
-    let m2: Message<Value> = serde_json::from_value(arr).unwrap();
-    assert!(matches!(m2.content[0], Content::Empty));
 }
 
 #[test]
-fn ev_is_required_on_the_wire() {
-    // ADR 0003: ev is a mandatory top-level field — a pre-ev frame must fail
-    // to decode loudly, not be silently treated as draw.
-    let no_ev = json!({ "sender": "s", "content": [{ "action": "empty" }] });
-    assert!(serde_json::from_value::<Message<Value>>(no_ev).is_err());
-    let with_ev = json!({ "ev": "draw", "sender": "s", "content": [{ "action": "empty" }] });
-    let m: Message<Value> = serde_json::from_value(with_ev).unwrap();
-    assert_eq!(m.ev, content::EV_DRAW);
+fn an_envelope_is_not_a_frame() {
+    // The envelope belongs to the host (ADR 0021 decision 6): a `Message`-shaped
+    // frame must fail to decode here, and the auto-detect says why.
+    let envelope = json!({ "ev": "draw", "sender": "s", "content": [{ "action": "empty" }] });
+    let bytes = serde_json::to_vec(&envelope).unwrap();
+    assert!(codec(CodecType::Json).decode::<Frame<Value>>(&bytes).is_err());
+    let err = codec(CodecType::Json)
+        .decode_auto::<Frame<Value>>(&bytes)
+        .expect_err("envelope refused");
+    assert!(
+        err.to_string().contains("envelope"),
+        "the refusal names the reason: {err}"
+    );
 }
 
 #[test]
 fn cross_codec_strict_decode_still_errors() {
     // explicit decode() stays strict: wrong codec must fail loudly
     let bytes = codec(CodecType::Json).encode(&sample()).unwrap();
-    let r = codec(CodecType::Cbor).decode::<Message<Payload>>(&bytes);
+    let r = codec(CodecType::Cbor).decode::<Frame<Payload>>(&bytes);
     assert!(r.is_err());
 }
 
@@ -170,8 +170,8 @@ fn decode_auto_accepts_json_and_cbor_regardless_of_self() {
     let cbor_bytes = codec(CodecType::Cbor).encode(&sample()).unwrap();
     for self_variant in [CodecType::Json, CodecType::Cbor] {
         let c = codec(self_variant);
-        let a: Message<Payload> = c.decode_auto(&json_bytes).expect("json auto");
-        let b: Message<Payload> = c.decode_auto(&cbor_bytes).expect("cbor auto");
+        let a: Frame<Payload> = c.decode_auto(&json_bytes).expect("json auto");
+        let b: Frame<Payload> = c.decode_auto(&cbor_bytes).expect("cbor auto");
         assert_eq!(
             serde_json::to_value(&a).unwrap(),
             serde_json::to_value(&sample()).unwrap()
@@ -186,8 +186,8 @@ fn decode_auto_accepts_json_and_cbor_regardless_of_self() {
 #[test]
 fn decode_auto_rejects_garbage() {
     let c = codec(CodecType::Cbor);
-    assert!(c.decode_auto::<Message<Payload>>(b"not a frame").is_err());
-    assert!(c.decode_auto::<Message<Payload>>(b"{\"nope\":1}").is_err());
+    assert!(c.decode_auto::<Frame<Payload>>(b"not a frame").is_err());
+    assert!(c.decode_auto::<Frame<Payload>>(b"[\"nope\"]").is_err());
 }
 
 #[test]

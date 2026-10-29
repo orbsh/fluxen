@@ -86,8 +86,12 @@ pub async fn run(port: u16) -> anyhow::Result<()> {
             match std::fs::read_to_string(file)
                 .map_err(|e| e.to_string())
                 .and_then(|src| parse_yaml_to_frame(&src).map_err(|e| e.msg))
+                .and_then(|frame| {
+                    // 上线的是动作列表；信封属于 stage（ADR 0021 决策 6）
+                    serde_json::to_string(frame.wire()).map_err(|e| e.to_string())
+                })
             {
-                Ok(frame) => frame.to_string(),
+                Ok(text) => text,
                 Err(e) => {
                     println!("! {e}");
                     continue;

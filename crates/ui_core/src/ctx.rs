@@ -2,7 +2,7 @@ use crate::hooks::FormState;
 use crate::render::dispatch;
 use accrete::{Accrete, AccreteOps, Grab};
 use content::codec::ActiveCodec;
-use content::{Content, Message, PatchKind};
+use content::{Content, PatchKind};
 use leptos::prelude::*;
 use serde_json::{Value, to_value};
 use std::collections::HashMap;
@@ -116,9 +116,10 @@ impl Ctx {
             // 取走整批再分发：清空要在分发前，分发本身会再触发本 Effect，空批直接返回。
             ctx_clone.transport.frame.set(Vec::new());
             for b in batch {
-                // 收侧双格式自适应：帧首字节定格式，与 ?codec= 钉定的发送格式无关
-                match ctx_clone.codec.decode_auto::<Message<Accrete>>(&b) {
-                    Ok(act) => dispatch_msg(&act, &ctx_clone),
+                // 收侧双格式自适应：帧首字节定格式，与 ?codec= 钉定的发送格式无关；
+                // 解出来的一帧就是动作列表本身——信封是宿主的（ADR 0021 决策 6）。
+                match ctx_clone.codec.decode_auto::<Vec<Content<Accrete>>>(&b) {
+                    Ok(actions) => dispatch_msg(&actions, &ctx_clone),
                     // decode 失败若静默丢弃，症状就是"ws 正常但界面空白"——必须留痕
                     Err(e) => tracing::error!("ws frame decode failed: {e}"),
                 }
@@ -232,14 +233,11 @@ impl Ctx {
     }
 }
 
-fn dispatch_msg(act: &Message<Accrete>, ctx: &Ctx) {
-    // 操作通道过滤：非渲染类帧不触碰 layout/data/list（ADR 0003）。
-    // Influx.event 是数据槽名，属渲染内部寻址，与此处消息级 ev 平面不同。
-    if act.ev != content::EV_DRAW {
-        tracing::debug!("frame ev = {:?} (not draw), skipped", act.ev);
-        return;
-    }
-    for c in &act.content {
+fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
+    // 每帧就是动作列表：没有消息级 `ev`，也就没有"这帧是不是给我"的闸
+    // （ADR 0021 决策 6——信封连同它的 ev 归宿主）。`Influx.event` 是数据槽名，
+    // 属渲染内部寻址，与帧的形状无关。
+    for c in actions {
         match c {
             Content::Tmpl(x) => {
                 let n = x.name.clone();

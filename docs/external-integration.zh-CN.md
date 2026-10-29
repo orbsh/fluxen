@@ -35,18 +35,17 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
 
 ## 2. 线上格式
 
-下行，渲染器消费的只有一样东西：**动作列表**——`create` / `set` / `append` / `remove` / `patch` /
-`inject` / `tmpl` / `empty` 八个动作按序组成的数组。
+下行，一帧**就是**动作列表——`create` / `set` / `append` / `remove` / `patch` / `inject` / `tmpl` /
+`empty` 八个动作按序组成的数组。渲染器这一侧没有信封（ADR 0021 决策 6）：`content::Message` 现在住在
+`stage` 里，prism 与 reflux 各自包自己的，`content` 只剩动作与 `Outflow`。
 
-外面那层信封是**使用方的包装**。stage、prism、reflux 各自装自己的
-`Message { ev, sender, created?, content }`；`sender` 与 `created` 渲染器一个字段都不读，那是宿主
-自己的事。唯一被读的信封字段是 `ev`，而且只用来判断这帧是不是给渲染器的：`ev == "draw"` 才渲染，
-其余值记 debug 日志后原样留给宿主自己的动词（`connected`、`login.result`、`error`、`turn.delta`
-——ADR 0003 的操作通道）。一个 socket，一种信封；渲染真正需要的只有里面那份动作列表。
+所以一帧永远是数组——单条动作也是「一个元素的数组」——线上要么是 JSON 数组，要么是 CBOR 数组。其余
+形状在入口就被拒，并且说清理由：旧的信封形状（JSON 对象或 CBOR map）解出来是
+`frame is an envelope (map), not an action list`，于是还在发 `Message` 的宿主看得到原因，而不是一片
+空白。
 
-已决定、尚未落地（ADR 0021 决策 6）：信封本身也归宿主——`content::Message` 移进 `stage`，prism 与
-reflux 各自定义自己的；渲染器那一侧届时直接解动作列表，`ev` 闸随之消失。落地之前，下行仍按
-`Message` 发。
+宿主动词（`connected`、`login.result`、`turn.delta`）走宿主自己的信封、走宿主自己的腿。渲染器从
+来看不到它们，也不提供过滤——ADR 0003 的 `ev` 闸跟着信封一起走了。
 
 上行（页面 → 宿主）：`content::Outflow { event, id?, data }`。
 
@@ -70,12 +69,11 @@ reflux 各自定义自己的；渲染器那一侧届时直接解动作列表，`
    **队列**（`RwSignal<Vec<Vec<u8>>>`），不是「最近一帧」信号。读循环一次可以连取多帧，而 Effect
    要等微任务边界才跑；用单值信号就是后到覆盖先到，症状是连上就推的布局丢掉、页面空白。次序在这里
    是语义，队列把它守住。socket 因此在渲染路径之外，调度归 Leptos。
-3. **解码。** 该队列上一个 `Effect` 取走整批，逐帧调 `ActiveCodec::decode_auto::<Message<Accrete>>`：
-   首字节定格式——`{` 是 JSON，`0xA0..=0xBF` 是 CBOR——与页面为上行为钉住的编码无关，所以宿主可以
-   在同一路数据里换格式。解不出的帧记日志后丢弃，绝不半应用。
-4. **`ev` 闸。** `dispatch_msg` 对 `draw` 以外的 `ev` 立即返回（ADR 0003）。宿主动词——
-   `connected`、`login.result`、`turn.delta`——走同一个 socket，在这里按设计被忽略。
-5. **应用。** 动作列表按序应用，每个动作只写一个信号：
+3. **解码。** 该队列上一个 `Effect` 取走整批，逐帧调
+   `ActiveCodec::decode_auto::<Vec<Content<Accrete>>>`：首字节定格式——`[` 是 JSON 数组，
+   `0x80..=0x9F` 是 CBOR 数组——与页面为上行为钉住的编码无关，所以宿主可以在同一路数据里换格式。
+   解不出的帧记日志后丢弃，绝不半应用。
+4. **应用。** 动作列表按序应用，每个动作只写一个信号：
 
    | 动作 | 写入 | 细节 |
    |:--|:--|:--|
@@ -89,7 +87,7 @@ reflux 各自定义自己的；渲染器那一侧届时直接解动作列表，`
 
    这些写入一律先 untracked 读、再 `set`：dispatch 运行在消费该帧的 Effect 里，tracked 读会让
    这个 Effect 订阅自己马上要写的槽。
-6. **渲染。** 树是数据。`render::dispatch` 把节点映射到组件（`gen_dispatch!` 由 `accrete` 的枚举
+5. **渲染。** 树是数据。`render::dispatch` 把节点映射到组件（`gen_dispatch!` 由 `accrete` 的枚举
    生成匹配），每个组件把自己的主体放进一个读取它所需槽的闭包里——`text_` 经 `use_source_value`，
    `rack` 读它的列表槽。于是 `set` 或 `append` 只重画绑在该槽上的节点：没有 diff，没有虚拟 DOM
    ——信号图**就是**更新范围。空的 data 槽不渲染、不占空间（ADR 0012），所以流式段落可以先出现，
@@ -174,9 +172,9 @@ prism 是 WS 连接面（网关、身份、turn）。它的渲染器腿是 `/ui`
 - **布局。** 客户端第一个上行是 `Outflow { event: "init" }`。prism 用普通的 `create` 帧答布局：
   `file:` 来源把 YAML 帧列表原样送出，`event:` 来源提交给一个全局摊位并把返回值转发。没有布局
   信封，也没有第二种形状——布局就是第一个视图操作。
-- **prism 自己的动词**走**它自己的**信封，不是渲染器的——今天恰好是同一个
-  `Message { ev: "<verb>", content: [] }` 形状，因为渲染器还在解 `Message` 并把它丢掉；决策 6
-  落地后，动词完全留在 prism 一侧，渲染腿只运动作列表。在意的客户端（比如登录表单）自己读。
+- **prism 自己的动词**走**它自己的**信封，不是渲染器的。今天那个信封恰好长得像
+  `Message { ev: "<verb>", content: [] }`，但渲染器已经完全不解 `Message` 了（决策 6 已落地）
+  ——所以动词整个留在 prism 一侧，渲染腿只运动作列表。在意的客户端（比如登录表单）自己读。
 - **流式。** 格式由生产端决定。gravity 的 turn 调用带一个 `protocol` 参数：默认 `data`（裸
   delta，给非 UI 消费者），`fluxen`（视图帧——对布局声明的槽做 `append`/`set`）。应用知识留在
   摊位，渲染器保持通用，槽名不编进 bundle。
