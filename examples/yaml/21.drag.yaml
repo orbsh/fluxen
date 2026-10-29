@@ -1,6 +1,6 @@
 # ADR 0019: 拖拽的两端。
 # 左边两行可拖（grab 当行根，id 就是行的身份，payload 是货物），右边两个落点：
-# rail 只收 kind=message、发 pin，并带一份元数据；trash 只收 kind=note——这次拖的
+# rail 只收 kind=message、发 pin；trash 只收 kind=note——这次拖的
 # 两个都配不上它，落上去等于没落。同页多落点靠事件名分开，不用额外寻址。
 action: create
 event: ""
@@ -68,8 +68,6 @@ data:
       value:
         kind: event
         event: pin
-        default:
-          rail: engineering
   - type: dock
     id: trash
     attrs:

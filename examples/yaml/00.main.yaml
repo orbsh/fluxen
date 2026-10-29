@@ -112,8 +112,6 @@
         value:
           kind: event
           event: pin
-          default:
-            rail: walkthrough
 
 # ---- 图的初始快照：crate 层 --------------------------------------------------
 - action: set

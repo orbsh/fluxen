@@ -67,12 +67,13 @@ ADR 0008 §5 立过一条：「组件内瞬态交互（hover/focus/drag）：无
    的 `node-click` 已是同款：实体信息全在 `data`）。
    `Local` 绑定时写进槽的包装与上行同形（ADR 0010），所以整条链可以纯前端闭合。
 
-4. **页面级拖拽会话（`Ctx.drag`，只在本页内存，不上线）**：`dragstart` 把 `grab` 的
-   货物（`id`／`kind`／`payload`）放进会话，`dragend` 清空；`dock` 在 `dragenter`／
+4. **页面级拖拽会话（`Ctx.drag`，只在本页内存，不上线）**：`dragstart` 把那个 `grab`
+   节点本身放进会话（不另造一份平行的结构——复制体和原体迟早对不上），`dragend` 清空；
+   `dock` 在 `dragenter`／
    `dragover` 里按自己的 `accept` 判断并 `preventDefault`（只挡其中一个，浏览器仍会
    把这次释放当成「不可落」，drop 根本不触发）；`drop` 取出会话里的货物、组帧发出、清空
-   会话。落点不需要在会话里登记自己——drop 事件落在它的 DOM 上，自己的处理器里就有 id、
-   事件名与元数据；会话只需要「谁在飞、带什么」。这份状态不进任何槽：它是浏览器的事实，
+   会话。落点不需要在会话里登记自己——drop 事件落在它的 DOM 上，自己的处理器里就有 id 与
+   事件名；会话只需要「谁在飞、带什么」。这份状态不进任何槽：它是浏览器的事实，
    不是生产者的树，而且只能有一份。
 
 5. **三态与几何**：常态（`reveal` = 细条，`reserved` = 占位）／拖拽在飞（`dock-armed`，
@@ -107,10 +108,10 @@ ADR 0008 §5 立过一条：「组件内瞬态交互（hover/focus/drag）：无
   `dataTransfer`，Firefox 也不会起拖）。
 - 源那边没有样式（它只是包装），样式全在落点：`main.css` 的 `.dock*` 四条规则。
 - 回归样本：`examples/yaml/21.drag.yaml`（两行 grab 当行根 + 两个 dock：一个 reveal 收
-  `message` 发 `pin` 带元数据，一个 reserved 只收 `note`）。`cargo test -p accrete` 覆盖
-  两侧的 wire 形状（含默认值不进 wire、闭枚举拒绝域外值）；`cargo check -p ui_leptos`
+  `message` 发 `pin`，一个 reserved 只收 `note`）。`cargo test -p accrete` 覆盖
+  两侧的 wire 形状（含默认值不进 wire、闭枚举拒绝域外值）；`cargo check -p ui-core`
   （host 与 wasm32 各一次）覆盖分派。浏览器那一层——真实拖拽一次、恰好一帧、`data` 的
-  四个可选键、类名加了又撤、配不上的落点静默——挂在 reflux 的 gate 套件里或另起一份；
+  三个可选键、类名加了又撤、配不上的落点静默——挂在 reflux 的 gate 套件里或另起一份；
   fluxen 自己没有 CDP 门，这条限制照实记。
 
 ## 明确不做的替代方案

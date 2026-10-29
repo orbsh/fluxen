@@ -10,16 +10,16 @@
 //! 布局——宽度在覆盖层里长，否则光标下面的内容会移走。
 
 use crate::Ctx;
-use crate::ctx::{DragCargo, render_children};
+use crate::ctx::render_children;
 use crate::hooks::use_common_css;
-use accrete::{BindVariant, Dock, DockExpand};
+use accrete::{BindVariant, Dock, DockExpand, Grab};
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::{Map, Value};
 
 /// 这个落点收不收这件货：`accept` 缺席 = 全收；写了就是闭集合比对，
 /// 没有 `kind` 的货配不上任何一个写了 `accept` 的落点。
-fn accepts(accept: &Option<Vec<String>>, cargo: &DragCargo) -> bool {
+fn accepts(accept: &Option<Vec<String>>, cargo: &Grab) -> bool {
     match accept {
         None => true,
         Some(list) => cargo
@@ -42,13 +42,8 @@ pub fn dock_(accrete: Dock, ctx: &Ctx, id: String) -> AnyView {
     let base = css.join(" ");
 
     let accept = accrete.attrs.as_ref().and_then(|a| a.accept.clone());
-    // 落点元数据：挂在同一条 bind 的 `default` 上（bind 的 `event`/`slot` 已经
-    // 用掉了变体，`default` 在这条 bind 上不表示初值）。
-    let meta = accrete
-        .bind
-        .as_ref()
-        .and_then(|b| b.get("value"))
-        .and_then(|b| b.default.clone());
+    // 落点由两样东西唯一确定：事件名（`bind["value"].event`）与帧的 `id`（dock 自己
+    // 的 id）。不另带元数据——那就成了同一件事的第三种说法。
     let event = accrete
         .bind
         .as_ref()
@@ -93,8 +88,10 @@ pub fn dock_(accrete: Dock, ctx: &Ctx, id: String) -> AnyView {
                 return;
             }
             let mut data = Map::new();
-            if let Some(item) = &cargo.item {
-                data.insert("item".into(), Value::String(item.clone()));
+            // 键名与源上用的一致，一个字段一个名字：`grab.id` 到这里还是 `id`。
+            // 空 id 按无身份处理（与 `node_id` 同一约定），所以在出口这一处归一。
+            if let Some(id) = cargo.id.as_deref().filter(|s| !s.is_empty()) {
+                data.insert("id".into(), Value::String(id.to_string()));
             }
             if let Some(kind) = &cargo.kind {
                 data.insert("kind".into(), Value::String(kind.clone()));
@@ -102,12 +99,9 @@ pub fn dock_(accrete: Dock, ctx: &Ctx, id: String) -> AnyView {
             if let Some(payload) = &cargo.payload {
                 data.insert("payload".into(), payload.clone());
             }
-            if let Some(meta) = &meta {
-                data.insert("meta".into(), meta.clone());
-            }
             if let Some(event) = &event {
                 // 帧：`event` = 落点声明的名字，`id` = 落点自己，
-                // `data` = {item, kind, payload, meta}（空即无，ADR 0012）。
+                // `data` = {id, kind, payload}（空即无，ADR 0012）。
                 ctx.emit(event, Some(id.clone()), Value::Object(data));
             }
             // 正常路径上源的 dragend 会清；这里再清一次，免得 drop 之后有
