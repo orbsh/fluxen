@@ -224,7 +224,7 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
   UMD script 自举 + 最小 cbor.js（roundtrip 测过 uint8/16 头、UTF-8、
   空 map）。修一个实施期真缺陷：UMD `<script>` 相对 src 按文档 base
   解析（页面在 / 时 404）→ `new URL(..., import.meta.url)`。
-  ApexCharts 资产/index.html 标签/trunk.toml 代理/08.apexchart.yaml
+  ApexCharts 资产/index.html 标签/Trunk.toml 代理/08.apexchart.yaml
   退役；08.g2chart.yaml + 08.chart.yaml 为 G2 形态。e2e：headful
   CDP 探针 CHART-OK（inline 路径 canvas 1280x960），最终由用户在
   stage 直连验证通过（图表渲染与交互目检）。
@@ -1086,7 +1086,7 @@ ADR 0021 的实施。落地后的形状：
 - **`crates/ui_core`**（包名 `ui-core`）：`ctx` / `dom` / `hooks` / `render` / `components` /
   `widgets`。不认识 `#main`，不依赖任何具体 transport（只认 `transport::Transport` 这个接缝）。
 - **`examples/renderer`**（包名仍是 `ui_leptos`）：boot——`mount()`（读 `#main`、建 WS、挂响应式根）、
-  `window.fluxen.send`、`main.rs`、`index.html`、`trunk.toml`、`assets/`、`modules/`。
+  `window.fluxen.send`、`main.rs`、`index.html`、`Trunk.toml`、`assets/`、`modules/`。
 - **`examples/transport-ws`**：WS 实现，92 行，唯一消费者是 boot。
 - **`crates/` 剩下的都是"外部按名字依赖"的东西**：`accrete`、`accrete_macro`、`content`、
   `transport`（trait）、`ui_core`、`ui_leptos_macro`、`forcegraph`、`ui-assets`、`fluxen`（门面，
