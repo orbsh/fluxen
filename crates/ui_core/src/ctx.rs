@@ -417,16 +417,16 @@ mod tests {
 
     #[test]
     fn inject_skips_an_equal_value() {
-        let cur = json!({"event": "page", "data": "about"});
+        let cur = json!({"dest": "page", "data": "about"});
         assert!(!inject_writes(Some(&cur), &cur));
     }
 
     #[test]
     fn inject_writes_a_changed_value() {
-        let cur = json!({"event": "page", "data": "about"});
+        let cur = json!({"dest": "page", "data": "about"});
         assert!(inject_writes(
             Some(&cur),
-            &json!({"event": "page", "data": "home"})
+            &json!({"dest": "page", "data": "home"})
         ));
     }
 }

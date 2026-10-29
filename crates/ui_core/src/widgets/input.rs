@@ -37,7 +37,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     };
     let bind_type = match &variant {
         BindVariant::Field { .. } => "field",
-        BindVariant::Dest { .. } | BindVariant::Local { .. } => "event",
+        BindVariant::Dest { .. } | BindVariant::Local { .. } => "send",
         _ => "",
     };
 
@@ -81,7 +81,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
                             sig.set(slot.get_untracked());
                         }
                     }
-                    "event" => {
+                    "send" => {
                         let ctx = ctx.clone();
                         let kk = k2.clone();
                         let val = slot.get_untracked();
