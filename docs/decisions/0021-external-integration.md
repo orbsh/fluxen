@@ -27,10 +27,10 @@ prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}
 
 1. **适配属于宿主。** fluxen 核心不认任何宿主的帧形状。宿主提供 `transport::Transport` 的一个实现
    和自己的 boot；核心只提供 `Ctx::new(transport, codec)` 这一处接缝。
-2. **线上格式就是 `content`。** 下行 `Message{ev, sender, created?, content}`（Accrete 的八个动作），
-   上行 `Outflow{event, id?, data}`。宿主的自有动词（`connected` / `login` / `error` / `turn.*`）
-   放在 `Message.ev != "draw"` 上，渲染器按 ADR 0003 忽略并记日志——因此一个 socket 上始终只有
-   一种帧形状，不需要第二套协议。
+2. **线上格式就是 `content`。** 下行是**动作列表**（Accrete 的八个动作，按序应用），上行是
+   `Outflow{event, id?, data}`。宿主的自有动词（`connected` / `login` / `error` / `turn.*`）不在
+   这个契约里：它们住在宿主自己的信封内，渲染器不认——`ev` 通道（ADR 0003）随信封一起归宿主，
+   见决策 6。
 3. **boot 从核心拆出。** `ui_leptos` → `ui-core`（`ctx` / `render` / `components` / `widgets`，
    无 `#main`、无 `transport-ws`）+ `boot`（`#main` 解析、WS 接线、`mount()`、
    `window.fluxen.send`）。`fluxen` 门面总是重导出 `ui-core`，`boot` 走 feature。
@@ -39,6 +39,11 @@ prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}
 5. **生产端的输出格式由调用参数决定。** 例：gravity 的 turn 调用带 `protocol` 参数，默认 `data`
    （裸 delta，给非 UI 消费者），`fluxen` 则返回视图帧（对槽做 `append`/`set`）。应用知识留在
    生产端，槽名不进 bundle。
+6. **信封归宿主（2026-10-29，落地中）。** `content::Message{ev, sender, created?, content}` 是宿主
+   包装，不是线上模型，整体移进 `stage`；prism 与 reflux 各自重新处理自己的信封（prism 的
+   `{ev,args}` 动词帧留在它自己的程序腿上，reflux 的 `wire.py` 继续构自己的）。渲染器这一侧只认
+   动作列表：`Message` 连同它携带的 `ev` 闸一起离开核心，宿主动词怎么到达页面由宿主自己决定，
+   渲染器不参与。落地清单在 PLAN 的「信封归宿主」一节；在此之前线下行的仍是 `Message`。
 
 ## 归属：crates/ 只放别人按名字依赖的东西
 
@@ -76,4 +81,6 @@ prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}
   核心可能有两份构建。宿主不改写产物的链接——否则网关成了第二个构建系统。
 - **集成说明见 `docs/external-integration.md`（en）与 `docs/external-integration.zh-CN.md`（zh）**，
   以 prism 与 reflux 为两个实例。
+- **信封也是宿主的。** 移完之后 `content` crate 只剩两样：动作（`Content` 与各 op）与 `Outflow`。
+  stage、prism、reflux 各有各的信封，彼此不需要兼容——它们只在动作列表这一层对齐。
 - 本文取代同日先前那份"客户端适配 prism 帧"的草案（未提交，已删除）。
