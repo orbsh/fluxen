@@ -55,8 +55,13 @@ pub struct LeptosTransport {
     /// wasm 单线程，用 SendWrapper 让 Rc 满足 leptos 组件闭包的 Send 约束
     /// （与原 WebSocketHandle 的做法一致）。
     pub inner: send_wrapper::SendWrapper<std::rc::Rc<dyn Transport>>,
-    /// 最近一帧下行字节；桥接自 transport.on() 读循环。
-    pub frame: RwSignal<Vec<u8>>,
+    /// 尚未处理的**一批**下行帧；桥接自 transport.on() 读循环。
+    ///
+    /// 队列而不是"最近一帧"：读循环一次可以连续取到多帧（无界 channel 永远 ready），
+    /// Effect 要等微任务边界才跑。用最新值信号时后到的帧会覆盖先到的，症状是"连上就推的
+    /// 布局丢了、界面空白"——那是丢帧，不是渲染问题。顺序在这里是语义：布局必须先于
+    /// 它的后续 set/append 被应用。
+    pub frame: RwSignal<Vec<Vec<u8>>>,
 }
 
 impl Ctx {
@@ -81,7 +86,7 @@ impl Ctx {
             leptos::task::spawn_local(async move {
                 use futures::StreamExt;
                 while let Some(bytes) = stream.next().await {
-                    frame_writer.set(bytes);
+                    frame_writer.update(|q| q.push(bytes));
                 }
             });
         }
@@ -104,8 +109,13 @@ impl Ctx {
         // 消费下行帧并分发
         let ctx_clone = ctx.clone();
         Effect::new(move |_| {
-            let b = ctx_clone.transport.frame.get();
-            if !b.is_empty() {
+            let batch = ctx_clone.transport.frame.get();
+            if batch.is_empty() {
+                return;
+            }
+            // 取走整批再分发：清空要在分发前，分发本身会再触发本 Effect，空批直接返回。
+            ctx_clone.transport.frame.set(Vec::new());
+            for b in batch {
                 // 收侧双格式自适应：帧首字节定格式，与 ?codec= 钉定的发送格式无关
                 match ctx_clone.codec.decode_auto::<Message<Accrete>>(&b) {
                     Ok(act) => dispatch_msg(&act, &ctx_clone),
