@@ -26,21 +26,20 @@ def send_text(payload):
     hdr += mask
     s.sendall(bytes(hdr) + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
 
-def set_ev(event, accrete):
-    return {"ev": "draw", "sender": "demo", "content": [{"action": "set", "event": event, "data": accrete}]}
+def set_ev(slot, accrete):
+    # 一帧就是一个动作列表（信封归宿主，ADR 0021 决策 6）
+    return [{"action": "set", "slot": slot, "data": accrete}]
 
-def append(ev, id, v, sel=None):
+def append(slot, id, v, sel=None):
     # row identity lives in the data (ADR 0005, cf. examples/yaml/02.concat.yaml)
     data = {"type": "text", "id": id, "bind": {"value": {"kind": "default", "default": v}}}
     if sel:
         # selector lives in attrs (Text's wire shape), not at the top level
         data["attrs"] = {"selector": sel}
-    return {"ev": "draw", "sender": "demo", "content": [{"action": "append", "event": ev, "data": data}]}
+    return [{"action": "append", "slot": slot, "data": data}]
 
-def patch(ev, id, v, op="append", path="/bind/value/default"):
-    return {"ev": "draw", "sender": "demo", "content": [{
-        "action": "patch", "event": ev, "id": id, "path": path, "op": op, "value": v
-    }]}
+def patch(slot, id, v, op="append", path="/bind/value/default"):
+    return [{"action": "patch", "slot": slot, "id": id, "path": path, "op": op, "value": v}]
 
 text_accrete = lambda v: {"type": "text", "bind": {"value": {"kind": "default", "default": v}}}
 
