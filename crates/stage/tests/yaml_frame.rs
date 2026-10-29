@@ -1,15 +1,14 @@
-//! YAML carrier tests: /send shape contract (Content item or array,
-//! action preserved end-to-end). The envelope is stage's own and never reaches
-//! the wire — `wire()` is the action list the renderer decodes (ADR 0021
-//! decision 6).
+//! YAML carrier tests: /send shape contract (Content item or array, action
+//! preserved end-to-end). What stage produces *is* the wire: the action list,
+//! no envelope (ADR 0021 decision 6).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use serde_json::Value;
 
 /// What goes on the socket: the action list, no envelope.
 fn wire(src: &str) -> Value {
-    let msg = stage::proto::parse_yaml_to_frame(src).unwrap();
-    serde_json::to_value(msg.wire()).unwrap()
+    let frame = stage::proto::parse_yaml_to_frame(src).unwrap();
+    serde_json::to_value(&frame).unwrap()
 }
 
 #[test]
@@ -17,7 +16,7 @@ fn yaml_single_content_item_keeps_action() {
     // ADR 0005 carrier shape: append head; row id lives in the DATA
     let src = r#"
 action: append
-event: chat
+slot: chat
 data:
   type: text
   id: m1
@@ -26,15 +25,11 @@ data:
       kind: default
       default: hi
 "#;
-    let msg = stage::proto::parse_yaml_to_frame(src).unwrap();
-    // stage's envelope, kept in this crate
-    assert_eq!(msg.ev, stage::proto::EV_DRAW);
-    assert_eq!(msg.sender, "stage");
     // the file's single item is one element of the list — the list is the wire
     let frame = wire(src);
     assert!(frame.is_array(), "一帧就是动作列表");
     assert_eq!(frame[0]["action"], "append");
-    assert_eq!(frame[0]["event"], "chat");
+    assert_eq!(frame[0]["slot"], "chat");
     assert_eq!(frame[0]["data"]["type"], "text");
     assert_eq!(frame[0]["data"]["id"], "m1");
 }
@@ -43,7 +38,7 @@ data:
 fn yaml_patch_item_roundtrips() {
     let src = r#"
 action: patch
-event: chat
+slot: chat
 id: a1
 path: /bind/value/default
 op: append
@@ -60,7 +55,7 @@ value: " tok"
 fn yaml_remove_item_roundtrips() {
     let src = r#"
 action: remove
-event: chat
+slot: chat
 id: a1
 "#;
     let frame = wire(src);
@@ -72,12 +67,12 @@ id: a1
 fn yaml_array_of_content_items() {
     let src = r#"
 - action: create
-  event: stage
+  slot: stage
   data:
     type: text
     id: a
 - action: set
-  event: case
+  slot: case
   data:
     type: text
     id: b
@@ -94,7 +89,7 @@ fn yaml_rejects_retired_sub_shape() {
     // fluxora's retired `sub:` must NOT deserialize (children is the model)
     let src = r#"
 action: create
-event: stage
+slot: stage
 data:
   type: case
   sub:
@@ -108,8 +103,8 @@ fn the_wire_decodes_as_the_renderers_frame_type() {
     // 端到端的那一段尾巴：stage 发出去的字节，必须就是渲染器解开的那一帧
     // （ADR 0021 决策 6）。用真的示例文件，走 JSON 与 CBOR 两条路。
     let src = std::fs::read_to_string("../../examples/yaml/00.main.yaml").unwrap();
-    let msg = stage::proto::parse_yaml_to_frame(&src).unwrap();
-    let wire = msg.wire();
+    let frame = stage::proto::parse_yaml_to_frame(&src).unwrap();
+    let wire = frame.as_slice();
     let json_bytes = serde_json::to_vec(&wire).unwrap();
     let frame: Vec<content::Content<accrete::Accrete>> = content::codec::ActiveCodec::Json
         .decode_auto(&json_bytes)

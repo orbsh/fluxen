@@ -1118,9 +1118,11 @@ prism 与 reflux 各自重新处理自己的信封；渲染器只认动作列表
    `0x80..=0x9F`（CBOR）；旧信封形状（对象／map）拿到一条点名的错误
    `frame is an envelope (map), not an action list`，不是静默空白。`tests/codec.rs` 与
    `tests/append_position.rs` 改为直接测动作列表，新增「一帧是数组／信封不是帧」两例。
-2. `stage`：`Message` 落在 `stage::proto`（`ev` 恒 `draw`、`sender` 恒 `stage`、`created` 空），
-   `Message::wire()` 是上线的那一半；`/send`、console 发 `wire()`，`tojson` 打印 `wire()`。
-   `tests/yaml_frame.rs` 跟着改成按 `wire()` 断言。
+2. `stage`：先按「移进 stage」落了一版 `stage::proto::Message`（`ev` 恒 `draw`、`sender` 恒
+   `stage`、`created` 空）+ `Message::wire()`；同日晚些时候用户裁掉它——**stage 没有动词就
+   不要信封**（`ev` 只会复述唯一的动词，`sender` 零读者，`created` 自出现起没人写过），
+   `parse_yaml_to_frame` 直接返回 `Vec<Content<Accrete>>`，`tojson`／`/send`／console 发的就是
+   那份数组。`tests/yaml_frame.rs` 跟着按动作列表断言。
 3. `ui-core`：`Ctx` 解 `Vec<Content<Accrete>>`；`dispatch_msg` 去掉信封参数与 `ev` 闸（连带那条
    `frame ev = …` debug 日志）。ADR 0003 已标注「部分取代」。
 4. `examples/renderer`：boot 不改（只搬字节）。
@@ -1138,3 +1140,49 @@ stage，验证因此走 3003。）
 7. reflux：`wire.py` 继续构自己的信封，发给渲染器的那一层只留动作列表——转换在它自己的宿主侧完成；
    `reflux.js` 若依赖 `ev` 需同步。它的 bundle 是钉住的：re-pin 之前两边版本必须对齐——旧 bundle 解不了
    数组，新 bundle 解不了信封，混用就是空白页加一条 decode 日志。
+
+
+### 线上词法：槽位叫 `slot`（ADR 0022）— 落地 2026-10-29
+
+用户裁决：同一帧里 `event` 既是下行地址又是上行事件名，"后端处理的时候名字撞车，太乱"。
+
+本仓已落地：
+
+1. `content`：`Influx`／`AppendOp`／`RemoveOp`／`PatchOp` 的 `event` 字段改名 `slot`（`create` 用
+   `slot: ""` 指根，与 `patch` 同一约定）；`InjectOp` 不动——它的 `slot` 是 vals 通道、`event?` 是被
+   模拟的事件名。`Outflow.event`、`BindVariant::Event { event }` 不动（它们本来就是事件名）。
+2. 示例 YAML：31 个文件里的顶层 `event:` 改写（嵌套 `bind` 里的 `event` 保留）；35 个例子全部
+   `stage tojson` 通过。
+3. `ui-core`：dispatch 里 12 处 `x.event` → `x.slot`；三个 widget 的 `to_value` 未用导入顺手清掉。
+4. 文档：ADR 0022 新增；0021 决策 6 改写成「有动词的宿主才有信封」；两份外部集成文档补「一个词一个
+   意思」一段，槽表／示例／`patch` 根写法换成 `slot`。
+
+验证：`cargo check --workspace --all-targets` 零警告；`cargo test --workspace` 全绿（stage 7 例、
+content 12 例、scene 45 例等）。
+
+跨仓：reflux 同批改（`wire.py` 的五个构造器、`ingest` 的字段集与错误路径、Rust SDK 的六个
+`put("slot")`、测试与门、钉住的渲染器包重打——`event`→`slot` 使每帧短 2 B，T10 的字节数随之变）；
+prism 自己处理。
+
+
+### 上行目标叫 `dest`（ADR 0023）— 落地 2026-10-29
+
+用户裁决：`event` 在 UI 侧同时指 DOM 事件、后端（aura）事件与上行落点，"前端传来的数据里又有 event
+就乱了"；并且"上下行的关系，包括数据形状都是不对称的，确实不应该用同一个名字"——所以下行留 `slot`
+（ADR 0022），上行另起一个词。词是用户定的：`dest`（4 个字母，和 `kind`/`slot` 对齐）。
+
+1. `content::Outflow { dest, id?, data }`：一帧上行 = 送到宿主上的某个目标。
+2. `accrete::BindVariant::Event { event }` → `Dest { dest }`（`kind: dest`）；`Local { slot, path,
+   name? }`——另起的名字叫 `name`，缺省 = 槽名（`slot` 已被通道占用，同一个对象里不能两个 `slot`）。
+3. `InjectOp { slot, name?, id?, data }`：同上，`event?` → `name?`。
+4. `ui-core`：emit 两支分开——`Dest` 走上行 transport，`Local` 写页面槽，包装里印 `dest`。
+5. 示例 YAML：9 个文件的 `kind: event` → `kind: dest`、`event:` → `dest:`；35 个例子全部 `stage tojson` 通过。
+6. 文档：ADR 0023 新增；两份外部集成文档的上行小节、bind 说明与 prism 的 `init` 例子同步。
+
+验证：`cargo check --workspace --all-targets` 零警告；`cargo test --workspace` 37 组全绿。
+
+跨仓：reflux 同批（`frame.dest`、`kind: dest`、注册表 `app.dests`／`reflux/dests.py`、SDK 重生成、
+包重打）；prism 自处理。
+
+词表走过的弯路（记下来防止再绕）：`event`（撞 DOM/后端）→ `intent`（自造，未确认就实施，被否）→
+`slot`（用户先按"对应下行"接受，随后按"上下不对称"否掉）→ `dest`（用户定）。

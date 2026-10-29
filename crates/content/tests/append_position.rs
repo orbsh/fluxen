@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 /// 一帧就是动作列表本身（ADR 0021 决策 6）——这层测试只关心 append 的线上形状。
 fn frame(position: i64) -> Value {
     let actions: Vec<Content<Value>> = vec![Content::Append(AppendOp {
-        event: "rows".into(),
+        slot: "rows".into(),
         position,
         data: json!({"id": "r1"}),
     })];
@@ -41,7 +41,7 @@ fn a_position_that_carries_information_is_written_and_decodes() {
     assert_eq!(frame(3)[0]["position"], 3);
     assert_eq!(decoded_position(frame(3)), 3);
     assert_eq!(decoded_position(json!([
-        {"action": "append", "event": "rows", "position": -1, "data": {"id": "r2"}}
+        {"action": "append", "slot": "rows", "position": -1, "data": {"id": "r2"}}
     ])), -1);
 }
 

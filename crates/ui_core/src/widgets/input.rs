@@ -4,7 +4,7 @@ use accrete::{AccreteOps, Bind, BindVariant, Input, JsType};
 use leptos::ev;
 use leptos::html::*;
 use leptos::prelude::*;
-use serde_json::{Value, to_value};
+use serde_json::Value;
 use wasm_bindgen::JsCast;
 
 fn default_option_jskind(v: &Option<JsType>) -> Value {
@@ -37,7 +37,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     };
     let bind_type = match &variant {
         BindVariant::Field { .. } => "field",
-        BindVariant::Event { .. } | BindVariant::Local { .. } => "event",
+        BindVariant::Dest { .. } | BindVariant::Local { .. } => "event",
         _ => "",
     };
 

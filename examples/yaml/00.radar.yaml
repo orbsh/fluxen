@@ -45,7 +45,7 @@
 #       python3 examples/walkthrough.py 搭自己的一行，只把本文件的 set 帧
 #       当作图表数据的唯一来源（发整份会多开一个 box），再逐段流式填充。
 - action: append
-  event: chat
+  slot: chat
   data:
     type: case
     attrs:
@@ -113,7 +113,7 @@
 # 图表数据与摘要走数据槽（ADR 0005：set 建槽、指针 patch 追加）——流式内容
 # 不进布局平面：写布局节点会重渲染整行、重挂模块宿主（实测见 docs/PLAN.md）。
 - action: set
-  event: trend
+  slot: trend
   data:
     type: chart
     bind:
@@ -273,7 +273,7 @@
             tooltip:
               crosshairs: true
 - action: set
-  event: summary
+  slot: summary
   data:
     type: text
     bind:
@@ -281,7 +281,7 @@
         kind: default
         default: ""
 - action: set
-  event: radar_rd
+  slot: radar_rd
   data:
     type: chart
     bind:
@@ -443,7 +443,7 @@
           interaction:
             tooltip: {}
 - action: set
-  event: radar_mkt
+  slot: radar_mkt
   data:
     type: chart
     bind:
@@ -581,7 +581,7 @@
           interaction:
             tooltip: {}
 - action: set
-  event: radar_ops
+  slot: radar_ops
   data:
     type: chart
     bind:

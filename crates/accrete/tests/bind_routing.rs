@@ -13,35 +13,35 @@ fn bind(js: serde_json::Value) -> BindVariant {
 #[test]
 fn local_kind_carries_slot_and_optional_path() {
     match bind(json!({"kind": "local", "slot": "page"})) {
-        BindVariant::Local { slot, path, event } => {
+        BindVariant::Local { slot, path, name } => {
             assert_eq!(slot, "page");
             assert_eq!(path, None);
-            assert_eq!(event, None);
+            assert_eq!(name, None);
         }
         other => panic!("expected Local, got {other:?}"),
     }
     match bind(json!({"kind": "local", "slot": "chan", "path": "/id"})) {
-        BindVariant::Local { slot, path, event } => {
+        BindVariant::Local { slot, path, name } => {
             assert_eq!(slot, "chan");
             assert_eq!(path.as_deref(), Some("/id"));
-            assert_eq!(event, None);
+            assert_eq!(name, None);
         }
         other => panic!("expected Local, got {other:?}"),
     }
 }
 
 #[test]
-fn local_kind_gains_optional_event_name() {
+fn local_kind_gains_an_optional_name() {
     // ADR 0010: emitter-side channel name; absent = slot name.
-    match bind(json!({"kind": "local", "slot": "page", "event": "channel::select"})) {
-        BindVariant::Local { slot, event, .. } => {
+    match bind(json!({"kind": "local", "slot": "page", "name": "channel::select"})) {
+        BindVariant::Local { slot, name, .. } => {
             assert_eq!(slot, "page");
-            assert_eq!(event.as_deref(), Some("channel::select"));
+            assert_eq!(name.as_deref(), Some("channel::select"));
         }
         other => panic!("expected Local, got {other:?}"),
     }
-    // roundtrip: explicit event serializes back; absent stays absent
-    let v = json!({"kind": "local", "slot": "p", "event": "e"});
+    // roundtrip: explicit name serializes back; absent stays absent
+    let v = json!({"kind": "local", "slot": "p", "name": "e"});
     let b = bind(v.clone());
     assert_eq!(serde_json::to_value(&b).unwrap(), v);
 }

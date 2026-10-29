@@ -1,5 +1,5 @@
 action: create
-event: ""
+slot: ""
 data:
   attrs:
     class:
@@ -26,8 +26,8 @@ data:
     - type: form
       bind:
         value:
-          kind: event
-          event: login
+          kind: dest
+          dest: login
       children:
       - type: button
         bind:
@@ -80,11 +80,11 @@ data:
       - type: input
         bind:
           value:
-            kind: event
-            event: history
+            kind: dest
+            dest: history
       - type: input
         bind:
           value:
-            kind: event
-            event: echo
+            kind: dest
+            dest: echo
 

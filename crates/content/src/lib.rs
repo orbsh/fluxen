@@ -9,7 +9,9 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Outflow {
-    pub event: String,
+    /// 上行目标：页面把这次交互送到宿主上的哪个目标（ADR 0023）。与下行的 `slot` 不同名——
+    /// 上下行并不对称（一个写页面里的位置，一个调起宿主的处理器）。`event` 不在这条线上。
+    pub dest: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub data: Value,
@@ -38,7 +40,7 @@ pub enum Content<T> {
     Remove(RemoveOp),
 
     /// Value-domain update addressed by JSON Pointer (ADR 0005).
-    /// Plane: `event == ""` → layout root; `id` set → that list row;
+    /// Plane: `slot == ""` → layout root; `id` set → that list row;
     /// otherwise → the named data slot.
     #[serde(rename = "patch")]
     Patch(PatchOp),
@@ -58,7 +60,10 @@ pub enum Content<T> {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AppendOp<T> {
-    pub event: String,
+    /// The list slot this row lands in — named `slot`, not `event`: the wire has
+    /// exactly one meaning per word, and an *event* is the uplink's name
+    /// (`Outflow.event`, `bind.*.event`), never an address inside the tree.
+    pub slot: String,
     /// 落点（ADR 0005）。0 = 末尾（默认，即追加）；正数从**尾**往内数（+1 = 最后一个之前，
     /// +len = 头部）；负数从**头**往内数（-1 = 头部）。域外由渲染器拒收，见 `append_index`。
     ///
@@ -99,7 +104,7 @@ pub fn append_index(len: usize, position: i64) -> Option<usize> {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct RemoveOp {
-    pub event: String,
+    pub slot: String,
     pub id: String,
 }
 
@@ -117,7 +122,7 @@ pub enum PatchKind {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PatchOp {
-    pub event: String,
+    pub slot: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     /// JSON Pointer (RFC 6901) into the target node's WIRE shape — the
@@ -135,19 +140,20 @@ pub struct PatchOp {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct InjectOp {
     pub slot: String,
+    /// 另起的名字（缺省 = 槽名）。目标仍是 `slot`；`name` 只在"这次写入要冒充另一个名字"时写。
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub event: Option<String>,
+    pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub data: Value,
 }
 
 impl InjectOp {
-    /// The wrapper the slot receives. `event` defaults to the slot name — the
+    /// The wrapper the slot receives. `name` defaults to the slot name — the
     /// same rule `BindVariant::Local` follows (the slot is the channel).
     pub fn outflow(&self) -> Outflow {
         Outflow {
-            event: self.event.clone().unwrap_or_else(|| self.slot.clone()),
+            dest: self.name.clone().unwrap_or_else(|| self.slot.clone()),
             id: self.id.clone(),
             data: self.data.clone(),
         }
@@ -162,7 +168,9 @@ pub struct InfluxTmpl {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Influx<T> {
-    pub event: String,
+    /// `create` addresses the layout root with `slot: ""` (the same convention
+    /// `patch` uses); `set` names a data slot.
+    pub slot: String,
     pub data: T,
 }
 

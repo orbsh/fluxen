@@ -3,7 +3,7 @@
 # rail 只收 kind=message、发 pin；trash 只收 kind=note——这次拖的
 # 两个都配不上它，落上去等于没落。同页多落点靠事件名分开，不用额外寻址。
 action: create
-event: ""
+slot: ""
 data:
   type: case
   attrs:
@@ -66,8 +66,8 @@ data:
       - message
     bind:
       value:
-        kind: event
-        event: pin
+        kind: dest
+        dest: pin
   - type: dock
     id: trash
     attrs:
@@ -78,5 +78,5 @@ data:
       - note
     bind:
       value:
-        kind: event
-        event: archive
+        kind: dest
+        dest: archive

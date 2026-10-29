@@ -145,26 +145,26 @@ impl Ctx {
             .set(Some(Arc::new(accrete)));
     }
 
-    /// emit 统一落点（ADR 0008，形状修订见 ADR 0010）：`Event` 上行
-    /// transport（现状不变），`Local` 不上行——写入 local 平面具名值槽
-    /// 的载荷是与上行同形的包装对象 `Outflow {event, id?, data}`：事件
-    /// 数据形状由事件定义、不由落点决定（同一事件从 event 改绑 local，
-    /// 订阅方 path/键零改动）。`event` 名取 `Local.event`，缺省 = 槽名
+    /// emit 统一出口（ADR 0008，形状修订见 ADR 0010/0023）：`Dest` 上行
+    /// transport（送进宿主的一个目标），`Local` 不上行——写入 local 平面具名值槽
+    /// 的载荷是与上行同形的包装对象 `Outflow {dest, id?, data}`：载荷
+    /// 形状由接收方定义、不由方向决定（同一次上行从远端改绑 local，
+    /// 订阅方 path/键零改动）。包装里的 dest 取 `Local.name`，缺省 = 槽名
     /// （槽即频道）。发射侧忽略自己的 `path` 字段（写必整值——指针提取
     /// 是订阅侧的事）。其他变体返回 false，调用方保持自己的兜底。
     pub fn emit(&self, variant: &accrete::BindVariant, id: Option<String>, payload: Value) -> bool {
         match variant {
-            accrete::BindVariant::Event { event } => {
-                let event = event.clone();
+            accrete::BindVariant::Dest { dest: landed } => {
+                let landed = landed.clone();
                 let ctx = self.clone();
                 leptos::task::spawn_local(async move {
-                    ctx.send(event, id, payload).await;
+                    ctx.send(landed, id, payload).await;
                 });
                 true
             }
-            accrete::BindVariant::Local { slot, event, .. } => {
+            accrete::BindVariant::Local { slot, name, .. } => {
                 let wrapped = to_value(&content::Outflow {
-                    event: event.clone().unwrap_or_else(|| slot.clone()),
+                    dest: name.clone().unwrap_or_else(|| slot.clone()),
                     id,
                     data: payload,
                 })
@@ -235,7 +235,7 @@ impl Ctx {
 
 fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
     // 每帧就是动作列表：没有消息级 `ev`，也就没有"这帧是不是给我"的闸
-    // （ADR 0021 决策 6——信封连同它的 ev 归宿主）。`Influx.event` 是数据槽名，
+    // （ADR 0021 决策 6——信封连同它的 ev 归宿主）。`Influx.slot` 是数据槽名，
     // 属渲染内部寻址，与帧的形状无关。
     for c in actions {
         match c {
@@ -262,7 +262,7 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 for w in d.expand(&env) {
                     tracing::warn!("{w}");
                 }
-                ctx.slot_for_data(&x.event).set(Some(Arc::new(d)));
+                ctx.slot_for_data(&x.slot).set(Some(Arc::new(d)));
             }
             Content::Append(x) => {
                 let mut d = x.data.clone();
@@ -272,7 +272,7 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 }
                 // untracked 读：dispatch_msg 运行在消费 frame 的 Effect 里，
                 // tracked 读会让 Effect 订阅自己写入的槽 → 自激循环。
-                let slot = ctx.slot_for_list(&x.event);
+                let slot = ctx.slot_for_list(&x.slot);
                 let cur = slot.get_untracked();
                 let mut list = std::sync::Arc::unwrap_or_clone(cur);
                 // 行身份在数据里（ADR 0005：`data.id`）；空串 id = 位置行
@@ -284,7 +284,7 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                     if list.iter().any(|i| i.get_id().as_deref() == Some(id.as_str())) {
                         tracing::warn!(
                             "append rejected: event {:?} already has row id {:?}",
-                            x.event,
+                            x.slot,
                             id
                         );
                         continue;
@@ -295,7 +295,7 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 let Some(spot) = content::append_index(list.len(), x.position) else {
                     tracing::warn!(
                         "append rejected: event {:?} has {} rows, position {} is out of range",
-                        x.event,
+                        x.slot,
                         list.len(),
                         x.position
                     );
@@ -305,7 +305,7 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 slot.set(Arc::new(list));
             }
             Content::Remove(x) => {
-                let slot = ctx.slot_for_list(&x.event);
+                let slot = ctx.slot_for_list(&x.slot);
                 let cur = slot.get_untracked();
                 let mut list = std::sync::Arc::unwrap_or_clone(cur);
                 let before = list.len();
@@ -313,13 +313,13 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 if list.len() != before {
                     slot.set(Arc::new(list));
                 } else {
-                    tracing::warn!("remove: event {:?} has no row id {:?}", x.event, x.id);
+                    tracing::warn!("remove: slot {:?} has no row id {:?}", x.slot, x.id);
                 }
             }
             Content::Patch(x) => {
                 // 平面路由（ADR 0005）："" = layout 根；id 设 = 列表行；
                 // 其余 = 具名数据槽。
-                let result = if x.event.is_empty() {
+                let result = if x.slot.is_empty() {
                     let mut d = ctx.layout.get_untracked();
                     let r = apply_patch(&mut d, x);
                     // 写回 layout 信号，否则响应式根（lib.rs tracked get）永不重建
@@ -328,7 +328,7 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                     }
                     r
                 } else if let Some(id) = &x.id {
-                    let slot = ctx.slot_for_list(&x.event);
+                    let slot = ctx.slot_for_list(&x.slot);
                     let cur = slot.get_untracked();
                     let mut list = std::sync::Arc::unwrap_or_clone(cur);
                     let r = match list
@@ -336,14 +336,14 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                         .find(|i| i.get_id().as_deref() == Some(id.as_str()))
                     {
                         Some(row) => apply_patch(row, x),
-                        None => Err(format!("no row {id:?} in {:?}", x.event)),
+                        None => Err(format!("no row {id:?} in {:?}", x.slot)),
                     };
                     if r.is_ok() {
                         slot.set(Arc::new(list));
                     }
                     r
                 } else {
-                    let slot = ctx.slot_for_data(&x.event);
+                    let slot = ctx.slot_for_data(&x.slot);
                     match slot.get_untracked().map(|a| std::sync::Arc::unwrap_or_clone(a)) {
                         Some(mut d) => {
                             let r = apply_patch(&mut d, x);
@@ -352,7 +352,7 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                             }
                             r
                         }
-                        None => Err(format!("no data slot {:?}", x.event)),
+                        None => Err(format!("no data slot {:?}", x.slot)),
                     }
                 };
                 if let Err(e) = result {

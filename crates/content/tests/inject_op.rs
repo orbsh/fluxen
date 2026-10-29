@@ -16,7 +16,7 @@ fn decodes_with_slot_and_payload_only() {
     };
     assert_eq!(op.slot, "page");
     assert_eq!(op.data, json!("about"));
-    assert_eq!(op.event, None);
+    assert_eq!(op.name, None);
     assert_eq!(op.id, None);
 }
 
@@ -31,38 +31,38 @@ fn carries_no_t_so_any_plane_type_can_hold_it() {
 }
 
 #[test]
-fn event_defaults_to_the_slot_name() {
+fn name_defaults_to_the_slot_name() {
     let op = InjectOp {
         slot: "page".into(),
-        event: None,
+        name: None,
         id: None,
         data: json!("about"),
     };
     assert_eq!(
         serde_json::to_value(op.outflow()).unwrap(),
-        json!({"event": "page", "data": "about"})
+        json!({"dest": "page", "data": "about"})
     );
 }
 
 #[test]
-fn explicit_event_and_id_pass_through() {
+fn explicit_name_and_id_pass_through() {
     let op = InjectOp {
         slot: "page".into(),
-        event: Some("channel::select".into()),
+        name: Some("channel::select".into()),
         id: Some("tab1".into()),
         data: json!("2"),
     };
     assert_eq!(
         serde_json::to_value(op.outflow()).unwrap(),
-        json!({"event": "channel::select", "id": "tab1", "data": "2"})
+        json!({"dest": "channel::select", "id": "tab1", "data": "2"})
     );
 }
 
 #[test]
-fn absent_event_and_id_are_omitted_on_the_wire() {
+fn absent_name_and_id_are_omitted_on_the_wire() {
     let op = InjectOp {
         slot: "page".into(),
-        event: None,
+        name: None,
         id: None,
         data: json!("about"),
     };
@@ -76,16 +76,16 @@ fn absent_event_and_id_are_omitted_on_the_wire() {
 
 #[test]
 fn structural_payloads_keep_their_shape() {
-    // Not just scalars: a local event's payload can be any JSON, and the
-    // wrapper must not reshape it (ADR 0010: shape is defined by the event).
+    // Not just scalars: a local emit's payload can be any JSON, and the
+    // wrapper must not reshape it (ADR 0010: shape is defined by the receiver).
     let op = InjectOp {
         slot: "filters".into(),
-        event: None,
+        name: None,
         id: None,
         data: json!({"dept": ["研发部", "市场部"], "range": [0, 5]}),
     };
     assert_eq!(
         serde_json::to_value(op.outflow()).unwrap(),
-        json!({"event": "filters", "data": {"dept": ["研发部", "市场部"], "range": [0, 5]}})
+        json!({"dest": "filters", "data": {"dept": ["研发部", "市场部"], "range": [0, 5]}})
     );
 }

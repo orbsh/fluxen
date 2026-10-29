@@ -1,11 +1,11 @@
 action: append
-event: chat
+slot: chat
 data:
   type: form
   bind:
     value:
-      kind: event
-      event: confirm
+      kind: dest
+      dest: confirm
   attrs:
     class:
     - gap
@@ -22,8 +22,8 @@ data:
   - type: text
     bind:
       value:
-        kind: event
-        event: test
+        kind: dest
+        dest: test
   - type: case
     attrs:
       class:

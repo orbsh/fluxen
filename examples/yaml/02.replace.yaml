@@ -2,7 +2,7 @@
 # frame replaces the cell's whole value (op: replace — not the retired
 # positional Replace-merge). Send the row once, then re-send repeatedly.
 - action: append
-  event: chat
+  slot: chat
   data:
     type: case
     id: s2
@@ -24,7 +24,7 @@
           kind: default
           default: old
 - action: patch
-  event: chat
+  slot: chat
   id: s2
   path: /children/0/bind/value/default
   op: replace

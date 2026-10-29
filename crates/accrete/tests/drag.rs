@@ -49,21 +49,21 @@ fn grab_may_be_a_bare_wrapper() {
 }
 
 #[test]
-fn dock_owns_the_event_name_and_the_landing_id() {
+fn dock_owns_the_dest_and_the_landing_id() {
     let wire = json!({
         "type": "dock",
         "id": "rail",
-        "bind": { "value": { "kind": "event", "event": "pin" } }
+        "bind": { "value": { "kind": "dest", "dest": "pin" } }
     });
     let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
     match &node {
         Accrete::dock(d) => {
             assert_eq!(d.id.as_deref(), Some("rail"));
-            // 落点由事件名 + 帧的 id（dock 自己）确定；不另带元数据。
+            // 落点由上行槽名 + 帧的 id（dock 自己）确定；不另带元数据。
             let value = d.bind.as_ref().unwrap().get("value").unwrap();
             assert!(matches!(
                 &value.variant,
-                accrete::BindVariant::Event { event } if event == "pin"
+                accrete::BindVariant::Dest { dest: landed } if landed == "pin"
             ));
         }
         other => panic!("expected dock, got {other:?}"),

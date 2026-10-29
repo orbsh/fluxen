@@ -76,14 +76,14 @@ nu -c 'use x.nu *; send 02.concat.yaml'
 python3 examples/push_demo.py
 ```
 
-Frames must carry the render channel: top-level `"ev": "draw"` (see
-docs/decisions/0003-ev-channel.md). Non-draw frames are ignored by the UI.
+A frame is the action list itself — a JSON (or CBOR) array, nothing wrapped around it
+(ADR 0021 decision 6). An envelope-shaped object is refused by name, not ignored.
 
 To stream updates against a running layout, use `/raw` in the console,
 e.g. a chat token append onto row `m1` (JSON Pointer into the row's wire shape):
 
 ```
-/raw {"ev":"draw","sender":"demo","content":[{"action":"patch","event":"chat","id":"m1","path":"/bind/value/default","op":"append","value":"hello "}]}
+/raw [{"action":"patch","slot":"chat","id":"m1","path":"/bind/value/default","op":"append","value":"hello "}]
 ```
 
 Rows streamed into a rack should carry `id` — row identity (patch addressing

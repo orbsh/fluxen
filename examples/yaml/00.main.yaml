@@ -12,7 +12,7 @@
 # 图的数据由后续帧继续喂（整份快照，按 id 求差量）：本文件只铺 crate 层，
 # 让左栏第一屏就有东西可看。
 - action: create
-  event: ""
+  slot: ""
   data:
     type: case
     attrs:
@@ -95,8 +95,8 @@
             id: test
             bind:
               value:
-                kind: event
-                event: message
+                kind: dest
+                dest: message
     # ---- 右侧窄轨：拖拽的落点（ADR 0019）------------------------------------
     # 气泡里的单元往这边一拖就成一条 pin。落点贴在窗口右边缘，常态一条细条，
     # 拖拽在飞时展开；`--rail` 让它向左长，否则长到屏幕外（custom.css）。
@@ -110,12 +110,12 @@
         - snippet
       bind:
         value:
-          kind: event
-          event: pin
+          kind: dest
+          dest: pin
 
 # ---- 图的初始快照：crate 层 --------------------------------------------------
 - action: set
-  event: graph
+  slot: graph
   data:
     type: group
     bind:

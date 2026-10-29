@@ -1,5 +1,5 @@
 action: create
-event: ""
+slot: ""
 data:
   type: case
   children:

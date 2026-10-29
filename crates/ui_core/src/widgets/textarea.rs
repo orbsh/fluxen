@@ -4,7 +4,7 @@ use accrete::TextArea;
 use leptos::ev;
 use leptos::html::*;
 use leptos::prelude::*;
-use serde_json::{Value, to_value};
+use serde_json::Value;
 use wasm_bindgen::JsCast;
 
 /// 多行输入：初值取 `bind["value"]`（Source/Local/default 统一经

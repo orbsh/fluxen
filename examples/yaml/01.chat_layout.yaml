@@ -1,5 +1,5 @@
 action: create
-event: ""
+slot: ""
 data:
   attrs:
     class:
@@ -49,8 +49,8 @@ data:
           - nogrow
         bind:
           value:
-            kind: event
-            event: channel::select
+            kind: dest
+            dest: channel::select
             default: "2"
           options:
             kind: source
@@ -151,6 +151,6 @@ data:
           - type: input
             bind:
               value:
-                kind: event
-                event: message
+                kind: dest
+                dest: message
 

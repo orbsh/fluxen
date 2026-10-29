@@ -168,7 +168,7 @@ pub fn use_target<'a>(
         .and_then(|x| x.get(key))
         .map(|b| b.variant.clone())?;
     match variant {
-        BindVariant::Event { .. } | BindVariant::Local { .. } => {
+        BindVariant::Dest { .. } | BindVariant::Local { .. } => {
             // 发射节点自身的 id 随事件走（ADR 0010 的 `id`）——闭包按值捕获，
             // 故在这里算好。
             let id = node_id(accrete);
