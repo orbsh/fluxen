@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-transport = { path = "../transport" }
-content = { path = "../content" }
+transport = { workspace = true }
+content = { workspace = true }
 futures = "0.3.32"
 gloo-net = "0.7.0"
 serde_json.workspace = true

@@ -4,7 +4,7 @@
 #   wasm-bindgen --target web --out-dir pkg \
 #     target/wasm32-unknown-unknown/release/browser3d.wasm
 # pkg/ 目录内容（browser3d.js + browser3d_bg.wasm）与本目录的 index.js 一起
-# 拷进 crates/ui_leptos/assets/3dbrowser/（该目录不入 git），Canvas 组件的
+# 拷进 examples/renderer/assets/3dbrowser/（该目录不入 git），Canvas 组件的
 # url 指向 index.js。
 [workspace]
 

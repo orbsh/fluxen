@@ -1,5 +1,5 @@
 # Canvas 示例（ADR 0007）：splatviewer 模块——高斯泼溅场景展示。
-# 前置：模块在 crates/ui_leptos/assets/splatviewer/（纯 JS，无构建，配方见
+# 前置：模块在 examples/renderer/assets/splatviewer/（纯 JS，无构建，配方见
 # examples/modules/splatviewer/index.js 头注释）；布局侧先发 00.main.yaml +
 # 00.chat.yaml。泼溅素材 truck.ksplat / bonsai.ksplat 来自
 # GaussianSplats3D 官方演示数据（INRIA 3DGS 数据集场景，演示用途随仓库分发，

@@ -10,7 +10,7 @@
 // 单场景展示（最新 key 生效，重复发送同 URL 幂等跳过）。three.js 与
 // @mkkellogg/gaussian-splats-3d 走 CDN（esm.sh）**按需加载**——模块求值本身
 // 零下载，库到 mount() 才拉；本模块零构建。
-// 产物部署：本文件复制到 crates/ui_leptos/assets/splatviewer/index.js 即可
+// 产物部署：本文件复制到 examples/renderer/assets/splatviewer/index.js 即可
 // （模块纯 JS，无 wasm 产物）。
 
 // 宿主经动态 import 加载本模块，import() 的相对说明符按本文件 URL 解析，

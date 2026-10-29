@@ -2,7 +2,7 @@
 """Cut a renderer release out of a trunk build: four files, a manifest, and a tarball.
 
     python3 scripts/ui_dist.py                  # build, then assemble into dist-release/
-    python3 scripts/ui_dist.py --no-build       # assemble whatever crates/ui_leptos/dist holds
+    python3 scripts/ui_dist.py --no-build       # assemble whatever examples/renderer/dist holds
     python3 scripts/ui_dist.py --tag v0.1.0 --out /tmp/rel
 
 What ships, and what deliberately does not:
@@ -38,7 +38,7 @@ import sys
 import tarfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-DIST = ROOT / "crates" / "ui_leptos" / "dist"
+DIST = ROOT / "examples" / "renderer" / "dist"
 OUT = ROOT / "dist-release"
 CSS = ("assets/main.css", "assets/custom.css")
 
@@ -53,25 +53,29 @@ def sh(*args: str, cwd: pathlib.Path = ROOT) -> str:
 
 def build() -> None:
     """`trunk build --release` — the only build path this script knows."""
-    print(f"[dist] trunk build --release in crates/ui_leptos (trunk {sh('trunk', '--version')})", flush=True)
-    out = subprocess.run(["trunk", "build", "--release"], cwd=ROOT / "crates" / "ui_leptos")
+    print(f"[dist] trunk build --release in examples/renderer (trunk {sh('trunk', '--version')})", flush=True)
+    out = subprocess.run(["trunk", "build", "--release"], cwd=ROOT / "examples" / "renderer")
     if out.returncode != 0:
         raise SystemExit("[dist] trunk failed — see its output above")
 
 
 def entry_names(dist: pathlib.Path) -> tuple[str, str]:
-    """(js, wasm) as trunk emitted them: the wasm is `*_bg.wasm`, the glue shares its stem."""
+    """(js, wasm) as trunk emitted them.
+
+    The two file names are found independently, not derived from a shared stem: trunk hashes
+    each artifact on its own, and which naming a build produces is the TOOL's business, not
+    ours (0.21.14 emitted one stem for both, 0.22.0 does not). Exactly one of each in the dist
+    is what makes it a release — a stale dist holding two builds is refused.
+    """
     wasms = sorted(dist.glob("ui_leptos-*_bg.wasm"))
-    if len(wasms) != 1:
+    js = sorted(p for p in dist.glob("ui_leptos-*.js") if not p.name.endswith("_bg.wasm"))
+    if len(wasms) != 1 or len(js) != 1:
         raise SystemExit(
-            f"[dist] expected exactly one ui_leptos-*_bg.wasm in {dist}, found {len(wasms)}"
+            f"[dist] expected exactly one ui_leptos-*.js and one ui_leptos-*_bg.wasm in {dist},"
+            f" found {[p.name for p in js]} + {[p.name for p in wasms]}"
             " — a stale dist with two builds is not a release"
         )
-    wasm = wasms[0]
-    js = wasm.with_name(wasm.name[: -len("_bg.wasm")] + ".js")
-    if not js.exists():
-        raise SystemExit(f"[dist] {js.name} is missing next to {wasm.name}")
-    return js.name, wasm.name
+    return js[0].name, wasms[0].name
 
 
 def digest(path: pathlib.Path) -> str:
@@ -110,7 +114,7 @@ def write(out: pathlib.Path, files: list[tuple[str, pathlib.Path]], tag: str, re
         "renderer": "fluxen",
         "tag": tag,
         "rev": rev,
-        "built": "trunk build --release (crates/ui_leptos)",
+        "built": "trunk build --release (examples/renderer)",
         "entry": {"js": js, "wasm": wasm},
         "files": {},
     }
@@ -145,7 +149,7 @@ def write(out: pathlib.Path, files: list[tuple[str, pathlib.Path]], tag: str, re
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="ui_dist", description="Cut a renderer release from a trunk build.")
-    ap.add_argument("--no-build", action="store_true", help="use crates/ui_leptos/dist as it stands")
+    ap.add_argument("--no-build", action="store_true", help="use examples/renderer/dist as it stands")
     ap.add_argument("--out", default=str(OUT), help=f"where to assemble (default: {OUT.relative_to(ROOT)})")
     ap.add_argument("--tag", default=None, help="release tag (default: the exact git tag, else `dev`)")
     ap.add_argument("--rev", default=None, help="commit the bundle was built from (default: HEAD)")

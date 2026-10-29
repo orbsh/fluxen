@@ -1,0 +1,31 @@
+# The package name is historical (it was the renderer crate before the split).
+# It is NOT renamed with the move: the artifact filenames are `ui_leptos-<hash>.js/_bg.wasm`,
+# and reflux pins exactly those under www/static/vendor/fluxen/ — a rename is a cross-repo
+# re-pin, not a path edit. Naming is recorded in docs/decisions/0021-external-integration.md.
+[package]
+name = "ui_leptos"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib"]
+
+# The reference boot: page shell + WS wiring + the JS uplink handle. Rendering
+# lives in `ui-core`; nothing here is a library a consumer depends on (see
+# docs/decisions/0021-external-integration.md, the 归属 section).
+[dependencies]
+ui-core = { workspace = true }
+content.workspace = true
+transport.workspace = true
+transport-ws.workspace = true
+console_error_panic_hook.workspace = true
+js-sys.workspace = true
+leptos.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-wasm.workspace = true
+wasm-bindgen.workspace = true
+web-sys.workspace = true
+
+[lints]
+workspace = true

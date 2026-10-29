@@ -867,7 +867,7 @@ checksum = "3e0f1c7c3a72c66fd80abe965175f7523475c0489a87d3ff9d6e8c87d87a9d2d"
 name = "fluxen"
 version = "0.1.0"
 dependencies = [
- "ui_leptos",
+ "ui-core",
 ]
 
 [[package]]
@@ -3258,17 +3258,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "ui_leptos"
+name = "ui-core"
 version = "0.1.0"
 dependencies = [
  "accrete",
- "anyhow",
  "ciborium",
- "console_error_panic_hook",
  "content",
  "forcegraph",
  "futures",
- "gloo-net 0.7.0",
  "itertools",
  "js-sys",
  "leptos",
@@ -3277,12 +3274,28 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
- "tracing-wasm",
  "transport",
- "transport-ws",
  "ui_leptos_macro",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "ui_leptos"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "content",
+ "js-sys",
+ "leptos",
+ "serde_json",
+ "tracing",
+ "tracing-wasm",
+ "transport",
+ "transport-ws",
+ "ui-core",
+ "wasm-bindgen",
  "web-sys",
 ]
 

@@ -8,7 +8,7 @@
 // https://unpkg.com/@antv/g2@5.4.8/dist/g2.min.js
 // sha256 7e7d346cab68c002a889dc6145bfc1f9ae1391be82ce8d514fb106ef3a6e6412
 // （2026-10-10 由本机那份文件反查补记：仓库原先没记版本）；本目录整体
-// 拷入 crates/ui_leptos/assets/g2chart/（.gitignore，配方在此注释）。
+// 拷入 examples/renderer/assets/g2chart/（.gitignore，配方在此注释）。
 // 容器镜像按这条配方自动装配（Dockerfile：ENV G2_VERSION + sha256sum -c）。
 import { decode } from "./cbor.js";
 

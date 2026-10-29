@@ -50,23 +50,25 @@ ADR 0008 §5 立过一条：「组件内瞬态交互（hover/focus/drag）：无
      不高亮）。
 
    `bind["value"]` 为 `Event { event }` 或 `Local { slot }`——**事件名与落点身份在这一侧
-   定义**，于是多个 dock 天然可分（不同 dock 绑不同事件名即可）。同一条 bind 的 `default`
-   在这条 bind 上不表示初值，而是**落点元数据**，随帧上行成 `meta`。名字说的是位置。
+   定义**，于是多个 dock 天然可分：事件名不同就是不同的落点，帧的 `id` 是哪个 dock 收的。
+   名字说的是位置。
 
 3. **上行一帧，由 `dock` 发射**：
    ```
    Outflow { event: <dock 的事件名>, id: <dock 的 id>,
-             data: { item?: <grab 的 id>, kind?: <grab 的 kind>,
-                     payload?: <grab 的 payload>, meta?: <dock 的 bind.default> } }
+             data: { id?: <grab 的 id>, kind?: <grab 的 kind>, payload?: <grab 的 payload> } }
    ```
-   空即无（ADR 0012）。由落点发射的三条理由：drop 事件本来就落在 dock 的 DOM 上，emit
-   就在处理它的那个函数里，不需要跨组件回调；帧的 `id` 惯例是「发射节点自己的 id」，于是
-   它等于落点，正好对上宿主按事件名注册的那一侧；「被拖来的是什么」是货物不是地址，进
-   `data`（`forcegraph` 的 `node-click` 已是同款：实体信息全在 `data`）。
+   空即无（ADR 0012）。**`data` 里不换名**：`grab.id` 就叫 `id`。帧外层那个 `id` 是
+   发射节点（落点）的，`data` 是自由对象，两者不冲突——对面看到的名字和发出去的名字
+   是同一个，后端不需要为同一件东西定义两套字段。
+   由落点发射的三条理由：drop 事件本来就落在 dock 的 DOM 上，emit 就在处理它的那个函数
+   里，不需要跨组件回调；帧的 `id` 惯例是「发射节点自己的 id」，于是它等于落点，正好对上
+   宿主按事件名注册的那一侧；「被拖来的是什么」是货物不是地址，进 `data`（`forcegraph`
+   的 `node-click` 已是同款：实体信息全在 `data`）。
    `Local` 绑定时写进槽的包装与上行同形（ADR 0010），所以整条链可以纯前端闭合。
 
 4. **页面级拖拽会话（`Ctx.drag`，只在本页内存，不上线）**：`dragstart` 把 `grab` 的
-   货物（`item`／`kind`／`payload`）放进会话，`dragend` 清空；`dock` 在 `dragenter`／
+   货物（`id`／`kind`／`payload`）放进会话，`dragend` 清空；`dock` 在 `dragenter`／
    `dragover` 里按自己的 `accept` 判断并 `preventDefault`（只挡其中一个，浏览器仍会
    把这次释放当成「不可落」，drop 根本不触发）；`drop` 取出会话里的货物、组帧发出、清空
    会话。落点不需要在会话里登记自己——drop 事件落在它的 DOM 上，自己的处理器里就有 id、

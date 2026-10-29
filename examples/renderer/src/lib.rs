@@ -1,21 +1,21 @@
 
+//! ui-leptos — the REFERENCE BOOT: page shell + WS wiring + the JS uplink handle.
+//!
+//! Everything that is rendering lives in `ui-core`; what stays here is the part a host is free to
+//! replace, and this crate is one such host (ours): read `#main`, open the socket, hand the page a
+//! `window.fluxen.send` handle. A host that wraps the core in its own binary (prism) writes its own
+//! boot and never depends on this crate — the ownership rule is
+//! `docs/decisions/0021-external-integration.md` 「归属」.
+
 // Unit tests may use the unwrap/panic vocabulary the production targets are
 // denied (a panicking test is a failing test). `cfg(test)` is on only for this
 // crate's own test build; `tests/` crates set the same line at their own root.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn))]
-pub mod ctx;
-pub mod dom;
-pub mod hooks;
-pub mod render;
-
-pub mod components;
-pub mod widgets;
-
-pub use ctx::Ctx;
 use leptos::prelude::Get;
 
 use content::codec::{ActiveCodec, CodecType};
 use serde_json::Value;
+use ui_core::Ctx;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
@@ -107,7 +107,7 @@ pub fn mount() -> Result<(), String> {
         // 响应式根：仅当 layout 变化时重建
         move || {
             let layout = ctx.layout.get();
-            render::dispatch(&layout, &ctx)
+            ui_core::render::dispatch(&layout, &ctx)
         }
     })
     .forget();

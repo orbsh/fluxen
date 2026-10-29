@@ -12,7 +12,7 @@
 # 见 examples/modules/forcegraph/index.js 的 DEFAULTS）。想换配色就加 palette，
 # 想换整个渲染器就换 url——DSL 形状不变。
 #
-# 前置：模块产物在 crates/ui_leptos/assets/forcegraph/（index.js + cbor.js +
+# 前置：模块产物在 examples/renderer/assets/forcegraph/（index.js + cbor.js +
 # 3d-force-graph.min.js，装配见 Dockerfile / 模块头注释；同源缺件时模块自己回落
 # unpkg 的钉版本 CDN）。布局侧先发 00.main.yaml + 00.chat.yaml。
 

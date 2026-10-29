@@ -26,14 +26,14 @@ AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set
 - `GET /cli` —— 程序化 peer（console、curl-ws、你自己的工具）
 - `POST /send` —— 请求体为 KDL；解析成 `Content::Create` 帧后广播
 - 其余路径 —— UI 本体：启动时若 trunk 端口（默认 8281）可达则反向代理过去，
-  否则静态托管 trunk 产物目录（默认 `crates/ui_leptos/dist`）。探测仅看 TCP
+  否则静态托管 trunk 产物目录（默认 `examples/renderer/dist`）。探测仅看 TCP
   且一次定终身（sticky）——先起 trunk 再起 stage；中途启动 trunk 需重启 stage。
 
 启动后直接打开 <http://localhost:3002/>：
 
 ```
 cargo run -p stage -- serve            # 镜像 + UI + console，单进程
-cargo run -p stage -- serve --trunk 8281 --dist crates/ui_leptos/dist   # 显式指定
+cargo run -p stage -- serve --trunk 8281 --dist examples/renderer/dist   # 显式指定
 ```
 
 UI 的 WS 地址默认取页面 origin，无需配置。接收侧逐帧自适应识别编码（首字节
@@ -91,7 +91,7 @@ cargo run -p stage -- schema                                # Accrete 线上形�
 
 ```
 python3 scripts/ui_dist.py            # 构建，然后装配到 dist-release/
-python3 scripts/ui_dist.py --no-build # 装配已有的 crates/ui_leptos/dist
+python3 scripts/ui_dist.py --no-build # 装配已有的 examples/renderer/dist
 ```
 
 打 `v*` tag 时 CI 跑同一个脚本（`.github/workflows/ui-release.yml`），发布：

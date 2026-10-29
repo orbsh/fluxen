@@ -16,6 +16,11 @@ Design: [Fluxora 架构](https://github.com/orbsh/wiki/blob/main/projects/fluxor
 
 Rendering layer only — no event bus, no gateway, no transport. Upstream (Prism / Aura realm / any producer) sends Accrete operations; Fluxen renders and applies them. The thick-shell principle stays: AI generates schema-validated structured JSON (content + structure), the framework owns styling and rendering determinism.
 
+Integrating it into a host (a gateway that re-wraps the core, or a server that serves a pinned
+bundle) is a documented contract, not folklore: [docs/external-integration.md](docs/external-integration.md)
+(English) · [中文](docs/external-integration.zh-CN.md). The rule it states: the renderer never adapts
+to a host — the host supplies a transport and a boot and speaks the renderer's wire.
+
 ## Dev workflow (`stage`)
 
 `stage` is the dev gateway: a WS mirror + console REPL + UI server, so the
@@ -31,14 +36,14 @@ Endpoints once running (default port 3002):
   create/set/append/patch/remove/tmpl files are all first-class
 - everything else — the UI itself: reverse-proxyed to `trunk serve` when its
   port (default 8281) is up at startup, otherwise served statically from the
-  trunk dist dir (default `crates/ui_leptos/dist`). Probe is TCP-only and
+  trunk dist dir (default `examples/renderer/dist`). Probe is TCP-only and
   sticky — restart `stage serve` after starting trunk.
 
 Start and open <http://localhost:3002/>:
 
 ```
 cargo run -p stage -- serve            # mirror + UI + console, one process
-cargo run -p stage -- serve --trunk 8281 --dist crates/ui_leptos/dist   # override
+cargo run -p stage -- serve --trunk 8281 --dist examples/renderer/dist   # override
 ```
 
 The UI's WS host defaults to the page origin, so no `?token`-style config is
@@ -112,7 +117,7 @@ The renderer ships as release assets, so a host needs neither this repo nor `tru
 
 ```
 python3 scripts/ui_dist.py            # build, then assemble into dist-release/
-python3 scripts/ui_dist.py --no-build # assemble an existing crates/ui_leptos/dist
+python3 scripts/ui_dist.py --no-build # assemble an existing examples/renderer/dist
 ```
 
 A `v*` tag runs the same script in CI (`.github/workflows/ui-release.yml`) and publishes:
