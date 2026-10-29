@@ -7,7 +7,7 @@
 //! 落点（`dock_`）——手势归浏览器，那一帧归落点。
 
 use crate::Ctx;
-use crate::ctx::{DragCargo, render_children};
+use crate::ctx::render_children;
 use accrete::Grab;
 use leptos::html::*;
 use leptos::prelude::*;
@@ -16,25 +16,19 @@ pub fn grab_(accrete: Grab, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let drag = ctx.drag;
 
-    // 货物与标签都是字面值（ADR 0019 决策 7：不进模板的共享面，每行各带一份），
-    // 所以在渲染期读一次就够。身份用 grab 自己的 id——它同时是 rack 的行键，
-    // 空的 id 按无身份处理（与 node_id 同一约定）。
-    let cargo = DragCargo {
-        item: accrete.id.clone().filter(|s| !s.is_empty()),
-        kind: accrete.kind.clone(),
-        payload: accrete.payload.clone(),
-    };
-
+    // 会话里放的就是这个节点本身：id／kind／payload 不复制第二份，否则两份迟早
+    // 对不上（ADR 0019）。节点在渲染期读一次就够——这几个字段都是字面值。
+    let node = accrete.clone();
     let on_start = {
-        let cargo = cargo.clone();
+        let node = node.clone();
         move |ev: web_sys::DragEvent| {
             // Firefox 不在 dataTransfer 里写东西就不认这次拖；货物本身走会话，
             // 不塞 dataTransfer（那儿只放一个能看的标签）。
             if let Some(dt) = ev.data_transfer() {
                 dt.set_effect_allowed("move");
-                let _ = dt.set_data("text/plain", cargo.kind.as_deref().unwrap_or("item"));
+                let _ = dt.set_data("text/plain", node.kind.as_deref().unwrap_or("item"));
             }
-            drag.set(Some(cargo.clone()));
+            drag.set(Some(node.clone()));
         }
     };
     let on_end = move |_ev: web_sys::DragEvent| drag.set(None);

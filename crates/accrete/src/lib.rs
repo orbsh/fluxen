@@ -1031,8 +1031,8 @@ pub struct Dock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<DockAttr>,
     /// `bind["value"]`：`event` 上行（事件名就是这里的名字），或 `local` 写槽
-    /// （包装与上行同形，ADR 0010）。`default` 在这条 bind 上是落点元数据，随帧
-    /// 上行成 `meta`。
+    /// （包装与上行同形，ADR 0010）。带什么货由源（`grab`）给，落点不再附加任何
+    /// 元数据——事件名与帧的 `id` 已经唯一确定是哪个落点。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]

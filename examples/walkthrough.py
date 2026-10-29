@@ -630,7 +630,7 @@ def main():
     step.wait(
         "气泡里那枚「≡ 把「分析引言」拖到右边」是一个单元，不是装饰：按住它拖到窗口右边缘"
         "那条窄轨（拖拽在飞时它自己展开），松手 → stage 控制台出现 `<- pin`，带落点 id、"
-        "{item, kind, payload, meta}；同一件货往别处拖什么也不会发生（那条轨只收 snippet）"
+        "{id, kind, payload}；同一件货往别处拖什么也不会发生（那条轨只收 snippet）"
     )
 
     step.wait("两个图表入场（发 00.radar.yaml 的 set 帧：折线 spec + 三个雷达 spec）")

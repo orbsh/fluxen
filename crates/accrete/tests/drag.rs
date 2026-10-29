@@ -1,7 +1,7 @@
 //! ADR 0019 wire shapes: `grab` (the source) and `dock` (the landing side).
 //! Both are ordinary internal-tagged nodes. The source is a plain wrapper that
-//! carries a `kind` tag and one `payload`; the landing side owns the event name,
-//! the landing id, the meta, and which kinds it accepts.
+//! carries a `kind` tag and one `payload`; the landing side owns the event name
+//! and which kinds it accepts.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use accrete::{Accrete, DockExpand};
@@ -53,21 +53,18 @@ fn dock_owns_the_event_name_and_the_landing_id() {
     let wire = json!({
         "type": "dock",
         "id": "rail",
-        "bind": {
-            "value": {
-                "kind": "event",
-                "event": "pin",
-                "default": { "rail": "engineering" }
-            }
-        }
+        "bind": { "value": { "kind": "event", "event": "pin" } }
     });
     let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
     match &node {
         Accrete::dock(d) => {
             assert_eq!(d.id.as_deref(), Some("rail"));
-            // 事件名在落点这一侧：多个 dock 绑不同事件名即天然可分。
+            // 落点由事件名 + 帧的 id（dock 自己）确定；不另带元数据。
             let value = d.bind.as_ref().unwrap().get("value").unwrap();
-            assert_eq!(value.default, Some(json!({ "rail": "engineering" })));
+            assert!(matches!(
+                &value.variant,
+                accrete::BindVariant::Event { event } if event == "pin"
+            ));
         }
         other => panic!("expected dock, got {other:?}"),
     }
