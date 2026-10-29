@@ -28,7 +28,8 @@ enum Cmd {
         #[arg(long, default_value = "examples/renderer/dist")]
         dist: String,
     },
-    /// Offline: parse a YAML frame file and print the wire JSON
+    /// Offline: parse a YAML frame file and print the wire JSON (the action
+    /// list — the envelope is stage's own and never crosses the socket)
     Tojson { file: String },
     /// Print the JSON Schema (draft 2020-12) of the Accrete wire shape
     Schema,
@@ -59,8 +60,8 @@ async fn main() -> anyhow::Result<()> {
         }
         Cmd::Tojson { file } => {
             let src = std::fs::read_to_string(&file)?;
-            let value = serde_json::to_value(proto::parse_yaml_to_frame(&src)?)?;
-            println!("{}", serde_json::to_string_pretty(&value)?);
+            let msg = proto::parse_yaml_to_frame(&src)?;
+            println!("{}", serde_json::to_string_pretty(msg.wire())?);
             Ok(())
         }
         Cmd::Schema => {

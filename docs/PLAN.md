@@ -1106,27 +1106,35 @@ ADR 0021 的实施。落地后的形状：
 工具事实（顺带撞上的）：本机 trunk 是 0.22.0，产物命名不再让 js 与 wasm 共用 stem（0.21.14 共用），
 `ui_dist.py` 的 `entry_names` 已改成分辨各取一个，两种命名都吃。Docker 仍钉 0.21.14。
 
-### 外部集成：信封归宿主（ADR 0021 决策 6）— 待做 2026-10-29
+### 外部集成：信封归宿主（ADR 0021 决策 6）— 落地 2026-10-29
 
 决定：`content::Message{ev, sender, created?, content}` 是宿主包装，不是线上模型——移进 `stage`；
-prism 与 reflux 各自重新处理自己的信封；渲染器只认动作列表。落地之前下行仍是 `Message`，两份集成
-文档已按「现状 + 决定」两段写明。
+prism 与 reflux 各自重新处理自己的信封；渲染器只认动作列表。
 
-清单（按依赖顺序）：
+本仓已落地：
 
-1. `content`：`Message` 与 `EV_DRAW` 离开本 crate，`From<(Session, Content<T>)>` 一并走；留下
-   `Content<T>` 与各 op、`Outflow`、`append_index`。`tests/codec.rs`、`tests/append_position.rs` 里
-   用 `Message` 的断言改为直接测动作列表。
-2. `stage`：`Message` 落到 `stage::proto`（构造点在 `proto.rs:48`，解析与转发在 `mirror.rs`）。
-   验收：`stage serve` + `examples/yaml/00.main.yaml` 全链（布局、流式、上行）不回归。
-3. `ui-core`：`Ctx` 的下行解码目标从 `Message<Accrete>` 改成动作列表；`dispatch_msg` 去掉信封参数，
-   `ev` 闸删除（连同那条 `frame ev = …` debug 日志）；队列消费循环逐帧解出列表后直接应用。
-4. `examples/renderer`：boot 只搬字节，不改代码；跑一遍确认。
-5. 示例 yaml：不改——`examples/yaml/*` 的顶层一直是动作本身，信封只存在于传输层。
-6. prism（跨仓）：渲染腿只发动作列表；`{ev,args}` 动词帧留在它自己的程序腿上，页面侧若要读动词，
-   由 prism 自己的 boot 承担，不经渲染器。
-7. reflux（跨仓）：`wire.py` 继续构自己的信封（它的业务形状），发给渲染器的那一层只留动作列表
-   ——转换在它自己的宿主侧完成；`reflux.js` 若依赖 `ev` 需同步。
+1. `content`：`Message`、`EV_DRAW`、`Created`／`Session`、`From<(Session, Content<T>)>` 一起离开；
+   只剩 `Content<T>` 与各 op、`Outflow`、`append_index`。`decode_auto` 改成认数组——`[`（JSON）与
+   `0x80..=0x9F`（CBOR）；旧信封形状（对象／map）拿到一条点名的错误
+   `frame is an envelope (map), not an action list`，不是静默空白。`tests/codec.rs` 与
+   `tests/append_position.rs` 改为直接测动作列表，新增「一帧是数组／信封不是帧」两例。
+2. `stage`：`Message` 落在 `stage::proto`（`ev` 恒 `draw`、`sender` 恒 `stage`、`created` 空），
+   `Message::wire()` 是上线的那一半；`/send`、console 发 `wire()`，`tojson` 打印 `wire()`。
+   `tests/yaml_frame.rs` 跟着改成按 `wire()` 断言。
+3. `ui-core`：`Ctx` 解 `Vec<Content<Accrete>>`；`dispatch_msg` 去掉信封参数与 `ev` 闸（连带那条
+   `frame ev = …` debug 日志）。ADR 0003 已标注「部分取代」。
+4. `examples/renderer`：boot 不改（只搬字节）。
+5. 示例 yaml：不动——`examples/yaml/*` 的顶层一直是动作本身。
 
-验收：`cargo test --workspace` 绿；本仓 `grep -r "content::Message"` 只剩 `stage`；ADR 0021 与两份
-集成文档里「落地前」的措辞同时撤掉。
+验证：`cargo check --workspace --all-targets` 与 `cargo test --workspace` 绿；运行侧
+`stage serve --port 3003` + `websocat /channel` + `POST /send 00.main.yaml`，对端收到的首字节是 `[`
+（`[{"action":"create",…}]`）——渲染器真的只会看到动作列表。（本机 3002 上还挂着一个用户自己的旧
+stage，验证因此走 3003。）
+
+待做（跨仓）：
+
+6. prism：渲染腿只发动作列表；`{ev,args}` 动词帧留在它自己的程序腿上，页面侧若要读动词，由 prism
+   自己的 boot 承担，不经渲染器。
+7. reflux：`wire.py` 继续构自己的信封，发给渲染器的那一层只留动作列表——转换在它自己的宿主侧完成；
+   `reflux.js` 若依赖 `ev` 需同步。它的 bundle 是钉住的：re-pin 之前两边版本必须对齐——旧 bundle 解不了
+   数组，新 bundle 解不了信封，混用就是空白页加一条 decode 日志。

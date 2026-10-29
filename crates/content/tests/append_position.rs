@@ -6,26 +6,22 @@
 //! 放到调用方没要求的位置，正是静默降级。
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
-use content::{AppendOp, Content, Message, append_index};
+use content::{AppendOp, Content, append_index};
 use serde_json::{Value, json};
 
+/// 一帧就是动作列表本身（ADR 0021 决策 6）——这层测试只关心 append 的线上形状。
 fn frame(position: i64) -> Value {
-    let msg = Message {
-        ev: "draw".into(),
-        sender: "t".into(),
-        created: None,
-        content: vec![Content::Append(AppendOp {
-            event: "rows".into(),
-            position,
-            data: json!({"id": "r1"}),
-        })],
-    };
-    serde_json::to_value(&msg).unwrap()
+    let actions: Vec<Content<Value>> = vec![Content::Append(AppendOp {
+        event: "rows".into(),
+        position,
+        data: json!({"id": "r1"}),
+    })];
+    serde_json::to_value(&actions).unwrap()
 }
 
 fn decoded_position(value: Value) -> i64 {
-    let back: Message<Value> = serde_json::from_value(value).unwrap();
-    match &back.content[0] {
+    let back: Vec<Content<Value>> = serde_json::from_value(value).unwrap();
+    match &back[0] {
         Content::Append(op) => op.position,
         other => panic!("expected an append, got {other:?}"),
     }
@@ -34,21 +30,19 @@ fn decoded_position(value: Value) -> i64 {
 #[test]
 fn the_tail_stays_off_the_wire() {
     // 省缺即 0（末尾），所以位置没有信息时帧里就不该有这个字段。
-    // 注意 `content` 是 OneOrMany：单条会塌成一个对象，索引的是对象本身。
-    let item = &frame(0)["content"];
-    assert!(item.is_object(), "单条 content 在线上塌成对象");
+    let item = &frame(0)[0];
+    assert_eq!(item["action"], json!("append"));
     assert!(item.get("position").is_none(), "省缺即末尾，不写");
     assert_eq!(decoded_position(frame(0)), 0);
 }
 
 #[test]
 fn a_position_that_carries_information_is_written_and_decodes() {
-    assert_eq!(frame(3)["content"]["position"], 3);
+    assert_eq!(frame(3)[0]["position"], 3);
     assert_eq!(decoded_position(frame(3)), 3);
-    assert_eq!(decoded_position(json!({
-        "ev": "draw", "sender": "t",
-        "content": [{"action": "append", "event": "rows", "position": -1, "data": {"id": "r2"}}],
-    })), -1);
+    assert_eq!(decoded_position(json!([
+        {"action": "append", "event": "rows", "position": -1, "data": {"id": "r2"}}
+    ])), -1);
 }
 
 #[test]

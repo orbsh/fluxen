@@ -1,6 +1,16 @@
 //! YAML carrier tests: /send shape contract (Content item or array,
-//! action preserved end-to-end).
+//! action preserved end-to-end). The envelope is stage's own and never reaches
+//! the wire — `wire()` is the action list the renderer decodes (ADR 0021
+//! decision 6).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
+
+use serde_json::Value;
+
+/// What goes on the socket: the action list, no envelope.
+fn wire(src: &str) -> Value {
+    let msg = stage::proto::parse_yaml_to_frame(src).unwrap();
+    serde_json::to_value(msg.wire()).unwrap()
+}
 
 #[test]
 fn yaml_single_content_item_keeps_action() {
@@ -16,14 +26,17 @@ data:
       kind: default
       default: hi
 "#;
-    let frame = stage::proto::parse_yaml_to_frame(src).unwrap();
-    assert_eq!(frame["ev"], "draw");
-    assert_eq!(frame["sender"], "stage");
-    // OneOrMany: single item collapses to an object; action is append (not create)
-    assert_eq!(frame["content"]["action"], "append");
-    assert_eq!(frame["content"]["event"], "chat");
-    assert_eq!(frame["content"]["data"]["type"], "text");
-    assert_eq!(frame["content"]["data"]["id"], "m1");
+    let msg = stage::proto::parse_yaml_to_frame(src).unwrap();
+    // stage's envelope, kept in this crate
+    assert_eq!(msg.ev, stage::proto::EV_DRAW);
+    assert_eq!(msg.sender, "stage");
+    // the file's single item is one element of the list — the list is the wire
+    let frame = wire(src);
+    assert!(frame.is_array(), "一帧就是动作列表");
+    assert_eq!(frame[0]["action"], "append");
+    assert_eq!(frame[0]["event"], "chat");
+    assert_eq!(frame[0]["data"]["type"], "text");
+    assert_eq!(frame[0]["data"]["id"], "m1");
 }
 
 #[test]
@@ -36,11 +49,11 @@ path: /bind/value/default
 op: append
 value: " tok"
 "#;
-    let frame = stage::proto::parse_yaml_to_frame(src).unwrap();
-    assert_eq!(frame["content"]["action"], "patch");
-    assert_eq!(frame["content"]["path"], "/bind/value/default");
-    assert_eq!(frame["content"]["op"], "append");
-    assert_eq!(frame["content"]["value"], " tok");
+    let frame = wire(src);
+    assert_eq!(frame[0]["action"], "patch");
+    assert_eq!(frame[0]["path"], "/bind/value/default");
+    assert_eq!(frame[0]["op"], "append");
+    assert_eq!(frame[0]["value"], " tok");
 }
 
 #[test]
@@ -50,9 +63,9 @@ action: remove
 event: chat
 id: a1
 "#;
-    let frame = stage::proto::parse_yaml_to_frame(src).unwrap();
-    assert_eq!(frame["content"]["action"], "remove");
-    assert_eq!(frame["content"]["id"], "a1");
+    let frame = wire(src);
+    assert_eq!(frame[0]["action"], "remove");
+    assert_eq!(frame[0]["id"], "a1");
 }
 
 #[test]
@@ -69,8 +82,8 @@ fn yaml_array_of_content_items() {
     type: text
     id: b
 "#;
-    let frame = stage::proto::parse_yaml_to_frame(src).unwrap();
-    let content = frame["content"].as_array().unwrap();
+    let content = wire(src);
+    let content = content.as_array().unwrap();
     assert_eq!(content.len(), 2);
     assert_eq!(content[0]["action"], "create");
     assert_eq!(content[1]["action"], "set");
@@ -88,6 +101,25 @@ data:
   - type: text
 "#;
     assert!(stage::proto::parse_yaml_to_frame(src).is_err());
+}
+
+#[test]
+fn the_wire_decodes_as_the_renderers_frame_type() {
+    // 端到端的那一段尾巴：stage 发出去的字节，必须就是渲染器解开的那一帧
+    // （ADR 0021 决策 6）。用真的示例文件，走 JSON 与 CBOR 两条路。
+    let src = std::fs::read_to_string("../../examples/yaml/00.main.yaml").unwrap();
+    let msg = stage::proto::parse_yaml_to_frame(&src).unwrap();
+    let wire = msg.wire();
+    let json_bytes = serde_json::to_vec(&wire).unwrap();
+    let frame: Vec<content::Content<accrete::Accrete>> = content::codec::ActiveCodec::Json
+        .decode_auto(&json_bytes)
+        .expect("json wire decodes");
+    assert!(!frame.is_empty());
+    let cbor_bytes = content::codec::ActiveCodec::Cbor.encode(&wire).unwrap();
+    let frame: Vec<content::Content<accrete::Accrete>> = content::codec::ActiveCodec::Cbor
+        .decode_auto(&cbor_bytes)
+        .expect("cbor wire decodes");
+    assert!(!frame.is_empty());
 }
 
 #[test]

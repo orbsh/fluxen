@@ -1,52 +1,11 @@
 pub mod codec;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use serde_with::{OneOrMany, serde_as};
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub struct Created(DateTime<Utc>);
-
-impl Default for Created {
-    fn default() -> Self {
-        Self(Utc::now())
-    }
-}
-
-type Session = String;
-
-/// 操作通道（ev）的渲染类取值：生产端一律填这个，其余值渲染器忽略。
-pub const EV_DRAW: &str = "draw";
-
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct Message<T>
-where
-    T: Serialize + for<'a> Deserialize<'a>,
-{
-    /// 消息级操作类别。"draw" = 渲染类（见 EV_DRAW）；必填，旧帧缺字段直接解码报错。
-    pub ev: String,
-    pub sender: Session,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub created: Option<Created>,
-    #[serde_as(as = "OneOrMany<_>")]
-    pub content: Vec<Content<T>>,
-}
-
-impl<T> From<(Session, Content<T>)> for Message<T>
-where
-    T: Serialize + for<'a> Deserialize<'a>,
-{
-    fn from(value: (Session, Content<T>)) -> Self {
-        Message {
-            ev: EV_DRAW.into(),
-            sender: value.0,
-            created: Some(Created::default()),
-            content: vec![value.1],
-        }
-    }
-}
+/// 下行的一帧就是**动作列表**本身（ADR 0021 决策 6）：没有信封。
+/// 宿主要带自己的 `ev`／`sender`／`created`，就装在宿主自己的帧里——三个宿主
+/// （stage / prism / reflux）各有各的，只在 `Content` 这一层对齐。
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Outflow {

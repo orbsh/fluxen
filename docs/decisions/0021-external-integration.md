@@ -39,11 +39,12 @@ prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}
 5. **生产端的输出格式由调用参数决定。** 例：gravity 的 turn 调用带 `protocol` 参数，默认 `data`
    （裸 delta，给非 UI 消费者），`fluxen` 则返回视图帧（对槽做 `append`/`set`）。应用知识留在
    生产端，槽名不进 bundle。
-6. **信封归宿主（2026-10-29，落地中）。** `content::Message{ev, sender, created?, content}` 是宿主
-   包装，不是线上模型，整体移进 `stage`；prism 与 reflux 各自重新处理自己的信封（prism 的
+6. **信封归宿主（2026-10-29，已落地）。** `content::Message{ev, sender, created?, content}` 是宿主
+   包装，不是线上模型，已整体移进 `stage`；prism 与 reflux 各自重新处理自己的信封（prism 的
    `{ev,args}` 动词帧留在它自己的程序腿上，reflux 的 `wire.py` 继续构自己的）。渲染器这一侧只认
-   动作列表：`Message` 连同它携带的 `ev` 闸一起离开核心，宿主动词怎么到达页面由宿主自己决定，
-   渲染器不参与。落地清单在 PLAN 的「信封归宿主」一节；在此之前线下行的仍是 `Message`。
+   动作列表：`content` crate 现在只剩动作（`Content` 与各 op）与 `Outflow`，`Ctx` 解的是
+   `Vec<Content<Accrete>>`，`ev` 闸随之消失（ADR 0003 的这一部分因此失效）。落地前线上是 `Message`
+   ——旧宿主会看到一条明确的 `frame is an envelope (map), not an action list` 而不是静默空白。
 
 ## 归属：crates/ 只放别人按名字依赖的东西
 
