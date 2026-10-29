@@ -34,7 +34,7 @@
 // 默认同源 `./3d-force-graph.min.js`（v1.80.1，装配配方见 Dockerfile），同源取不到
 // 才回落钉版本的 unpkg；options.libUrl 可显式覆盖。
 // 部署：`examples/modules/forcegraph/{index.js,cbor.js}` + 库文件一起拷进
-// `crates/ui_leptos/assets/forcegraph/`（该目录 gitignore，`trunk build` 的
+// `examples/renderer/assets/forcegraph/`（该目录 gitignore，`trunk build` 的
 // copy-dir 会把它带进 dist），示例帧见 `examples/yaml/19.canvas.forcegraph.yaml`。
 import { decode } from "./cbor.js";
 

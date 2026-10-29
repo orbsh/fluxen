@@ -1,9 +1,9 @@
 # Canvas 示例（ADR 0007）：3dbrowser 多实例 + 流式喂载荷。只留两件网格模型——鞋
 # （MaterialsVariantsShoe）与车（ToyCar）；手表/头盔/沙发不再随示例分发，需要时按
-# crates/ui_leptos/assets/3dbrowser/README.md 的地址自行取。这两件都靠 glTF 节点
+# examples/renderer/assets/3dbrowser/README.md 的地址自行取。这两件都靠 glTF 节点
 # 旋转装配（ToyCar 的 ToyCar/Fabric/Glass 三个部件各带一个），所以它们同时是
 # "归一化必须与节点变换复合、不能覆盖"的回归样本（见模块 src/lib.rs 的注释）。
-# 前置：模块产物在 crates/ui_leptos/assets/3dbrowser/（配方见
+# 前置：模块产物在 examples/renderer/assets/3dbrowser/（配方见
 # examples/modules/3dbrowser/Cargo.toml 头注释；stage serve 自带静态服务）；
 # 布局侧先发 00.main.yaml + 00.chat.yaml（本文件往 chat rack 追加两行）。
 #
@@ -13,7 +13,7 @@
 # 槽，每槽 set 一次，互不覆盖。
 #
 # 素材均为 CC0（Khronos glTF-Sample-Assets），下载地址见
-# crates/ui_leptos/assets/3dbrowser/README.md。
+# examples/renderer/assets/3dbrowser/README.md。
 - action: append
   event: chat
   data:

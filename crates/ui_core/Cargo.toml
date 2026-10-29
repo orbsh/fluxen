@@ -1,5 +1,5 @@
 [package]
-name = "ui_leptos"
+name = "ui-core"
 version = "0.1.0"
 edition = "2024"
 
@@ -7,13 +7,10 @@ edition = "2024"
 crate-type = ["rlib"]
 
 [dependencies]
-anyhow.workspace = true
 accrete = { workspace = true, features = ["classify", "ops"] }
-console_error_panic_hook.workspace = true
 content.workspace = true
 forcegraph.workspace = true
 futures.workspace = true
-gloo-net.workspace = true
 itertools.workspace = true
 js-sys.workspace = true
 leptos.workspace = true
@@ -22,10 +19,9 @@ send_wrapper.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ciborium.workspace = true
+# The seam: core knows the `Transport` trait, never an implementation.
 transport.workspace = true
-transport-ws.workspace = true
 tracing.workspace = true
-tracing-wasm.workspace = true
 ui_leptos_macro = { path = "../ui_leptos_macro" }
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true

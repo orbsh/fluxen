@@ -20,8 +20,8 @@
 // 也正因如此**装配时不能改 worker 文件的内容哈希名**（editor.main.js 与各
 // *Mode-*.js 里写死了这些名字）。
 //
-// 部署：本目录整体拷入 crates/ui_leptos/assets/editor/；Monaco AMD 子集（tarball
-// 的 package/min/vs/**，原样、不改名）放进 crates/ui_leptos/assets/monaco/vs/。
+// 部署：本目录整体拷入 examples/renderer/assets/editor/；Monaco AMD 子集（tarball
+// 的 package/min/vs/**，原样、不改名）放进 examples/renderer/assets/monaco/vs/。
 // 两者都在 .gitignore 里（构建产物模式，配方见 Dockerfile）：
 //   monaco-editor 0.55.1  https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.55.1.tgz
 //   sha1 e74c6fe5a6bf985b817d2de3eb88d56afc494a1b（tarball，13 677 219 B）

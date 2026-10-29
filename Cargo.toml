@@ -8,9 +8,10 @@ members = [
   "crates/content",
   "crates/forcegraph",
   "crates/transport",
-  "crates/transport-ws",
+  "examples/transport-ws",
   "crates/fluxen",
-  "crates/ui_leptos",
+  "crates/ui_core",
+  "examples/renderer",
   "crates/ui_leptos_macro",
 ]
 
@@ -18,10 +19,11 @@ members = [
 anyhow = "1.0.102"
 accrete = { path = "crates/accrete", version = "^0.1.0" }
 content = { path = "crates/content", version = "^0.1.0" }
+ui-core = { path = "crates/ui_core", version = "^0.1.0" }
 forcegraph = { path = "crates/forcegraph", version = "^0.1.0" }
 transport = { path = "crates/transport", version = "^0.1.0" }
 ui-assets = { path = "crates/ui-assets", version = "^0.1.0" }
-transport-ws = { path = "crates/transport-ws", version = "^0.1.0" }
+transport-ws = { path = "examples/transport-ws", version = "^0.1.0" }
 ciborium = "0.2"
 chrono = { version = "0.4.44", features = ["serde"] }
 futures = "0.3.32"

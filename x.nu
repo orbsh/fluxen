@@ -1,6 +1,6 @@
 export def start [--dev] {
     do {
-        cd crates/ui_leptos/
+        cd examples/renderer/
         if $dev {
             trunk serve
         } else {

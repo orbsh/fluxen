@@ -7,18 +7,18 @@ out/
 node_modules/
 # Canvas 模块产物（ADR 0007）：从 examples/modules/3dbrowser 拷入，不入 git
 # （重建配方见该目录 Cargo.toml 头注释）
-crates/ui_leptos/assets/3dbrowser/
-# Chart 封装模块 + G2 库（ADR 0009）：从 crates/ui_leptos/modules/g2chart 拷入，
+examples/renderer/assets/3dbrowser/
+# Chart 封装模块 + G2 库（ADR 0009）：从 examples/renderer/modules/g2chart 拷入，
 # g2.min.js 来自 npmmirror tarball（版本固定 5.4.8），不入 git
-crates/ui_leptos/assets/g2chart/
+examples/renderer/assets/g2chart/
 *.glb
 *.ksplat
-# Editor 封装模块 + Monaco AMD 子集（ADR 0016）：封装模块从 crates/ui_leptos/modules/editor
+# Editor 封装模块 + Monaco AMD 子集（ADR 0016）：封装模块从 examples/renderer/modules/editor
 # 拷入；Monaco 取自 npm tarball（版本固定 0.55.1 的 package/min/vs，原样——worker 的
 # 内容哈希名被 editor.main.js 写死，不能改名），不入 git
-crates/ui_leptos/assets/editor/
-crates/ui_leptos/assets/monaco/
+examples/renderer/assets/editor/
+examples/renderer/assets/monaco/
 # forcegraph 封装模块 + 3d-force-graph 库（ADR 0017）：模块从 examples/modules/forcegraph
 # 拷入，库取自 unpkg（版本固定 1.80.1 + sha256，见 Dockerfile），不入 git
-crates/ui_leptos/assets/forcegraph/
+examples/renderer/assets/forcegraph/
 dist-release/

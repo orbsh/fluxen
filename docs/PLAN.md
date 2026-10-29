@@ -1052,3 +1052,56 @@ cannot change the shape of the graph.
 Verified headless (34 nodes / 44 links, 220×473 viewport, SwiftShader): stable at
 `d=565 r=204`, real-edge midpoints painted 72/80 against 32/80 for non-edges, 6888
 coloured pixels with the DOM overlay hidden.
+
+### 外部集成：ui-core / boot 拆分（ADR 0021）— 待做 2026-10-29
+
+两种消费方式已经同时存在：reflux（Python 宿主 + 钉住的 bundle + `window.fluxen.send`）与 prism
+（Rust 会场，前端装进自己的二进制）。现在的 `ui_leptos::mount()` 把 `#main` 解析、`transport-ws`
+与页面级上行把手写死在渲染核心旁边，于是"核心 + 自己的 boot"这条路走不通，`fluxen` 门面也只做了
+一个 feature re-export。适配方向此前被写反过：要求 fluxen 认宿主（prism）的 `{ev,args}` 帧——已否，
+见 `docs/decisions/0021-external-integration.md`。
+
+工作：
+
+1. **拆 crate 并归位**：`ui_leptos` → 核心（`ctx` / `render` / `components` / `widgets`，不依赖
+   `transport-ws`、不认识 `#main`，留 `crates/`）与 boot（`#main` 解析、`mount()`、
+   `window.fluxen.send`、`main.rs`、`index.html` + trunk 配置）。boot 搬 `examples/`，
+   `transport-ws` 一并搬（92 行，唯一消费者就是 boot）——判据见 ADR 0021「归属」节：`crates/` 只放
+   外部按名字依赖的东西，`stage` 作为调试工具例外留 `crates/`。`stage` 的 `--dist` 默认值随 boot 的
+   新路径改。核心与宏的最终包名（`ui-core` / `ui_leptos`，宏是否跟着改名）在动手时定，文档里先用语义名。
+2. **门面归位**：`fluxen` 总是重导出 `ui-core`；`boot` 走 feature（默认不拉 `transport-ws`）。
+3. **两个消费者对齐**：reflux 依赖 `boot`（它的 bundle 就是一次 boot 构建）；prism 依赖 `ui-core` +
+   自己的 transport 与 boot。任何一方都不新增长在核心里的适配层。
+4. **发布产物按挂载点构建**：reflux 用根相对 public URL，prism 用 `--public-url /assets/`；宿主
+   不改写产物链接。
+5. **验收**：`cargo run -p stage -- serve` 仍走原生 `Message`（dev 回归不破）；reflux 的
+   `python3 -m reflux.demo_app` 在拆后照常运行；`ui-core` 的构建里没有 `transport-ws`。
+
+说明见 `docs/external-integration.md`（en）与 `.zh-CN.md`（zh）。
+
+### 外部集成：ui-core / boot 拆分 —— done 2026-10-29
+
+ADR 0021 的实施。落地后的形状：
+
+- **`crates/ui_core`**（包名 `ui-core`）：`ctx` / `dom` / `hooks` / `render` / `components` /
+  `widgets`。不认识 `#main`，不依赖任何具体 transport（只认 `transport::Transport` 这个接缝）。
+- **`examples/renderer`**（包名仍是 `ui_leptos`）：boot——`mount()`（读 `#main`、建 WS、挂响应式根）、
+  `window.fluxen.send`、`main.rs`、`index.html`、`trunk.toml`、`assets/`、`modules/`。
+- **`examples/transport-ws`**：WS 实现，92 行，唯一消费者是 boot。
+- **`crates/` 剩下的都是"外部按名字依赖"的东西**：`accrete`、`accrete_macro`、`content`、
+  `transport`（trait）、`ui_core`、`ui_leptos_macro`、`forcegraph`、`ui-assets`、`fluxen`（门面，
+  现在只重导出 `ui-core`，feature 已不需要）；`stage` 例外留 `crates/`（调试工具）。
+
+包名 `ui_leptos` 故意没改：产物文件名是 `ui_leptos-<hash>.js/_bg.wasm`，reflux 在
+`www/static/vendor/fluxen/` 里钉住的就是这两个名字——改名是一次跨仓 re-pin，不是路径编辑。
+
+搬动的连带修正：`assets/{main,custom}.css` 原来是符号链接（`../../ui-assets/assets/...`），随目录
+下移后指向失效，已改为 `../../../crates/ui-assets/assets/...`；`Dockerfile`、`x.nu`、
+`scripts/ui_dist.py`、`stage` 的 `--dist` 默认值、两份 README、示例 yaml 与模块头注释里的路径全部
+跟上。构建脚本里的 `stage` 装配命令随之变成 `cargo run -p stage -- serve --dist examples/renderer/dist`。
+
+验证：`cargo check --workspace --all-targets` 与 `cargo test --workspace` 绿；
+`examples/renderer` 的 `trunk build`（dev 与 `--release`）成功；`scripts/ui_dist.py` 装配出四件 + manifest。
+
+工具事实（顺带撞上的）：本机 trunk 是 0.22.0，产物命名不再让 js 与 wasm 共用 stem（0.21.14 共用），
+`ui_dist.py` 的 `entry_names` 已改成分辨各取一个，两种命名都吃。Docker 仍钉 0.21.14。

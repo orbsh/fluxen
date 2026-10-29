@@ -47,7 +47,7 @@ COPY examples/modules ./examples/modules
 #  * the truck splat scene, served from this repo's own `assets` release — the
 #    scene's upstream home is a 590 MB zip, so the 29 MB file is mirrored there.
 #
-# `trunk build` then copies crates/ui_leptos/assets/** into the served dist
+# `trunk build` then copies examples/renderer/assets/** into the served dist
 # (index.html: `<link data-trunk rel="copy-dir" href="/assets">`), so all five
 # must land before that step. The second splat scene (bonsai) is NOT fetched: a
 # container serves the mesh, chart, editor and truck demos and leaves
@@ -58,38 +58,38 @@ ARG GLTF_SAMPLE_ASSETS_COMMIT=edc7c9e67c639d230715049ee31f9a96a6babbbe
 # `curl -o` dies with "curl: (23) client returned ERROR on write" — a write
 # failure, which is not the same as a failed download.
 RUN set -eu; \
-    mkdir -p crates/ui_leptos/assets/3dbrowser; \
+    mkdir -p examples/renderer/assets/3dbrowser; \
     base="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/${GLTF_SAMPLE_ASSETS_COMMIT}/Models"; \
     curl -fsSL "$base/MaterialsVariantsShoe/glTF-Binary/MaterialsVariantsShoe.glb" \
-      -o crates/ui_leptos/assets/3dbrowser/MaterialsVariantsShoe.glb; \
+      -o examples/renderer/assets/3dbrowser/MaterialsVariantsShoe.glb; \
     curl -fsSL "$base/ToyCar/glTF-Binary/ToyCar.glb" \
-      -o crates/ui_leptos/assets/3dbrowser/ToyCar.glb; \
-    echo "e1d7cb190382111e5a5b37b51e9a7f007f7eb2ab1b6185e0188e8d0a0d1265a7  crates/ui_leptos/assets/3dbrowser/MaterialsVariantsShoe.glb" | sha256sum -c -; \
-    echo "01a60862de55cd4b9f3acfab0b0def86451800f9c42467fcd61052c16cb9838c  crates/ui_leptos/assets/3dbrowser/ToyCar.glb" | sha256sum -c -
+      -o examples/renderer/assets/3dbrowser/ToyCar.glb; \
+    echo "e1d7cb190382111e5a5b37b51e9a7f007f7eb2ab1b6185e0188e8d0a0d1265a7  examples/renderer/assets/3dbrowser/MaterialsVariantsShoe.glb" | sha256sum -c -; \
+    echo "01a60862de55cd4b9f3acfab0b0def86451800f9c42467fcd61052c16cb9838c  examples/renderer/assets/3dbrowser/ToyCar.glb" | sha256sum -c -
 
 RUN cd examples/modules/3dbrowser \
     && cargo build --release --target wasm32-unknown-unknown \
     && wasm-bindgen --target web --out-dir pkg \
          target/wasm32-unknown-unknown/release/browser3d.wasm \
     && cp pkg/browser3d.js pkg/browser3d_bg.wasm index.js \
-         /app/crates/ui_leptos/assets/3dbrowser/
+         /app/examples/renderer/assets/3dbrowser/
 
 # The chart module's runtime (ADR 0009): G2 is UMD, loaded by a <script> tag the
 # wrapper injects, so it ships beside the wrapper. The wrapper itself is tracked
-# source (crates/ui_leptos/modules/g2chart/) — only its deployed copy is
+# source (examples/renderer/modules/g2chart/) — only its deployed copy is
 # gitignored. The pinned version is recorded in that module header; it was
 # recovered from the local file's sha256 (the repo had not recorded it).
 ENV G2_VERSION=5.4.8
-RUN mkdir -p crates/ui_leptos/assets/g2chart \
-    && cp crates/ui_leptos/modules/g2chart/index.js \
-          crates/ui_leptos/modules/g2chart/cbor.js \
-          crates/ui_leptos/assets/g2chart/ \
+RUN mkdir -p examples/renderer/assets/g2chart \
+    && cp examples/renderer/modules/g2chart/index.js \
+          examples/renderer/modules/g2chart/cbor.js \
+          examples/renderer/assets/g2chart/ \
     && curl -fsSL "https://unpkg.com/@antv/g2@${G2_VERSION}/dist/g2.min.js" \
-         -o crates/ui_leptos/assets/g2chart/g2.min.js \
-    && echo "7e7d346cab68c002a889dc6145bfc1f9ae1391be82ce8d514fb106ef3a6e6412  crates/ui_leptos/assets/g2chart/g2.min.js" | sha256sum -c -
+         -o examples/renderer/assets/g2chart/g2.min.js \
+    && echo "7e7d346cab68c002a889dc6145bfc1f9ae1391be82ce8d514fb106ef3a6e6412  examples/renderer/assets/g2chart/g2.min.js" | sha256sum -c -
 
 # The editor module's runtime (ADR 0016): the wrapper is tracked source
-# (crates/ui_leptos/modules/editor/) — only its deployed copy is gitignored —
+# (examples/renderer/modules/editor/) — only its deployed copy is gitignored —
 # and Monaco's AMD subset is unpacked from the pinned npm tarball, sha1-checked
 # like every other upstream input here. min/vs is copied VERBATIM: editor.main.js
 # and the *Mode chunks hard-code the worker files' content-hashed names
@@ -104,21 +104,21 @@ RUN mkdir -p crates/ui_leptos/assets/g2chart \
 # fails the build instead of silently shipping the 9 MB again.
 ENV MONACO_VERSION=0.55.1
 ENV MONACO_SHA1=e74c6fe5a6bf985b817d2de3eb88d56afc494a1b
-RUN mkdir -p crates/ui_leptos/assets/editor crates/ui_leptos/assets/monaco \
-    && cp crates/ui_leptos/modules/editor/index.js \
-          crates/ui_leptos/modules/editor/cbor.js \
-          crates/ui_leptos/assets/editor/ \
+RUN mkdir -p examples/renderer/assets/editor examples/renderer/assets/monaco \
+    && cp examples/renderer/modules/editor/index.js \
+          examples/renderer/modules/editor/cbor.js \
+          examples/renderer/assets/editor/ \
     && curl -fsSL \
          "https://registry.npmjs.org/monaco-editor/-/monaco-editor-${MONACO_VERSION}.tgz" \
          -o /tmp/monaco.tgz \
     && echo "${MONACO_SHA1}  /tmp/monaco.tgz" | sha1sum -c - \
     && tar -xzf /tmp/monaco.tgz -C /tmp \
-    && cp -r /tmp/package/min/vs crates/ui_leptos/assets/monaco/vs \
-    && rm -f crates/ui_leptos/assets/monaco/vs/assets/css.worker-*.js \
-             crates/ui_leptos/assets/monaco/vs/assets/html.worker-*.js \
-             crates/ui_leptos/assets/monaco/vs/assets/json.worker-*.js \
-             crates/ui_leptos/assets/monaco/vs/assets/ts.worker-*.js \
-    && test "$(ls crates/ui_leptos/assets/monaco/vs/assets/*.worker-*.js | wc -l)" = 1 \
+    && cp -r /tmp/package/min/vs examples/renderer/assets/monaco/vs \
+    && rm -f examples/renderer/assets/monaco/vs/assets/css.worker-*.js \
+             examples/renderer/assets/monaco/vs/assets/html.worker-*.js \
+             examples/renderer/assets/monaco/vs/assets/json.worker-*.js \
+             examples/renderer/assets/monaco/vs/assets/ts.worker-*.js \
+    && test "$(ls examples/renderer/assets/monaco/vs/assets/*.worker-*.js | wc -l)" = 1 \
     && rm -rf /tmp/monaco.tgz /tmp/package
 
 # The forcegraph module's runtime (ADR 0017): 3d-force-graph is UMD (it exposes
@@ -130,33 +130,33 @@ RUN mkdir -p crates/ui_leptos/assets/editor crates/ui_leptos/assets/monaco \
 # wrapper falls back to this same pinned unpkg URL if the same-origin file is
 # missing (see the module header).
 ENV FORCE_GRAPH_VERSION=1.80.1
-RUN mkdir -p crates/ui_leptos/assets/forcegraph \
+RUN mkdir -p examples/renderer/assets/forcegraph \
     && cp examples/modules/forcegraph/index.js \
           examples/modules/forcegraph/cbor.js \
-          crates/ui_leptos/assets/forcegraph/ \
+          examples/renderer/assets/forcegraph/ \
     && curl -fsSL \
          "https://unpkg.com/3d-force-graph@${FORCE_GRAPH_VERSION}/dist/3d-force-graph.min.js" \
-         -o crates/ui_leptos/assets/forcegraph/3d-force-graph.min.js \
-    && echo "13088340aad408156064fd120c3bc3a47c93a3cc45b8f132d6284b20e2223be9  crates/ui_leptos/assets/forcegraph/3d-force-graph.min.js" | sha256sum -c -
+         -o examples/renderer/assets/forcegraph/3d-force-graph.min.js \
+    && echo "13088340aad408156064fd120c3bc3a47c93a3cc45b8f132d6284b20e2223be9  examples/renderer/assets/forcegraph/3d-force-graph.min.js" | sha256sum -c -
 
 # The truck scene, mirrored in this repo's own `assets` release (why: the scene's
 # upstream home is a 590 MB multi-scene zip — see assets/splatviewer/README.md).
 ARG FLUXEN_ASSETS_RELEASE=assets
 RUN curl -fsSL \
       "https://github.com/orbsh/fluxen/releases/download/${FLUXEN_ASSETS_RELEASE}/truck.ksplat" \
-      -o crates/ui_leptos/assets/splatviewer/truck.ksplat \
-    && echo "e8ed0a5cc03fe7d91c5cea7a53c72e0f3a8bdd805157bee24def1ab059b23654  crates/ui_leptos/assets/splatviewer/truck.ksplat" | sha256sum -c -
+      -o examples/renderer/assets/splatviewer/truck.ksplat \
+    && echo "e8ed0a5cc03fe7d91c5cea7a53c72e0f3a8bdd805157bee24def1ab059b23654  examples/renderer/assets/splatviewer/truck.ksplat" | sha256sum -c -
 
 # Dev gateway binary.
 RUN cargo build --release -p stage
 
-# WASM UI (trunk release build -> crates/ui_leptos/dist).
-RUN cd crates/ui_leptos && trunk build --release
+# WASM UI (trunk release build -> examples/renderer/dist).
+RUN cd examples/renderer && trunk build --release
 
 FROM debian:bookworm-slim AS runtime
 
 COPY --from=builder /app/target/release/stage /usr/local/bin/stage
-COPY --from=builder /app/crates/ui_leptos/dist /app/dist
+COPY --from=builder /app/examples/renderer/dist /app/dist
 
 EXPOSE 3002
 

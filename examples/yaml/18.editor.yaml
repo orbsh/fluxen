@@ -1,8 +1,8 @@
 # 代码编辑器示例（ADR 0016）：Monaco 走模块通道（ADR 0007），库在 mount() 里才拉
 # （ADR 0015），保存 = 编辑器里 Ctrl/Cmd+S → 上行 `{code, lang}`（与表单 submit 同腿）。
-# 前置：封装模块在 crates/ui_leptos/assets/editor/（纯 JS，无构建，配方见
-# crates/ui_leptos/modules/editor/index.js 头注释），Monaco 的 AMD 子集在
-# crates/ui_leptos/assets/monaco/vs/（同理，两者都是 gitignore 的构建产物）；
+# 前置：封装模块在 examples/renderer/assets/editor/（纯 JS，无构建，配方见
+# examples/renderer/modules/editor/index.js 头注释），Monaco 的 AMD 子集在
+# examples/renderer/assets/monaco/vs/（同理，两者都是 gitignore 的构建产物）；
 # 布局侧先发 00.main.yaml + 00.chat.yaml。
 #
 # 两条形态各一个，演示同一契约的两种数据来源：
