@@ -13,7 +13,7 @@
 # demo/bonsai.html）——3DGS 数据集的坐标系朝向各异，不给就是 GS3D 的默认
 # 相机（[0,10,15] 看向原点、up=[0,1,0]），视角是歪的。
 - action: append
-  event: chat
+  slot: chat
   data:
     type: canvas
     url: /assets/splatviewer/index.js
@@ -25,7 +25,7 @@
         kind: source
         source: splat_truck
 - action: append
-  event: chat
+  slot: chat
   data:
     type: canvas
     url: /assets/splatviewer/index.js
@@ -37,7 +37,7 @@
         kind: source
         source: splat_bonsai
 - action: set
-  event: splat_truck
+  slot: splat_truck
   data:
     type: group
     bind:
@@ -51,7 +51,7 @@
             position: [-5, -1, -1]
             lookAt: [-1.72477, 0.05395, -0.00147]
 - action: set
-  event: splat_bonsai
+  slot: splat_bonsai
   data:
     type: group
     bind:

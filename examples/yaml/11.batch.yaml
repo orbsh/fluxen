@@ -1,5 +1,5 @@
 - action: append
-  event: chat
+  slot: chat
   data:
     type: text
     bind:
@@ -7,7 +7,7 @@
         kind: default
         default: alex
 - action: append
-  event: chat
+  slot: chat
   data:
     type: text
     bind:
@@ -15,7 +15,7 @@
         kind: default
         default: bill
 - action: append
-  event: chat
+  slot: chat
   data:
     type: text
     bind:

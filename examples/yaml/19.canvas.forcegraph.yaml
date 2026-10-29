@@ -18,7 +18,7 @@
 
 # ---- 第 1 帧：骨架 + crate 层 ------------------------------------------------
 - action: append
-  event: chat
+  slot: chat
   data:
     type: canvas
     url: /assets/forcegraph/index.js
@@ -38,7 +38,7 @@
         source: mfg
 
 - action: set
-  event: mfg
+  slot: mfg
   data:
     type: group
     bind:
@@ -59,7 +59,7 @@
 
 # ---- 第 2 帧：组件层（ui_leptos 的 render 分派） -----------------------------
 - action: set
-  event: mfg
+  slot: mfg
   data:
     type: group
     bind:
@@ -90,7 +90,7 @@
 
 # ---- 第 3 帧：模块层（canvas/chart/editor 各自 import 的外部模块） -----------
 - action: set
-  event: mfg
+  slot: mfg
   data:
     type: group
     bind:

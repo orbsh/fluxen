@@ -16,7 +16,7 @@
 
 # ---- 第 1 帧：骨架（空载荷不占位，ADR 0012） ---------------------------------
 - action: append
-  event: chat
+  slot: chat
   data:
     type: forcegraph
     attrs:
@@ -41,7 +41,7 @@
 
 # ---- 第 2 帧：crate 层 --------------------------------------------------------
 - action: set
-  event: mfg
+  slot: mfg
   data:
     type: group
     bind:
@@ -63,7 +63,7 @@
 
 # ---- 第 3 帧：组件层 ----------------------------------------------------------
 - action: set
-  event: mfg
+  slot: mfg
   data:
     type: group
     bind:
@@ -95,7 +95,7 @@
 
 # ---- 第 4 帧：外部模块层（追加不重排、不飞相机） ------------------------------
 - action: set
-  event: mfg
+  slot: mfg
   data:
     type: group
     bind:
@@ -139,7 +139,7 @@
 # 同一份快照 + focus：相机飞向这一簇，其余不消失（高亮由渲染器按 focus 判断）。
 # `seq` 必须变——不然同一目标重复送达不会重新飞。
 - action: set
-  event: mfg
+  slot: mfg
   data:
     type: group
     bind:

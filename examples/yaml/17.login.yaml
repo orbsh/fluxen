@@ -7,7 +7,7 @@
 #    （下次写入必是新值，"同值不写"不会误挡）。
 # 前置：先发 00.main.yaml + 00.chat.yaml。
 - action: patch
-  event: ""
+  slot: ""
   path: /children
   op: append
   value:
@@ -20,7 +20,7 @@
         kind: local
         slot: login_modal
 - action: append
-  event: chat
+  slot: chat
   data:
     type: case
     id: login_demo
@@ -32,7 +32,7 @@
         value:
           kind: local
           slot: login_modal
-          event: login::open
+          name: login::open
           default: "回车打开登录框"
     - type: portal
       attrs:
@@ -41,8 +41,8 @@
       - type: form
         bind:
           value:
-            kind: event
-            event: login
+            kind: dest
+            dest: login
         children:
         - type: case
           attrs:

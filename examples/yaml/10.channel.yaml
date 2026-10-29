@@ -1,5 +1,5 @@
 action: append
-event: channel
+slot: channel
 data:
   type: text
   bind:

@@ -19,7 +19,7 @@ type Frame<T> = Vec<Content<T>>;
 
 fn sample() -> Frame<Payload> {
     vec![Content::Append(AppendOp {
-        event: "chat".into(),
+        slot: "chat".into(),
         position: 0,
         data: Payload {
             n: 7,
@@ -61,14 +61,14 @@ fn action_wire_names_are_lowercase() {
     let cases = [
         (
             Content::Set(Influx {
-                event: "e".into(),
+                slot: "e".into(),
                 data: Payload { n: 1, s: "x".into() },
             }),
             "set",
         ),
         (
             Content::Append(AppendOp {
-                event: "e".into(),
+                slot: "e".into(),
                 position: 0,
                 data: Payload { n: 1, s: "x".into() },
             }),
@@ -76,14 +76,14 @@ fn action_wire_names_are_lowercase() {
         ),
         (
             Content::Remove(RemoveOp {
-                event: "e".into(),
+                slot: "e".into(),
                 id: "x".into(),
             }),
             "remove",
         ),
         (
             Content::Patch(PatchOp {
-                event: "e".into(),
+                slot: "e".into(),
                 id: None,
                 path: "/a/b".into(),
                 op: PatchKind::Replace,
@@ -108,7 +108,7 @@ fn patch_op_wire_shape() {
     );
     // Patch is self-describing: op is a required wire field
     let p: PatchOp = serde_json::from_value(json!({
-        "event": "e", "path": "/x", "op": "append", "value": "tok"
+        "slot": "e", "path": "/x", "op": "append", "value": "tok"
     }))
     .unwrap();
     assert_eq!(p.id, None);
@@ -118,10 +118,10 @@ fn patch_op_wire_shape() {
 #[test]
 fn influx_no_longer_carries_method_or_channel() {
     // ADR 0005: `method` was the positional-merge knob — retired with join.
-    let v = json!({ "event": "e", "data": { "n": 1, "s": "x" } });
+    let v = json!({ "slot": "e", "data": { "n": 1, "s": "x" } });
     let inf: Influx<Payload> = serde_json::from_value(v).unwrap();
     let back = serde_json::to_value(&inf).unwrap();
-    assert_eq!(back, json!({ "event": "e", "data": { "n": 1, "s": "x" } }));
+    assert_eq!(back, json!({ "slot": "e", "data": { "n": 1, "s": "x" } }));
 }
 
 #[test]

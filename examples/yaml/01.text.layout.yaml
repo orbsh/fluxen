@@ -1,5 +1,5 @@
 action: create
-event: ""
+slot: ""
 data:
   type: case
   attrs:
@@ -67,12 +67,12 @@ data:
   - type: input
     bind:
       value:
-        kind: event
-        event: message
+        kind: dest
+        dest: message
   - type: button
     bind:
       value:
-        kind: event
+        kind: dest
         default: Count
-        event: ok
+        dest: ok
 

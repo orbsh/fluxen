@@ -12,7 +12,7 @@
 # 保存上行：点进任一编辑器、按 Ctrl+S，stage 控制台的 `<-` 块会打印
 # event: submit + 该节点 id + {code, lang}。
 - action: append
-  event: chat
+  slot: chat
   data:
     type: editor
     id: patch-inline
@@ -29,7 +29,7 @@
             }
           lang: rust
 - action: append
-  event: chat
+  slot: chat
   data:
     type: editor
     id: patch-staged
@@ -42,7 +42,7 @@
         source: staged_code
 # 槽里的载荷形状与 inline 完全一致（宿主取槽节点的 bind.value.default 原样推给模块）。
 - action: set
-  event: staged_code
+  slot: staged_code
   data:
     type: group
     bind:

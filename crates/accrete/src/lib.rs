@@ -92,19 +92,23 @@ pub enum BindVariant {
     /// 裸 Value 平面——发射侧省略 `path`（整值写入），订阅侧带 `path`
     /// 时进槽内 Value 的 JSON Pointer 提取子值（形状归生产端，
     /// 与 wire-shape 无关）。
-    /// ADR 0010：落槽载荷与上行同形（`Outflow {event, id?, data}` 包装
+    /// ADR 0010：落槽载荷与上行同形（`Outflow {slot, id?, data}` 包装
     /// 对象）——事件形状由事件定义、不由落点决定，`kind: event` 改绑
-    /// `kind: local` 订阅方零改动。`event` 缺省 = 槽名（槽即频道）；
+    /// `kind: local` 订阅方零改动。`name` 缺省 = 槽名（槽即频道）；
     /// `path` 仍是订阅侧字段，发射侧忽略。
     Local {
         slot: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         path: Option<String>,
+        /// 包装里的那个名字，缺省 = 槽名。另起的名字才写它——落点本身是 `slot`。
         #[serde(skip_serializing_if = "Option::is_none")]
-        event: Option<String>,
+        name: Option<String>,
     },
-    Event {
-        event: String,
+    /// 上行目标：这个控件把交互送到宿主上的哪个目标（ADR 0023）。叫 `dest` 而不是 `slot`：
+    /// 上下行并不对称（下行写页面里的位置，上行调起宿主的一个处理器），所以不共用一个词;
+    /// `event` 留给 DOM 与后端自己的事件，UI 侧不用这个词。
+    Dest {
+        dest: String,
     },
     Field {
         field: String,

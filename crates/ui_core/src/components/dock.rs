@@ -49,7 +49,7 @@ pub fn dock_(accrete: Dock, ctx: &Ctx, id: String) -> AnyView {
         .as_ref()
         .and_then(|b| b.get("value"))
         .map(|b| b.variant.clone())
-        .filter(|v| matches!(v, BindVariant::Event { .. } | BindVariant::Local { .. }));
+        .filter(|v| matches!(v, BindVariant::Dest { .. } | BindVariant::Local { .. }));
 
     let over = RwSignal::new(false);
 

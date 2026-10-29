@@ -1,4 +1,4 @@
-//! ADR 0010: the wrapped event payload shape shared by the uplink and
+//! ADR 0010/0023: the wrapped uplink payload shape shared by a `dest` send and
 //! the `local` slot write (`Ctx::emit` builds exactly this object).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
@@ -8,26 +8,26 @@ use serde_json::json;
 #[test]
 fn id_is_omitted_when_absent() {
     let o = Outflow {
-        event: "channel::select".into(),
+        dest: "channel::select".into(),
         id: None,
         data: json!("2"),
     };
     assert_eq!(
         serde_json::to_value(&o).unwrap(),
-        json!({"event": "channel::select", "data": "2"})
+        json!({"dest": "channel::select", "data": "2"})
     );
 }
 
 #[test]
 fn id_passes_through_when_present() {
     let o = Outflow {
-        event: "page".into(),
+        dest: "page".into(),
         id: Some("tab1".into()),
         data: json!(7),
     };
     assert_eq!(
         serde_json::to_value(&o).unwrap(),
-        json!({"event": "page", "id": "tab1", "data": 7})
+        json!({"dest": "page", "id": "tab1", "data": 7})
     );
     // decode back
     let d: Outflow = serde_json::from_value(serde_json::to_value(&o).unwrap()).unwrap();

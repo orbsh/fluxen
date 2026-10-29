@@ -82,7 +82,7 @@ pub fn form_(accrete: Form, ctx: &Ctx) -> AnyView {
         .get_bind()
         .and_then(|x| x.get("value"))
         .map(|b| b.variant.clone())
-        .filter(|v| matches!(v, BindVariant::Event { .. } | BindVariant::Local { .. }));
+        .filter(|v| matches!(v, BindVariant::Dest { .. } | BindVariant::Local { .. }));
 
     // 注入表单状态并克隆下传：子树内的 input_/button_ 拿到的 ctx 自带归属
     let ctx = Ctx {

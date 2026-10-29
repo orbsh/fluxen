@@ -14,7 +14,7 @@ Reuse — the core, no I/O, no browser assumptions:
 | crate | holds |
 |:--|:--|
 | `accrete` (+ `accrete_macro`) | the node vocabulary and the eight actions |
-| `content` (+ `codec`) | `Message` / `Outflow` / the action structs; JSON + CBOR codecs |
+| `content` (+ `codec`) | `Outflow` / the action structs; JSON + CBOR codecs |
 | `ui-core` (today `ui_leptos` minus boot) | `Ctx` (layout/data/list/vals/drag signals), `render::dispatch`, components, widgets |
 | `forcegraph` | the 3-D graph core (camera, layout, picking) — no framework, no DSL, no protocol |
 | `ui-assets` | the CSS registry (`manganis` requires assets to live in a crate) |
@@ -41,8 +41,9 @@ Above it nothing knows where bytes come from; below it nothing knows Accrete.
 
 Downstream, a frame **is** the action list — the eight actions (`create` / `set` / `append` /
 `remove` / `patch` / `inject` / `tmpl` / `empty`) as an ordered array. There is no envelope on this
-side (ADR 0021 decision 6): `content::Message` lives in `stage` now, prism and reflux wrap their own,
-and `content` keeps only the actions and `Outflow`.
+side (ADR 0021 decision 6). `content` keeps only the actions and `Outflow`, and a host keeps an
+envelope only when it has more than one kind of frame to categorise — prism does (`connected`,
+`init.error`, `echo.result`); `stage` and reflux have a single verb each, so neither has one.
 
 A frame is therefore an array, always — one action is a one-element array — and it arrives as either
 a JSON array or a CBOR array. Anything else is refused where it enters, with a message that names the
@@ -53,7 +54,9 @@ Host verbs (`connected`, `login.result`, `turn.delta`) ride the host's own envel
 own leg. The renderer never sees them and offers no filter — ADR 0003's `ev` gate left with the
 envelope.
 
-Upstream (page → host): `content::Outflow { event, id?, data }`.
+Upstream (page → host): `content::Outflow { dest, id?, data }` — the *destination*: which handler on the
+host this interaction calls. It is deliberately not `slot`; the two directions are asymmetric. `event`
+never appears on this wire (ADR 0023).
 
 Codec: CBOR by default; the reading side auto-detects the format per frame from its first byte, and
 `?codec=` pins only what the client SENDS. A host may mix them freely.
@@ -91,14 +94,21 @@ directions pass through one seam: everything below is `ui-core` plus the transpo
    |:--|:--|:--|
    | `tmpl` | the template table | `{{key}}` substitution, run at `create`/`set`/`append` (ADR 0006) |
    | `create` | `ctx.layout` | the root document; the page's reactive root re-renders |
-   | `set` | data slot `event` | one named node |
-   | `append` | list slot `event` | row id read from `data.id`; duplicate ids rejected; `position` counts from the tail (0 = end) |
-   | `remove` | list slot `event` | by row id |
-   | `patch` | layout root, one list row, or a data slot | JSON Pointer (RFC 6901) into the node's WIRE shape; `event: ""` = root, `id` set = that row, else the named slot |
+   | `set` | data slot `slot` | one named node |
+   | `append` | list slot `slot` | row id read from `data.id`; duplicate ids rejected; `position` counts from the tail (0 = end) |
+   | `remove` | list slot `slot` | by row id |
+   | `patch` | layout root, one list row, or a data slot | JSON Pointer (RFC 6901) into the node's WIRE shape; `slot: ""` = root, `id` set = that row, else the named slot |
    | `inject` | vals slot | local plane; an equal value short-circuits |
 
    These writes read untracked and then `set`: dispatch runs inside the effect that consumes the
    frame, so a tracked read would subscribe that effect to the slots it is about to write.
+
+   **One word, one meaning.** An address inside the tree is a `slot` — `create` targets the root with
+   `slot: ""`, everything else names a slot (or a row of one, via `id`). The uplink is **not** a slot
+   (`Outflow.dest`, and the `dest` of a node's `kind: dest`) — the two directions are not symmetric,
+   so they do not share a word: downlink writes into a place in the page, uplink calls a handler on the
+   host, and the shapes differ too. `event` stays with the DOM and with the host's own events
+   (ADR 0022 for the slot, ADR 0023 for the dest).
 5. **Render.** The tree is data. `render::dispatch` maps a node to its component (`gen_dispatch!`
    generates the match from `accrete`'s enum), and each component puts its body inside a closure over
    the slots it reads — `text_` through `use_source_value`, `rack` over its list slot. A `set` or
@@ -116,11 +126,11 @@ A hole, and what fills it. The layout declares a slot by name; the producer writ
 ```yaml
 # a later frame
 action: set
-event: intro
+slot: intro
 data: { type: text, bind: { value: { kind: default, default: "hello" } } }
 ```
 `set` writes the slot; every node reading `intro` re-renders. To continue the same paragraph, send
-`patch` with `event: intro` and a pointer at the slot node's field — `patch` is the streaming verb;
+`patch` with `slot: intro` and a pointer at the slot node's field — `patch` is the streaming verb;
 `set` is the whole-value one. For a list, the layout supplies the shell and the row template:
 
 ```yaml
@@ -130,17 +140,17 @@ data: { type: text, bind: { value: { kind: default, default: "hello" } } }
   - type: case
     attrs: { class: [as-stretch, box, border, round] }
 ```
-and each `append { event: chat, data: { id: m42, ... } }` adds one row, keyed by `data.id`, so
+and each `append { slot: chat, data: { id: m42, ... } }` adds one row, keyed by `data.id`, so
 appending does not remount the rows above it.
 
 ### 3.2 Upstream: page → host
 
-1. **A component emits.** A node whose `bind["value"]` is `Event { event }` or `Local { slot }` calls
+1. **A component emits.** A node whose `bind["value"]` is `Dest { dest }` or `Local { slot }` calls
    `ctx.emit(variant, id, payload)` through `use_target`. `id` is the emitting node's own id
    (`node_id`, empty string = none); `payload` is whatever that component produced — a form value, a
    drag cargo, a page number.
 2. **`Event` goes on the wire.** `ctx.send` → `Transport::emit(transport::Event)` →
-   `WsTransport::emit`, which builds `content::Outflow { event, id?, data }`, encodes it with the
+   `WsTransport::emit`, which builds `content::Outflow { dest, id?, data }`, encodes it with the
    codec the page was built with (JSON → text frame, CBOR → binary frame) and sends. `send` is a
    future: gloo's sink suspends while the socket is still connecting and wakes when it opens, so an
    emit fired before `open` is not lost.
@@ -191,14 +201,14 @@ Prism is a WS connection plane (gateway, identity, turns). Its renderer leg is `
 speaks **this** wire — not prism's own `{ev, args}` verb frames (those stay on `/ws`, the programmatic
 leg for the CLI and peers — the stage precedent: `/channel` for the page, `/cli` for peers):
 
-- **Layout.** The client's first uplink is `Outflow { event: "init" }`. Prism answers with the
+- **Layout.** The client's first uplink is `Outflow { dest: "init" }`. Prism answers with the
   layout as ordinary `create` frames: a `file:` source delivers the YAML frame list verbatim, an
-  `event:` source submits to a global booth and forwards what it returns. There is no layout
+  `uplink:` source submits to a global booth and forwards what it returns. There is no layout
   envelope and no second shape — the layout is just the first view operation.
-- **Prism's own verbs** ride its **own** envelope, not the renderer's. Today that envelope happens to
-  look like `Message { ev: "<verb>", content: [] }`, but the renderer no longer decodes `Message` at
-  all (decision 6 landed) — prism's verbs therefore stay entirely on prism's side, and the render leg
-  carries action lists only. A client that cares (a login form) reads them.
+- **Prism's own verbs** ride its **own** leg and its own shape (`{ev, args}` on `/ws`), not the
+  renderer's: the render leg carries action lists only and decodes nothing else (decision 6). Prism's
+  verbs therefore stay entirely on prism's side, and a client that cares (a login form) reads them
+  there.
 - **Streaming.** The producer decides the format. Gravity's turn call takes a `protocol` argument:
   default `data` (raw deltas, for non-UI consumers), `fluxen` (view frames — `append`/`set` against
   the slot the layout declares). Application knowledge stays in the booth; the renderer stays
@@ -215,8 +225,8 @@ leg for the CLI and peers — the stage precedent: `/channel` for the page, `/cl
 
 Reflux is the reference host for the pinned-bundle style: a Python producer builds SDK nodes and the
 eight actions (`reflux/wire.py`), a static shell (`www/`) loads the pinned renderer bundle, and the
-page uplinks through `window.fluxen.send` — the handle `mount()` publishes. Its wire is already
-`Message { ev: "draw", sender, content }`, field for field this document's wire.
+page uplinks through `window.fluxen.send` — the handle `mount()` publishes. Its wire is the action list
+itself — a bare array, field for field this document's contract.
 
 Under the split it consumes **`boot`** (its bundle is a boot build) and never the core directly. If
 it ever needs in-process rendering it moves to core + own boot, the same way prism does.

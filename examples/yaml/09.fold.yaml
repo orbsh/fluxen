@@ -1,5 +1,5 @@
 action: append
-event: chat
+slot: chat
 data:
   attrs:
     class:

@@ -2,7 +2,7 @@
 # then each frame patches only the token — O(1) per frame, no full prefix.
 # Send the row once, then re-send the patch part repeatedly.
 - action: append
-  event: chat
+  slot: chat
   data:
     type: case
     id: s1
@@ -24,7 +24,7 @@
           kind: default
           default: ""
 - action: patch
-  event: chat
+  slot: chat
   id: s1
   path: /children/0/bind/value/default
   op: append

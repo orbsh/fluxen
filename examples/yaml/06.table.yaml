@@ -193,9 +193,9 @@ data:
     type: button
   bind:
     value:
-      kind: event
-      event: confirm
+      kind: dest
+      dest: confirm
   id: table-form
   type: form
-event: chat
+slot: chat
 

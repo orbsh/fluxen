@@ -1,5 +1,5 @@
 action: set
-event: login
+slot: login
 data:
   type: text
   bind:

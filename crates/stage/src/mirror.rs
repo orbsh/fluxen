@@ -7,7 +7,7 @@
 //!                         peers. No dedicated client needed — curl works.
 //!
 //! The mirror does not parse accrete/content for routing; POST /send is the one
-//! place that converts (YAML → stage's `Message`), and what it puts on the
+//! place that converts (YAML → the action list), and what it puts on the
 //! socket is that frame's action list — the renderer decodes nothing else
 //! (ADR 0021 decision 6).
 
@@ -84,8 +84,8 @@ async fn http_send(
     let frame = crate::proto::parse_yaml_to_frame(&body);
     match frame {
         Ok(frame) => {
-            // 渲染器只收动作列表（ADR 0021 决策 6）：信封留在 stage 里。
-            let text = match serde_json::to_string(frame.wire()) {
+            // 渲染器只收动作列表（ADR 0021 决策 6）——这就是那一份。
+            let text = match serde_json::to_string(&frame) {
                 Ok(t) => t,
                 Err(e) => {
                     return (

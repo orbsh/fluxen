@@ -6,7 +6,7 @@
 # 流式内容的正确落点是数据槽：封装的 update 腿 = 同实例 options + render。
 # 保留本文件是为了覆盖"按行寻址 patch 进 spec"这条协议路径。
 - action: append
-  event: chat
+  slot: chat
   data:
     type: chart
     id: stream-chart
@@ -50,7 +50,7 @@
           interaction:
             tooltip: {shared: true}
 - action: patch
-  event: chat
+  slot: chat
   id: stream-chart
   # op:append 在数组上 = 尾部 push（ADR 0005 的流式累加语义）：
   # 两队各补第 12 天，模拟实时追点。
@@ -58,7 +58,7 @@
   op: append
   value: {day: Dec 12, value: 49, team: TEAM A}
 - action: patch
-  event: chat
+  slot: chat
   id: stream-chart
   path: /bind/value/default/data
   op: append

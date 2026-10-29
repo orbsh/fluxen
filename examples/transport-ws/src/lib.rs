@@ -68,7 +68,7 @@ impl Stream for SharedRxStream {
 impl Transport for WsTransport {
     fn emit(&self, event: Event) -> Pin<Box<dyn Future<Output = ()>>> {
         let out = Outflow {
-            event: event.name,
+            dest: event.name,
             id: event.id,
             data: event.data,
         };

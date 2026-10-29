@@ -4,7 +4,7 @@ use accrete::{AccreteOps, Bind, BindVariant, Button, ButtonAttr};
 use leptos::ev::click;
 use leptos::html::*;
 use leptos::prelude::*;
-use serde_json::{Value, to_value};
+use serde_json::Value;
 
 /// 按钮：默认文本取 `bind["value"].default`；`Submit` 变体切换 form 的确认信号。
 pub fn button_(accrete: Button, ctx: &Ctx) -> AnyView {
