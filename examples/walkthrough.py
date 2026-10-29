@@ -7,6 +7,8 @@ Steps (each waits for one Enter; --auto runs unattended, --delay paces the text)
   4  append the ONE message row (9 children, every child bound to a slot) and
                             seed the four text slots
   5  TYPE the analytics intro
+  5b drag the bubble's pin chip to the rail at the window's right edge — the
+                            stage console shows the `pin` frame (ADR 0019)
   6  send the chart data    the two charts draw into their bands (line chart +
                             the three radars — 00.radar.yaml's set frames)
   7  one patch per day      the line chart grows to 30 days
@@ -39,6 +41,13 @@ Implementation choices worth naming:
   re-render the whole box and remount every module host inside it (docs/PLAN.md).
   An empty data area occupies NO space (ADR 0012), which is why the box opens
   holding nothing but the first paragraph and grows segment by segment.
+- The bubble carries ONE draggable unit (ADR 0019): a `grab` chip whose payload
+  is a POINTER to the paragraph's slot, not the paragraph itself — dragging costs
+  the same whether the text is ten characters or ten thousand. The landing zone
+  is a `dock` on the shell's right edge (`accept: [snippet]`, event `pin`), so
+  only snippet-kind cargo can land; anything else is refused silently, which is
+  the pairing rule working, not a failure. The source adds no style and no size
+  of its own — what you see is the `text` child.
 - A chart has no size attrs (ADR 0009 — a chart's size always comes from its
   container), so each chart sits in a borderless container whose definite size
   comes from `attrs.grid`, the same shape `00.radar.yaml` uses. That band is part
@@ -319,6 +328,31 @@ def text_node(slot):
     }
 
 
+def pin_chip(slot, title):
+    """A draggable unit INSIDE the bubble (ADR 0019).
+
+    `grab` wraps a small chip and carries the cargo; the chip itself is just a
+    `text` with classes — the source adds no style and no size of its own, so
+    what you see is the child. The payload is a POINTER (`slot` + `title`), not
+    the paragraph: the rail's handler can read the slot, and dragging stays
+    cheap no matter how long the text is. `kind: snippet` is what the rail's
+    `accept` in 00.main.yaml matches — nothing else can land there.
+    """
+    return {
+        "type": "grab",
+        "id": f"pin-{slot}",
+        "kind": "snippet",
+        "payload": {"slot": slot, "title": title},
+        "children": [
+            {
+                "type": "text",
+                "attrs": {"class": ["box", "border", "round", "nogrow"]},
+                "bind": {"value": {"kind": "default", "default": f"≡ 把「{title}」拖到右边"}},
+            }
+        ],
+    }
+
+
 def chart_node(node_id, slot):
     """`f` mirrors 00.radar.yaml: the chart is a grid item of the band container,
     and the container's track supplies the height."""
@@ -371,6 +405,8 @@ def frame_message():
             "type": "case",
             "children": [
                 text_node(ANALYTICS),
+                # 气泡内部的一枚可拖单元（ADR 0019）：段落是内容，这一格是动作。
+                pin_chip(ANALYTICS, "分析引言"),
                 chart_band([chart_node("dept-trend", TREND)], TREND_BAND),
                 chart_band(
                     [chart_node("radar-rd", RADARS[0]),
@@ -590,6 +626,12 @@ def main():
     step.wait("打字机：分析引言")
     type_out(mirror, ANALYTICS, ANALYTICS_TEXT, delay, "引言")
     grow("分析引言")
+
+    step.wait(
+        "气泡里那枚「≡ 把「分析引言」拖到右边」是一个单元，不是装饰：按住它拖到窗口右边缘"
+        "那条窄轨（拖拽在飞时它自己展开），松手 → stage 控制台出现 `<- pin`，带落点 id、"
+        "{item, kind, payload, meta}；同一件货往别处拖什么也不会发生（那条轨只收 snippet）"
+    )
 
     step.wait("两个图表入场（发 00.radar.yaml 的 set 帧：折线 spec + 三个雷达 spec）")
     print(f"    send chart data → {mirror.send(chart_data())}")
