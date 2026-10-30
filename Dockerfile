@@ -31,6 +31,14 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY examples/modules ./examples/modules
 
+# The split moved the renderer crate to `examples/renderer` and kept the transport
+# demo as a member of its own. Both are workspace members (root `Cargo.toml`), so
+# cargo refuses to load the workspace if either directory is absent — and the
+# renderer's own sources are what `trunk build` compiles below. Their deployed
+# media is excluded by `.dockerignore` and refetched by the steps that follow.
+COPY examples/renderer ./examples/renderer
+COPY examples/transport-ws ./examples/transport-ws
+
 # Six build inputs the repo does not carry — all gitignored (media addresses in
 # assets/*/README.md, module recipes in the Cargo.toml / module headers):
 #
