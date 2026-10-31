@@ -55,8 +55,23 @@
    `scroll: none`、`play: rotate`、`pause: click` 就是通知区；横幅同理，只是 `enter: translate`、
    `every` 更长。渲染器里没有"通知"这个物种。
 
+## 补记 2026-10-31（同日第二批）：`scroll` 说了什么，以及翻页
+
+`scroll` 这个轴此前只影响"跟不跟尾巴"，没影响容器本身——帧还得自己写 `scrolly` 这个类才真能滚。
+现在它决定容器提供的**滚动手艺**：`bar` 就是那个老类（现有帧本来都手写了它，所以行为不变），
+`none` / `indicator` / `arrow` 一律裁剪（`noscroll`），因为分页的 rack 不能在自己的控件底下滚动。
+
+`indicator` / `arrow` 落地为翻页控件：点数 = 页数（exclusive 每页一行，fixed 每页 `count` 行），
+当前页高亮；箭头在同两端置灰。点击只改本地窗口，不上行——和轮换同一条规矩；点击一律
+`stopPropagation`，因为 `pause: click` 就挂在同一容器上，翻页不是暂停。`adaptive` 不提供翻页
+（它没有"页"可言）。
+
+同一批修掉一个真缺陷：`exclusive` + `play: newest` 在没有人设过游标时什么都不显示。说"一次一行、
+跟最新"的帧必须露出最后一行，否则那是一块谁也解释不了的空白。现在"哪一行在场"由一个函数
+（`stage_row`）回答，行自己的可见性、点的点亮、窗口起点（`window_start`，仅 `fixed`）共用它，
+三者不可能各说一套。
+
 ## 未做（明确的欠账）
 
-- `fixed` 的翻页 UI：`indicator` / `arrow` 的点击与页码还没做，`fixed` 现在只能靠索引推进。
 - 进场与离场时长还不是参数（都写死 0.35s）；要调就调 CSS。
 - 横向的"跟尾巴"没有实现：跟随规则目前只对 vertical + adaptive + bar 生效。
