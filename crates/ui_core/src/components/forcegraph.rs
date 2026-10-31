@@ -36,8 +36,13 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
         size
     };
 
+    // 尺寸之外还有三条结构属性：标签层和悬停卡是宿主的绝对定位子元素，定位
+    // 基准必须是宿主自己，超出面板的标签和卡片要被裁掉。`style` 属性归下面的
+    // Effect 重写，所以这三条必须跟尺寸一起写——只写尺寸会把 `mount` 时写下的
+    // `position: relative` / `overflow: hidden` 抹掉（症状：悬停卡出现在画布
+    // 下方、面板外，而不是节点旁边）。
+    let host_style = format!("{size}position: relative; margin: 0; padding: 0; overflow: hidden;");
     let nr = NodeRef::<Div>::new();
-    let host_style = size.clone();
     let view: Rc<RefCell<Option<forcegraph::View>>> = Rc::new(RefCell::new(None));
 
     {
