@@ -2,10 +2,15 @@ use crate::Ctx;
 use crate::ctx::render_accrete;
 use crate::hooks::{use_common_css, use_source_id};
 use accrete::classify::Classify;
-use accrete::{Accrete, AccreteOps, Rack, RackAttr};
+use accrete::{
+    Accrete, AccreteOps, Rack, RackAttr, RackDirection, RackEnter, RackLayout, RackPause, RackPlay,
+    RackScroll, RackView,
+};
 use leptos::html::*;
+use leptos::leptos_dom::helpers::set_interval;
 use leptos::prelude::*;
 use std::collections::HashMap;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 struct ItemContainer {
@@ -67,7 +72,53 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
     // 只在 leptos 的 render 作用域里调用：没有 owner，行订阅就无处挂。
     #[allow(clippy::expect_used)]
     let parent_owner = Owner::current().expect("rack_ requires a reactive owner");
+    // THE VIEW (ADR 0024): how the same rows are laid out, how they enter, who plays them. The
+    // defaults are exactly what a rack has always done, so a frame that says nothing about `view`
+    // renders through the same path it always did — no wrapper node, no timer, no class.
+    let view = accrete
+        .attrs
+        .as_ref()
+        .and_then(|RackAttr { view, scroll, .. }| {
+            // The old boolean keeps its meaning: it was "scrollbar, follow the tail".
+            Some(match (view.clone(), *scroll) {
+                (Some(v), true) => RackView {
+                    scroll: RackScroll::Bar,
+                    ..v
+                },
+                (Some(v), false) => v,
+                (None, true) => RackView {
+                    scroll: RackScroll::Bar,
+                    ..RackView::default()
+                },
+                (None, false) => RackView::default(),
+            })
+        })
+        .unwrap_or_default();
+    // Rows earn a wrapper node only when the view needs a handle on them (a fade to run, an
+    // opacity to toggle). Otherwise the tree is the one it has always been.
+    let paints = view.layout != RackLayout::Adaptive || view.enter != RackEnter::None;
+
+    // ONE KNOB FOR DIRECTION: the frame says `view.direction`, and it lands through the
+    // `horizontal` field `use_common_css` already reads. Two mechanisms would let the frame say one
+    // thing while the class says another.
+    let mut accrete = accrete;
+    if view.direction == RackDirection::Horizontal {
+        accrete
+            .attrs
+            .get_or_insert_with(RackAttr::default)
+            .horizontal = Some(true);
+    }
+    let accrete = accrete;
+
     let mut css = vec!["rack", "f"];
+    match view.layout {
+        // EXCLUSIVE: every row sits in the same grid cell, stacked, and only the current one is
+        // opaque. Fading out is therefore CSS's job — no "keep the node a while after it is
+        // removed" timing that nobody but the renderer could run.
+        RackLayout::Exclusive => css.push("rot"),
+        RackLayout::Fixed => css.push("win"),
+        RackLayout::Adaptive => {}
+    }
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
@@ -75,17 +126,78 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
     let Some(source) = use_source_id(&accrete).cloned() else {
         return div().into_any();
     };
-    let scroll = accrete
-        .attrs
-        .as_ref()
-        .map(|RackAttr { scroll, .. }| *scroll)
-        .unwrap_or(false);
+    // FOLLOW-THE-TAIL lives only where these three meet (the old chat path). A notice rack —
+    // exclusive, rotating, no scrollbar — must not inherit "follow while within a screen of the
+    // bottom".
+    let follows = view.scroll == RackScroll::Bar
+        && view.direction == RackDirection::Vertical
+        && view.layout == RackLayout::Adaptive;
 
     let slot = ctx.slot_for_list(&source);
     // 行位置索引：list 每次变更只建一遍，所有行 memo 共用。建在外层闭包之外
     // ——闭包每次重跑都会重建自身状态，索引必须比它活得久（索引与行 owner 同
     // 挂 rack 作用域，父渲染重跑时一起重建）。
     let index = Memo::new(move |_| std::sync::Arc::new(row_positions(&slot.get())));
+
+    // WHO IS ON STAGE: `None` means nobody. A notice area empties itself when its turn ends — the
+    // rows stay in the slot, the renderer simply stops showing them. Rotation ends at `None`, never
+    // wrapping back to the first row: a sentence already said should not return every so often.
+    //
+    // Rotation and pausing are the renderer's own state. The venue only sends rows; how long one
+    // stays, when it is replaced, and what holds it still are decided here (2026-10-31).
+    let active = RwSignal::new(None::<usize>);
+    // How many rows have had their turn. Rotation walks the queue in the order it was said — a
+    // second line arriving while the first is being read waits behind it, which is what a queue is
+    // for; the only thing that jumps is an empty area meeting an unread row.
+    let shown = RwSignal::new(0usize);
+    let paused = RwSignal::new(false);
+    let rotating = view.play == RackPlay::Rotate && view.layout != RackLayout::Adaptive;
+    if rotating {
+        let tick_slot = slot.clone();
+        let every = view.every.unwrap_or(4000).max(200);
+        set_interval(
+            move || {
+                if paused.get_untracked() {
+                    return;
+                }
+                let len = tick_slot.get_untracked().len();
+                let Some(cur) = active.get_untracked() else {
+                    return;
+                };
+                if len == 0 {
+                    active.set(None);
+                } else if cur + 1 < len {
+                    shown.set(cur + 1);
+                    active.set(Some(cur + 1));
+                } else {
+                    shown.set(len);
+                    active.set(None);
+                }
+            },
+            Duration::from_millis(every),
+        );
+        // An empty area shows the next unread row at once, so a refusal never waits for a turn that
+        // has nothing to wait behind.
+        let watch = slot.clone();
+        let last_len = RwSignal::new(0usize);
+        Effect::new(move |_| {
+            let len = watch.get().len();
+            let before = last_len.get_untracked();
+            last_len.set(len);
+            if len < before {
+                // A removal renumbers the rows underneath the cursor; start over rather than point
+                // into the middle of a list that changed shape.
+                shown.set(0);
+                active.set(None);
+                return;
+            }
+            if len > before && active.get_untracked().is_none() {
+                let next = shown.get_untracked().min(len - 1);
+                shown.set(next);
+                active.set(Some(next));
+            }
+        });
+    }
     move || -> AnyView {
         // 只订阅本 source 的槽：其他键的更新不触发本闭包
         let c = slot.get();
@@ -93,9 +205,28 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
         // 外层键集 diff：追帧只给新键建行，旧行节点存活；行内容做成
         // 反应式闭包再订阅 ctx.list，同 id 行的 merge 更新原地刷新，
         // 不重建行节点。
+        // FIXED N: mount only the rows in the window (paging is driven by the index). Every other
+        // layout mounts all of them — exclusive hides the rest with opacity, so the slot keeps the
+        // whole history.
+        let (from, to) = match view.layout {
+            RackLayout::Fixed => {
+                let n = view.count.unwrap_or(1).max(1);
+                // Without a rotation there is no cursor to page with, and "fixed N" then means the
+                // last N — the newest rows are the ones a reader cares about.
+                let start = match active.get() {
+                    Some(cur) => cur.min(c.len().saturating_sub(1)),
+                    None if view.play == RackPlay::Newest => c.len().saturating_sub(n),
+                    None => 0,
+                };
+                (start, (start + n).min(c.len()))
+            }
+            _ => (0, c.len()),
+        };
         let keys: Vec<String> = c
             .iter()
             .enumerate()
+            .skip(from)
+            .take(to.saturating_sub(from))
             .map(|(idx, child)| row_key(child, idx))
             .collect();
         let lcx = ctx.clone();
@@ -104,7 +235,7 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
         let children = leptos::tachys::view::keyed::keyed(
             keys,
             |k: &String| k.clone(),
-            move |_, key: String| {
+            move |row_index: usize, key: String| {
                 // 每行独立 owner（挂在 rack 的 owner 下）：外层键集 diff 不清理
                 // 未变动行的 owner，行内 memo/订阅因此跨外层重建存活。
                 let owner = po.with(Owner::new);
@@ -125,14 +256,31 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
                         let Some(child) = memo.get() else {
                             return div().into_any();
                         };
-                        match item.select(&child) {
+                        let inner = match item.select(&child) {
                             Some(mut template) => {
                                 // 模板外壳 + child 作为其 children
                                 template.set_children(vec![child]);
                                 render_accrete(&rctx, &template)
                             }
                             None => render_accrete(&rctx, &child),
+                        };
+                        if !paints {
+                            return inner;
                         }
+                        // The wrapper exists only to give the row a handle that can be switched:
+                        // the enter animation plays once (on mount), and in an exclusive layout the
+                        // show/hide is an opacity transition — both directions are CSS's.
+                        let enter = match view.enter {
+                            RackEnter::Fade => " enter-fade",
+                            RackEnter::Translate => " enter-slide",
+                            RackEnter::None => "",
+                        };
+                        let shown_by_index = view.layout == RackLayout::Exclusive;
+                        let cls = move || {
+                            let is_active = !shown_by_index || active.get() == Some(row_index);
+                            format!("slide{enter}{}", if is_active { " active" } else { "" })
+                        };
+                        div().class(cls).child(inner).into_any()
                     }
                     .into_any()
                 });
@@ -143,7 +291,7 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
             },
         );
 
-        if scroll {
+        if follows {
             let id_ = id.clone();
             leptos::task::spawn_local(async move {
                 // 自动滚动 = "开启 + 在底部"才跟随（PLAN §17）：旧判据
@@ -242,7 +390,19 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
             });
         }
 
-        div().id(id.as_str()).class(css.as_str()).child(children).into_any()
+        let root = div().id(id.as_str()).class(css.as_str()).child(children);
+        match (rotating, view.pause) {
+            (true, RackPause::Click) => root
+                .on(leptos::ev::click, move |_| {
+                    paused.set(!paused.get_untracked());
+                })
+                .into_any(),
+            (true, RackPause::Hover) => root
+                .on(leptos::ev::mouseenter, move |_| paused.set(true))
+                .on(leptos::ev::mouseleave, move |_| paused.set(false))
+                .into_any(),
+            _ => root.into_any(),
+        }
     }
     .into_any()
 }
