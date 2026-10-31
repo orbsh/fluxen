@@ -35,6 +35,9 @@ use crate::style::{Style, Theme};
 
 /// Pointer travel (CSS px) below which press-and-release counts as a click.
 const CLICK_SLOP_PX: f32 = 4.0;
+
+/// Distance between the hovered node's centre and the detail card, in CSS px.
+const CARD_GAP_PX: f32 = 14.0;
 const ORBIT_RADIANS_PER_PX: f32 = 0.006;
 // No pitch limit: a frame has no pole to hit, so the drag can tip past vertical
 // and keep going (see `Camera::orbit`).
@@ -203,6 +206,12 @@ struct Overlay {
     layer: HtmlElement,
     card: HtmlElement,
     labels: Vec<HtmlElement>,
+    /// The card's measured box and the text it was measured with. Sizing the
+    /// placement needs the box (a card near the panel edge is clamped back
+    /// inside it), and measuring only when the text changes keeps the frame
+    /// loop free of a forced layout.
+    card_box: Option<(f32, f32)>,
+    card_text: String,
 }
 
 pub struct View {
@@ -261,6 +270,11 @@ impl View {
         card.set_class_name("fg-card");
         let card_css = card.style();
         card_css.set_property("position", "absolute").ok()?;
+        // Absolute with `auto` offsets lays the card out at its *static*
+        // position — which is below the canvas, i.e. outside the panel. The
+        // offsets must be explicit, like the label layer's.
+        card_css.set_property("left", "0").ok()?;
+        card_css.set_property("top", "0").ok()?;
         card_css.set_property("display", "none").ok()?;
         card_css.set_property("pointer-events", "none").ok()?;
         card_css.set_property("z-index", "2").ok()?;
@@ -292,6 +306,8 @@ impl View {
             layer,
             card,
             labels: Vec::new(),
+            card_box: None,
+            card_text: String::new(),
         }));
 
         // The theme switch lives inside the panel: it repaints the surface, the
@@ -984,6 +1000,19 @@ impl View {
         on_up.forget();
         self.listen("pointerup", function);
 
+        // Leaving the canvas ends the hover. The card follows the pointer
+        // position the view last saw, so without this a card stays standing
+        // after the cursor has gone somewhere else.
+        let state = Rc::clone(&self.state);
+        let on_leave = Closure::<dyn FnMut(PointerEvent)>::new(move |_event: PointerEvent| {
+            let mut guard = state.borrow_mut();
+            let st: &mut State = &mut guard;
+            st.hover = None;
+        });
+        let function = on_leave.as_ref().unchecked_ref::<js_sys::Function>().clone();
+        on_leave.forget();
+        self.listen("pointerleave", function);
+
         let on_menu = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
             event.prevent_default();
         });
@@ -1136,21 +1165,40 @@ fn update_overlay(overlay: &mut Overlay, st: &State, viewport: (f32, f32)) {
             let name = node.name.clone().unwrap_or_else(|| node.id.clone());
             let kind = node.kind.clone().unwrap_or_else(|| "—".to_string());
             let weight = node.weight.unwrap_or(1.0);
-            overlay.card.set_text_content(Some(&format!(
-                "{name}\n{kind} · weight {weight:.0}"
-            )));
+            let text = format!("{name}\n{kind} · weight {weight:.0}");
+            if overlay.card_text != text {
+                overlay.card.set_text_content(Some(&text));
+                overlay.card_text = text;
+                overlay.card_box = None;
+            }
             let css = overlay.card.style();
             css.set_property("white-space", "pre").ok();
             css.set_property("display", "block").ok();
+            // The host clips to the panel, so the card has to be placed *inside*
+            // it: measure once per text (offset size is zero while hidden, hence
+            // the display write above) and clamp both axes.
+            let (w, h) = match overlay.card_box {
+                Some(size) => size,
+                None => {
+                    let size = (
+                        overlay.card.offset_width() as f32,
+                        overlay.card.offset_height() as f32,
+                    );
+                    overlay.card_box = Some(size);
+                    size
+                }
+            };
+            let pad = 4.0;
+            let x = (screen.x - w * 0.5).clamp(pad, (viewport.0 - w - pad).max(pad));
+            // Above the node by default (it is what the labels do not cover),
+            // below it when the node sits too close to the top edge.
+            let y = if screen.y - h - CARD_GAP_PX >= pad {
+                screen.y - h - CARD_GAP_PX
+            } else {
+                screen.y + CARD_GAP_PX
+            };
             let _ = css
-                .set_property(
-                    "transform",
-                    &format!(
-                        "translate({}px, {}px) translate(-50%, -260%)",
-                        screen.x.round(),
-                        screen.y.round()
-                    ),
-                )
+                .set_property("transform", &format!("translate({}px, {}px)", x.round(), y.round()))
                 .ok();
         }
         None => {
