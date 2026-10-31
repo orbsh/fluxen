@@ -29,11 +29,12 @@
 #       三格挤一图）已弃：小格内轴叠轴、整体挤压。facetRect 词法备查：
 #       顶层 composition + encode.x 分面字段；view+transform:[facetRect]
 #       嵌套写法不存在。
-#       雷达首尾轴不重合的写法（实测 2026-10-02，量的是坐标变换后的像素）：
-#       point 标度默认把 6 个维度摊在 0…1，polar 下 0 与 1 是同一角度——
-#       首尾两轴像素完全相同（重合）；paddingOuter 对本版 point 标度无效
-#       （paddingOuter 1/2 映射都不变，实测），必须显式给 range
-#       （[-1/6, 2/3]）＝六轴各隔 60°、留一处 60° 缺口。
+#       雷达首尾轴不重合的写法：point 标度默认把 6 个维度摊在 0…1，polar 下 0 与 1
+#       是同一角度——首尾两轴像素完全相同（重合）；`paddingOuter` 对本版 point 标度
+#       无效（paddingOuter 1/2 映射都不变，实测）。官方配方是给标度自身的
+#       `padding: 0.5` + `align: 0`：每个维度占一个槽、第一个落在正上方，六轴各隔
+#       60°，没有缺口。手拼 `range`（[-1/6, 2/3]）也能隔开，但会留一处 60° 的缺口
+#       并把末端维度推到画布边缘——标签被裁，那条轴附近没有可悬停的图元。
 #   下：摘要行（text，绑 `summary` 槽，空串起步），演示脚本逐 token patch 进槽
 #       的 /bind/value/default 追加。
 # 流式内容（逐日数据、逐 token 摘要）全部走数据槽：写布局节点会重渲染整行、
@@ -388,15 +389,13 @@
             value: 4.4
           coordinate:
             type: polar
-          # 极坐标的轴标签画在外圈之外，`auto` 不为它们留位：末端维度（150°）的
-          # 标签会顶到画布边缘被裁掉，那块区域也就没有可悬停的对象。给固定内边距。
-          padding: 14
+          # 六轴等分用标度自己的旋钮（G2 官方雷达配方）：`padding: 0.5` 让每个
+          # 维度占一个槽、`align: 0` 让第一个落在正上方。不要手拼 `range`，那会
+          # 留缺口并把末端维度顶到画布边缘。
           scale:
             x:
-              type: point
-              range:
-              - -0.1666667
-              - 0.6666667
+              padding: 0.5
+              align: 0
             y:
               domain:
               - 0
@@ -429,17 +428,6 @@
               lineWidth: 2
               join: round
               cap: round
-          # 顶点标记：area 只填 0.15 透明度、line 只有 2px 描边，两者在某个维度上
-          # 的可命中范围都很窄，最后一个维度（150°）尤其落空——悬停没提示就是因为
-          # 那里没有可命中的图元。点标记给每个维度一个明确的悬停目标。
-          - type: point
-            encode:
-              x: dim
-              y: value
-              color: name
-            style:
-              r: 2.5
-              lineWidth: 0
           interaction:
             tooltip: {}
 - action: set
@@ -526,15 +514,13 @@
             value: 3.6
           coordinate:
             type: polar
-          # 极坐标的轴标签画在外圈之外，`auto` 不为它们留位：末端维度（150°）的
-          # 标签会顶到画布边缘被裁掉，那块区域也就没有可悬停的对象。给固定内边距。
-          padding: 14
+          # 六轴等分用标度自己的旋钮（G2 官方雷达配方）：`padding: 0.5` 让每个
+          # 维度占一个槽、`align: 0` 让第一个落在正上方。不要手拼 `range`，那会
+          # 留缺口并把末端维度顶到画布边缘。
           scale:
             x:
-              type: point
-              range:
-              - -0.1666667
-              - 0.6666667
+              padding: 0.5
+              align: 0
             y:
               domain:
               - 0
@@ -567,17 +553,6 @@
               lineWidth: 2
               join: round
               cap: round
-          # 顶点标记：area 只填 0.15 透明度、line 只有 2px 描边，两者在某个维度上
-          # 的可命中范围都很窄，最后一个维度（150°）尤其落空——悬停没提示就是因为
-          # 那里没有可命中的图元。点标记给每个维度一个明确的悬停目标。
-          - type: point
-            encode:
-              x: dim
-              y: value
-              color: name
-            style:
-              r: 2.5
-              lineWidth: 0
           interaction:
             tooltip: {}
 - action: set
@@ -688,15 +663,13 @@
             value: 3.5
           coordinate:
             type: polar
-          # 极坐标的轴标签画在外圈之外，`auto` 不为它们留位：末端维度（150°）的
-          # 标签会顶到画布边缘被裁掉，那块区域也就没有可悬停的对象。给固定内边距。
-          padding: 14
+          # 六轴等分用标度自己的旋钮（G2 官方雷达配方）：`padding: 0.5` 让每个
+          # 维度占一个槽、`align: 0` 让第一个落在正上方。不要手拼 `range`，那会
+          # 留缺口并把末端维度顶到画布边缘。
           scale:
             x:
-              type: point
-              range:
-              - -0.1666667
-              - 0.6666667
+              padding: 0.5
+              align: 0
             y:
               domain:
               - 0
@@ -729,16 +702,5 @@
               lineWidth: 2
               join: round
               cap: round
-          # 顶点标记：area 只填 0.15 透明度、line 只有 2px 描边，两者在某个维度上
-          # 的可命中范围都很窄，最后一个维度（150°）尤其落空——悬停没提示就是因为
-          # 那里没有可命中的图元。点标记给每个维度一个明确的悬停目标。
-          - type: point
-            encode:
-              x: dim
-              y: value
-              color: name
-            style:
-              r: 2.5
-              lineWidth: 0
           interaction:
             tooltip: {}
