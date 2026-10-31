@@ -410,6 +410,77 @@
         position: absolute;
     }
 
+    /* rack's `view` (ADR 0024): how the same rows are laid down. The default view adds no wrapper
+       node, so these classes only ever appear when a frame says `view`. */
+    .rack > .slide.enter-fade {
+        animation: rack-fade 0.35s ease;
+    }
+
+    .rack > .slide.enter-slide {
+        animation: rack-slide 0.35s ease;
+    }
+
+    /* Exclusive: every row stacks in one cell and only the current one is opaque. Both directions
+       ride the opacity transition, so fading out needs no one to hold the node a while — and no
+       clock outside the renderer. */
+    .rack.rot {
+        display: grid;
+        grid-template-areas: "stack";
+        grid-template-columns: minmax(0, 1fr);
+
+        & > .slide {
+            grid-area: stack;
+            opacity: 0;
+            transition: opacity 0.35s ease;
+            pointer-events: none;
+
+            &.active {
+                opacity: 1;
+                pointer-events: auto;
+            }
+        }
+    }
+
+    @keyframes rack-fade {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes rack-slide {
+        from {
+            opacity: 0;
+            transform: translateY(-0.5rem);
+        }
+
+        to {
+            opacity: 1;
+            transform: none;
+        }
+    }
+
+    /* The notice area: floats above everything, takes no room in the layout, does nothing while
+       empty. Where it stands is this file's business; how long a line stays, how it enters and when
+       it is replaced belong to the rack's `view`. */
+    .toast {
+        position: fixed;
+        top: 1rem;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 60;
+        width: max-content;
+        max-width: min(80vw, 36rem);
+        pointer-events: none;
+
+        & > * > * {
+            pointer-events: auto;
+        }
+    }
+
     .popup {
         & > .body {
             display: none;

@@ -705,12 +705,115 @@ pub struct Pages {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
 pub struct RackAttr {
+    /// The old boolean scroll switch: `true` means `view.scroll = "bar"`. It stays because frames
+    /// already say it, and what it meant now has a finer name.
     #[serde(default)]
     pub scroll: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
+    /// How the same rows are laid down (ADR 0024). Omitted = exactly what a rack has always done.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view: Option<RackView>,
+    /// The container's own direction. `view.direction` is what a frame should say; this field is
+    /// where the renderer lands it (`use_common_css` already reads it — the same field `ClassAttr`
+    /// grew for the same reason).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub horizontal: Option<bool>,
+}
+
+/// How a list container presents its rows: where they sit, how they come and go, who plays them. It
+/// changes no data — the slot is still the truth, this only decides which rows are shown.
+///
+/// The six defaults together are the rack that already existed (adaptive flow, vertical, no enter
+/// effect, no scroll control, following the newest row, no pausing), so an old frame that says
+/// nothing about `view` behaves exactly as before.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct RackView {
+    #[serde(default)]
+    pub layout: RackLayout,
+    /// `fixed` 露出几行；其余布局不看这个数。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<usize>,
+    #[serde(default)]
+    pub direction: RackDirection,
+    #[serde(default)]
+    pub enter: RackEnter,
+    #[serde(default)]
+    pub scroll: RackScroll,
+    #[serde(default)]
+    pub play: RackPlay,
+    /// `rotate` 每一步停留多久（毫秒）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub every: Option<u64>,
+    #[serde(default)]
+    pub pause: RackPause,
+}
+
+/// How many rows are on stage: adaptive (the flow, as before), a fixed N, or one at a time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum RackLayout {
+    #[default]
+    Adaptive,
+    Fixed,
+    Exclusive,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum RackDirection {
+    #[default]
+    Vertical,
+    Horizontal,
+}
+
+/// How a row enters. Leaving is the renderer's business and needs no word from the sender.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum RackEnter {
+    #[default]
+    None,
+    Fade,
+    Translate,
+}
+
+/// The shape of scrolling: a bar (the old `scroll: true`), indicators, arrows, or none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum RackScroll {
+    #[default]
+    None,
+    Bar,
+    Indicator,
+    Arrow,
+}
+
+/// Who decides which row is current: the newest one (as before), or a rotation of the renderer's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum RackPlay {
+    #[default]
+    Newest,
+    Rotate,
+}
+
+/// What holds the rotation still.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum RackPause {
+    #[default]
+    Off,
+    Click,
+    Hover,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
