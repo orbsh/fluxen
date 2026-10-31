@@ -729,7 +729,9 @@ pub struct RackAttr {
 /// The six defaults together are the rack that already existed (adaptive flow, vertical, no enter
 /// effect, no scroll control, following the newest row, no pausing), so an old frame that says
 /// nothing about `view` behaves exactly as before.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+// Copy: every axis is a small enum, and the renderer clones the view into row closures that outlive
+// the pass that built them — a value type keeps that from turning into ownership puzzles.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct RackView {
     #[serde(default)]

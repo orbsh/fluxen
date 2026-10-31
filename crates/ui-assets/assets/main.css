@@ -425,8 +425,17 @@
        clock outside the renderer. */
     .rack.rot {
         display: grid;
-        grid-template-areas: "stack";
+        /* A second row exists for the paging controls: they must not share the row the slides
+           stack in, or a dot row would sit on top of the current notice. */
+        grid-template-rows: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "stack"
+            "foot";
         grid-template-columns: minmax(0, 1fr);
+
+        & > .pager {
+            grid-area: foot;
+        }
 
         & > .slide {
             grid-area: stack;
@@ -460,6 +469,53 @@
         to {
             opacity: 1;
             transform: none;
+        }
+    }
+
+    /* A view that is not `bar` clips: a paged rack must not scroll under its own controls, and a
+       notice must not grow the page. */
+    .rack.noscroll {
+        overflow: hidden;
+    }
+
+    /* Paging (`scroll: indicator | arrow`). Local to the page: the dots and arrows move the window
+       and say nothing to whoever sent the rows. */
+    .rack > .pager {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 0.15rem 0;
+    }
+
+    .rack > .pager .dot {
+        width: 0.4rem;
+        height: 0.4rem;
+        border-radius: 999px;
+        background: currentColor;
+        opacity: 0.3;
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+
+        &.on {
+            opacity: 1;
+        }
+    }
+
+    .rack > .pager .arrow {
+        border: 0;
+        background: none;
+        color: inherit;
+        font-size: 1rem;
+        line-height: 1;
+        padding: 0 0.3rem;
+        opacity: 0.75;
+        cursor: pointer;
+
+        &.off {
+            opacity: 0.2;
+            cursor: default;
         }
     }
 

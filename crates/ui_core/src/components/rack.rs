@@ -64,6 +64,112 @@ fn row_positions(rows: &[Accrete]) -> HashMap<String, usize> {
     pos
 }
 
+/// Which row an exclusive rack has on stage. `newest` without a rotation means the last one: a
+/// frame that says "one at a time, follow the newest" must not show an empty area because nobody
+/// ever set a cursor.
+fn stage_row(view: &RackView, active: Option<usize>, len: usize) -> Option<usize> {
+    match view.layout {
+        RackLayout::Exclusive => active.or_else(|| match view.play {
+            RackPlay::Newest => len.checked_sub(1),
+            RackPlay::Rotate => None,
+        }),
+        RackLayout::Fixed | RackLayout::Adaptive => None,
+    }
+}
+
+/// Where a paged window starts, given the view's own cursor. ONE definition: the row window and
+/// the paging controls both ask here, so what a dot says is what is on screen.
+fn window_start(view: &RackView, active: Option<usize>, len: usize) -> usize {
+    // Only `fixed` has a window; every other layout mounts what it mounts, so there is no start to
+    // compute and a value here would only invite someone to read it.
+    if view.layout != RackLayout::Fixed {
+        return 0;
+    }
+    let n = view.count.unwrap_or(1).max(1);
+    match active {
+        Some(cur) => cur.min(len.saturating_sub(1)),
+        // Without a cursor "fixed N" means the last N: the newest rows are the ones a reader cares
+        // about.
+        None if view.play == RackPlay::Newest => len.saturating_sub(n),
+        None => 0,
+    }
+}
+
+/// The paging controls a frame asked for (`scroll: indicator | arrow`). LOCAL state only — a click
+/// moves the window and nothing is said to the sender, the same rule a rotation follows. Clicks
+/// stop propagating because `pause: click` listens on the same container: paging is not pausing.
+fn pager(
+    view: &RackView,
+    active: RwSignal<Option<usize>>,
+    shown: RwSignal<usize>,
+    from: usize,
+    per_page: usize,
+    paged: bool,
+    len: usize,
+) -> AnyView {
+    // One page is not a choice, and an adaptive rack has no page to name.
+    if !paged || per_page == 0 || len <= per_page {
+        return ().into_any();
+    }
+    let pages = len.div_ceil(per_page);
+    let current = match view.layout {
+        RackLayout::Exclusive => stage_row(view, active.get(), len),
+        RackLayout::Fixed => Some(from / per_page),
+        RackLayout::Adaptive => None,
+    };
+    // A person who pages has SEEN what lies behind the new page, so the rotation resumes after it
+    // rather than replaying the queue from the start.
+    let go = move |page: usize| {
+        let start = page * per_page;
+        active.set(Some(start));
+        shown.set(start + 1);
+    };
+    let mut kids: Vec<AnyView> = Vec::new();
+    match view.scroll {
+        RackScroll::Indicator => {
+            for page in 0..pages {
+                let live = current == Some(page);
+                kids.push(
+                    span()
+                        .class(if live { "dot on" } else { "dot" })
+                        .on(leptos::ev::click, move |e: leptos::ev::MouseEvent| {
+                            e.stop_propagation();
+                            go(page);
+                        })
+                        .into_any(),
+                );
+            }
+        }
+        RackScroll::Arrow => {
+            let here = current.unwrap_or(0);
+            let back = here.saturating_sub(1);
+            let ahead = (here + 1).min(pages - 1);
+            kids.push(
+                button()
+                    .class(if here == 0 { "arrow off" } else { "arrow" })
+                    .on(leptos::ev::click, move |e: leptos::ev::MouseEvent| {
+                        e.stop_propagation();
+                        go(back);
+                    })
+                    .child("\u{2039}")
+                    .into_any(),
+            );
+            kids.push(
+                button()
+                    .class(if here + 1 >= pages { "arrow off" } else { "arrow" })
+                    .on(leptos::ev::click, move |e: leptos::ev::MouseEvent| {
+                        e.stop_propagation();
+                        go(ahead);
+                    })
+                    .child("\u{203a}")
+                    .into_any(),
+            );
+        }
+        RackScroll::None | RackScroll::Bar => {}
+    }
+    div().class("pager").child(kids).into_any()
+}
+
 /// 列表容器：按 selector 索引 `item` 模板，遍历 `ctx.list[source]` 渲染。
 pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
     let ctx = ctx.clone();
@@ -116,8 +222,14 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
         // opaque. Fading out is therefore CSS's job — no "keep the node a while after it is
         // removed" timing that nobody but the renderer could run.
         RackLayout::Exclusive => css.push("rot"),
-        RackLayout::Fixed => css.push("win"),
-        RackLayout::Adaptive => {}
+        RackLayout::Fixed | RackLayout::Adaptive => {}
+    }
+    // `view.scroll` says what the container offers, so it decides the CSS that offers it: a bar is
+    // the scroll container every existing frame already names by hand, and anything else clips
+    // (a paged view must not scroll under its own controls).
+    match view.scroll {
+        RackScroll::Bar => css.push("scrolly"),
+        RackScroll::None | RackScroll::Indicator | RackScroll::Arrow => css.push("noscroll"),
     }
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
@@ -133,11 +245,27 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
         && view.direction == RackDirection::Vertical
         && view.layout == RackLayout::Adaptive;
 
+    // Rows per page: one at a time (exclusive), the declared window (fixed), or everything
+    // (adaptive — where a page would name nothing, so paging controls are not offered).
+    let per_page = match view.layout {
+        RackLayout::Exclusive => 1,
+        RackLayout::Fixed => view.count.unwrap_or(1).max(1),
+        RackLayout::Adaptive => usize::MAX,
+    };
+    let paged = matches!(view.scroll, RackScroll::Indicator | RackScroll::Arrow)
+        && view.layout != RackLayout::Adaptive;
+
     let slot = ctx.slot_for_list(&source);
     // 行位置索引：list 每次变更只建一遍，所有行 memo 共用。建在外层闭包之外
     // ——闭包每次重跑都会重建自身状态，索引必须比它活得久（索引与行 owner 同
     // 挂 rack 作用域，父渲染重跑时一起重建）。
     let index = Memo::new(move |_| std::sync::Arc::new(row_positions(&slot.get())));
+    // How many rows there are, as a signal: a row's own closure outlives the render pass that built
+    // it, so "which row is on stage" has to read the CURRENT length, not a captured one.
+    let row_count = {
+        let s = slot.clone();
+        Memo::new(move |_| s.get().len())
+    };
 
     // WHO IS ON STAGE: `None` means nobody. A notice area empties itself when its turn ends — the
     // rows stay in the slot, the renderer simply stops showing them. Rotation ends at `None`, never
@@ -210,15 +338,8 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
         // whole history.
         let (from, to) = match view.layout {
             RackLayout::Fixed => {
-                let n = view.count.unwrap_or(1).max(1);
-                // Without a rotation there is no cursor to page with, and "fixed N" then means the
-                // last N — the newest rows are the ones a reader cares about.
-                let start = match active.get() {
-                    Some(cur) => cur.min(c.len().saturating_sub(1)),
-                    None if view.play == RackPlay::Newest => c.len().saturating_sub(n),
-                    None => 0,
-                };
-                (start, (start + n).min(c.len()))
+                let start = window_start(&view, active.get(), c.len());
+                (start, (start + per_page).min(c.len()))
             }
             _ => (0, c.len()),
         };
@@ -231,6 +352,9 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
             .collect();
         let lcx = ctx.clone();
         let item2 = item.clone();
+        // The row closures outlive this pass, so they get their own copy of the view (the outer
+        // closure re-runs and must not have its `view` moved out from under it).
+        let view_rows = view.clone();
         let po = parent_owner.clone();
         let children = leptos::tachys::view::keyed::keyed(
             keys,
@@ -276,8 +400,11 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
                             RackEnter::None => "",
                         };
                         let shown_by_index = view.layout == RackLayout::Exclusive;
+                        let stage_view = view_rows.clone();
                         let cls = move || {
-                            let is_active = !shown_by_index || active.get() == Some(row_index);
+                            let is_active = !shown_by_index
+                                || stage_row(&stage_view, active.get(), row_count.get())
+                                    == Some(row_index);
                             format!("slide{enter}{}", if is_active { " active" } else { "" })
                         };
                         div().class(cls).child(inner).into_any()
@@ -390,7 +517,11 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
             });
         }
 
-        let root = div().id(id.as_str()).class(css.as_str()).child(children);
+        let root = div()
+            .id(id.as_str())
+            .class(css.as_str())
+            .child(children)
+            .child(pager(&view, active, shown, from, per_page, paged, c.len()));
         match (rotating, view.pause) {
             (true, RackPause::Click) => root
                 .on(leptos::ev::click, move |_| {
@@ -437,6 +568,47 @@ mod tests {
         assert_eq!(pos["#1"], 1);
         assert_eq!(pos["b"], 2);
         assert_eq!(pos.len(), 3);
+    }
+
+    fn view(layout: RackLayout, play: RackPlay, count: Option<usize>) -> RackView {
+        RackView {
+            layout,
+            play,
+            count,
+            ..RackView::default()
+        }
+    }
+
+    #[test]
+    fn one_at_a_time_follows_the_newest_row_without_a_cursor() {
+        // A frame that says "exclusive + newest" and never rotates still has something to show:
+        // the last row. An empty area would be a bug the sender cannot see.
+        let v = view(RackLayout::Exclusive, RackPlay::Newest, None);
+        assert_eq!(stage_row(&v, None, 3), Some(2));
+        assert_eq!(stage_row(&v, None, 0), None, "no rows, nobody on stage");
+    }
+
+    #[test]
+    fn rotation_starts_with_nobody_on_stage() {
+        let v = view(RackLayout::Exclusive, RackPlay::Rotate, None);
+        assert_eq!(stage_row(&v, None, 3), None, "the clock decides, not the frame");
+        assert_eq!(stage_row(&v, Some(1), 3), Some(1), "a cursor outranks the policy");
+    }
+
+    #[test]
+    fn a_fixed_window_defaults_to_the_newest_rows() {
+        let v = view(RackLayout::Fixed, RackPlay::Newest, Some(2));
+        assert_eq!(window_start(&v, None, 5), 3, "the last two of five");
+        assert_eq!(window_start(&v, None, 1), 0, "never past the end");
+        assert_eq!(window_start(&v, Some(9), 5), 4, "a stale cursor clamps");
+        assert_eq!(window_start(&v, Some(2), 5), 2);
+    }
+
+    #[test]
+    fn an_adaptive_rack_has_no_page_and_no_stage() {
+        let v = view(RackLayout::Adaptive, RackPlay::Rotate, None);
+        assert_eq!(stage_row(&v, Some(1), 3), None, "everything is on screen already");
+        assert_eq!(window_start(&v, Some(1), 3), 0);
     }
 
     #[test]
