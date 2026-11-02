@@ -747,6 +747,13 @@ pub struct RackView {
     pub scroll: RackScroll,
     #[serde(default)]
     pub play: RackPlay,
+    /// How long `enter` and `leave` take, in ms. Absent = 350, the number the CSS was written
+    /// with; the renderer only ever writes them through the container's custom properties, so how
+    /// a row moves is still CSS's business (ADR 0024).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enter_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub leave_ms: Option<u64>,
     /// `rotate` 每一步停留多久（毫秒）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub every: Option<u64>,

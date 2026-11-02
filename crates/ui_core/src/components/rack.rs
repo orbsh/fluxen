@@ -238,12 +238,12 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
     let Some(source) = use_source_id(&accrete).cloned() else {
         return div().into_any();
     };
-    // FOLLOW-THE-TAIL lives only where these three meet (the old chat path). A notice rack —
+    // FOLLOW-THE-TAIL lives only where these two meet (the old chat path). A notice rack —
     // exclusive, rotating, no scrollbar — must not inherit "follow while within a screen of the
-    // bottom".
-    let follows = view.scroll == RackScroll::Bar
-        && view.direction == RackDirection::Vertical
-        && view.layout == RackLayout::Adaptive;
+    // end". Which axis "the end" is on is the frame's to say: a horizontal strip follows the same
+    // way, it just pins `scrollLeft` instead of `scrollTop`.
+    let follows = view.scroll == RackScroll::Bar && view.layout == RackLayout::Adaptive;
+    let horizontal_tail = view.direction == RackDirection::Horizontal;
 
     // Rows per page: one at a time (exclusive), the declared window (fixed), or everything
     // (adaptive — where a page would name nothing, so paging controls are not offered).
@@ -262,10 +262,7 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
     let index = Memo::new(move |_| std::sync::Arc::new(row_positions(&slot.get())));
     // How many rows there are, as a signal: a row's own closure outlives the render pass that built
     // it, so "which row is on stage" has to read the CURRENT length, not a captured one.
-    let row_count = {
-        let s = slot.clone();
-        Memo::new(move |_| s.get().len())
-    };
+    let row_count = Memo::new(move |_| slot.get().len());
 
     // WHO IS ON STAGE: `None` means nobody. A notice area empties itself when its turn ends — the
     // rows stay in the slot, the renderer simply stops showing them. Rotation ends at `None`, never
@@ -352,9 +349,9 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
             .collect();
         let lcx = ctx.clone();
         let item2 = item.clone();
-        // The row closures outlive this pass, so they get their own copy of the view (the outer
-        // closure re-runs and must not have its `view` moved out from under it).
-        let view_rows = view.clone();
+        // The row closures outlive this pass: they get the view by value (it is `Copy`), so the
+        // outer closure re-running cannot take it away from them.
+        let view_rows = view;
         let po = parent_owner.clone();
         let children = leptos::tachys::view::keyed::keyed(
             keys,
@@ -400,7 +397,7 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
                             RackEnter::None => "",
                         };
                         let shown_by_index = view.layout == RackLayout::Exclusive;
-                        let stage_view = view_rows.clone();
+                        let stage_view = view_rows;
                         let cls = move || {
                             let is_active = !shown_by_index
                                 || stage_row(&stage_view, active.get(), row_count.get())
@@ -443,22 +440,29 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
                     if (e) {{
                         if (!e.dataset.scrollInit) {{
                             e.dataset.scrollInit = "1";
-                            // 最后一次钉下的 scrollTop：用来认出"这次 scroll 是我们自己
-                            // 造成的"——生长常晚于 scroll 事件派发，此刻按 live 值重算
-                            // 会把"还在跟随"误判成用户上滚。
-                            var expectTop = -1;
+                            // The tail, on whichever axis the frame named. One triple, so the
+                            // vertical and horizontal cases cannot drift apart.
+                            var hor = {horizontal};
+                            var keyPos = hor ? "scrollLeft" : "scrollTop";
+                            var keySize = hor ? "scrollWidth" : "scrollHeight";
+                            var keySpan = hor ? "clientWidth" : "clientHeight";
+                            var maxOf = function () {{ return e[keySize] - e[keySpan]; }};
+                            // Last position we pinned: it tells "this scroll was ours" from "the
+                            // reader moved" — growth often arrives after the scroll event, so
+                            // recomputing from the live value would read our own pin as a leave.
+                            var expectPos = -1;
                             var chasing = false;
                             var pin = function () {{
-                                if (e.dataset.atBottom === "0") {{ return; }}
-                                var max = e.scrollHeight - e.clientHeight;
-                                expectTop = max;
-                                e.scrollTop = max;
+                                if (e.dataset.atTail === "0") {{ return; }}
+                                var max = maxOf();
+                                expectPos = max;
+                                e[keyPos] = max;
                             }};
-                            // 追赶循环：生长分多帧到（模块宿主撑开、图表带渲染、打字
-                            // 机），单拍"跳一下"会停在中间值上。用 setTimeout 而不是
-                            // rAF——headless/慢机上 rAF 实测被拖到秒级，追赶因此落后
-                            // 数百 px。高度稳定三拍、或旗标转 "0"（用户上滚）、或超时
-                            // 2s 即停；期间任何新变化再触发一轮。
+                            // Growth arrives over several frames (a module host expanding, a chart
+                            // band rendering), so one jump stops at an intermediate value. Re-pin
+                            // each tick until the extent holds for three ticks, the flag says the
+                            // reader left, or 2s pass. setTimeout, not rAF: on slow machines rAF
+                            // was measured at second scale and the chase fell behind.
                             var chase = function () {{
                                 pin();
                                 if (chasing) {{ return; }}
@@ -466,10 +470,10 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
                                 var last = -1, stable = 0, t0 = Date.now();
                                 var tick = function () {{
                                     pin();
-                                    var now = e.scrollHeight - e.clientHeight;
+                                    var now = maxOf();
                                     stable = (now === last) ? stable + 1 : 0;
                                     last = now;
-                                    if (e.dataset.atBottom === "0" || stable >= 3 ||
+                                    if (e.dataset.atTail === "0" || stable >= 3 ||
                                         Date.now() - t0 > 2000) {{
                                         chasing = false;
                                         return;
@@ -478,16 +482,17 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
                                 }};
                                 setTimeout(tick, 40);
                             }};
-                            var atBottom = function () {{
-                                // 落在底部、或落回刚钉下的位置 = 仍是跟随（用户自己
-                                // 滚到底也落进第一条）；只有明显离开两者才算上滚。
-                                var max = e.scrollHeight - e.clientHeight;
-                                if (Math.abs(e.scrollTop - max) <= 2 ||
-                                    (expectTop >= 0 && Math.abs(e.scrollTop - expectTop) <= 2)) {{
-                                    e.dataset.atBottom = "1";
+                            var atTail = function () {{
+                                // At the end, or back at the position we pinned, still counts as
+                                // following (a reader who scrolls to the end lands in the first
+                                // case); only a clear move away from both means they left.
+                                var max = maxOf();
+                                if (Math.abs(e[keyPos] - max) <= 2 ||
+                                    (expectPos >= 0 && Math.abs(e[keyPos] - expectPos) <= 2)) {{
+                                    e.dataset.atTail = "1";
                                     return;
                                 }}
-                                e.dataset.atBottom = "0";
+                                e.dataset.atTail = "0";
                             }};
                             var ro = new ResizeObserver(chase);
                             var observeChildren = function () {{
@@ -505,21 +510,39 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
                             }}).observe(e, {{ childList: true, subtree: true,
                                               characterData: true, attributes: true }});
                             observeChildren();
-                            e.addEventListener("scroll", atBottom, {{ passive: true }});
-                            e.dataset.atBottom =
-                                (e.scrollHeight - e.scrollTop - e.clientHeight <= 2) ? "1" : "0";
+                            e.addEventListener("scroll", atTail, {{ passive: true }});
+                            e.dataset.atTail =
+                                (e[keySize] - e[keyPos] - e[keySpan] <= 2) ? "1" : "0";
                         }}
                         chase();
                     }}
                     "#,
-                    id_extra = id_
+                    id_extra = id_,
+                    horizontal = if horizontal_tail { "true" } else { "false" }
                 ));
             });
         }
 
+        // How long a row takes to arrive and to leave. The numbers ride the container's custom
+        // properties, so the CSS still owns the motion and a frame only says how long (ADR 0024).
+        // The style attribute is ours alone here: this component applies a frame's class list and
+        // id, never its style.
+        let pace = {
+            let mut s = String::new();
+            if let Some(ms) = view.enter_ms {
+                s.push_str(&format!("--enter-ms:{ms}ms;"));
+            }
+            if let Some(ms) = view.leave_ms {
+                s.push_str(&format!("--leave-ms:{ms}ms;"));
+            }
+            (!s.is_empty()).then_some(s)
+        };
+        // `None` removes the attribute rather than leaving an empty one: a rack whose frame said
+        // nothing about pace carries no style of its own.
         let root = div()
             .id(id.as_str())
             .class(css.as_str())
+            .style(pace)
             .child(children)
             .child(pager(&view, active, shown, from, per_page, paged, c.len()));
         match (rotating, view.pause) {
