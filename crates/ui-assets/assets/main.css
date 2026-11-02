@@ -412,12 +412,20 @@
 
     /* rack's `view` (ADR 0024): how the same rows are laid down. The default view adds no wrapper
        node, so these classes only ever appear when a frame says `view`. */
+    /* Durations are values, not decisions: a frame may say how long (`enter_ms` / `leave_ms`) and
+       the renderer writes them here as custom properties. The fallback is the number this file was
+       written with, so a frame that says nothing moves exactly as before. */
+    .rack {
+        --enter-ms: 350ms;
+        --leave-ms: 350ms;
+    }
+
     .rack > .slide.enter-fade {
-        animation: rack-fade 0.35s ease;
+        animation: rack-fade var(--enter-ms) ease;
     }
 
     .rack > .slide.enter-slide {
-        animation: rack-slide 0.35s ease;
+        animation: rack-slide var(--enter-ms) ease;
     }
 
     /* Exclusive: every row stacks in one cell and only the current one is opaque. Both directions
@@ -440,7 +448,7 @@
         & > .slide {
             grid-area: stack;
             opacity: 0;
-            transition: opacity 0.35s ease;
+            transition: opacity var(--leave-ms) ease;
             pointer-events: none;
 
             &.active {

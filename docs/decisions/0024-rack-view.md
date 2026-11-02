@@ -71,7 +71,18 @@
 （`stage_row`）回答，行自己的可见性、点的点亮、窗口起点（`window_start`，仅 `fixed`）共用它，
 三者不可能各说一套。
 
-## 未做（明确的欠账）
+## 补记 2026-10-31（第三批）：时长是值，尾巴有两个方向
 
-- 进场与离场时长还不是参数（都写死 0.35s）；要调就调 CSS。
-- 横向的"跟尾巴"没有实现：跟随规则目前只对 vertical + adaptive + bar 生效。
+**时长**：`enter_ms` / `leave_ms` 两个轴，缺省就是 CSS 里原本的 350ms。渲染器不自己算动画——它只把
+这两个数写成容器的自定义属性（`--enter-ms` / `--leave-ms`），CSS 用 `var()` 读；帧不说就一个属性
+都不写（不是写个空属性占位）。实测（真浏览器、真场馆）：说 `enter_ms: 1200, leave_ms: 900` 的帧，
+`exclusive` 行的 computed `animation-duration` 是 1.2s、`transition-duration` 是 0.9s，容器上两个
+变量分别是 `1200ms` / `900ms`；不说的帧容器上没有 `style` 属性。
+
+**尾巴有两个方向**：跟随规则原先绑死在 vertical 上，而"尾巴"本来只是"滚动轴的一端"。现在
+`bar` + `adaptive` 就跟随，轴向由 `direction` 定：竖直钉 `scrollTop`，横向钉 `scrollLeft`。注入脚本里
+是一个三元组（位置 / 内容长度 / 视口长度）按轴选，两个方向共用同一条"生长追赶、只在尾部才跟随"的
+逻辑，不各写一份。实测：3 行长消息的横向条被压到 40px 宽后 `scrollLeft == scrollWidth - clientWidth
+== 1849`；此后每加一行尾部依次推到 1888 / 1926 / 1965，`scrollLeft` 每次跟到位。
+
+至此 ADR 0024 的六轴没有未做的部分了。

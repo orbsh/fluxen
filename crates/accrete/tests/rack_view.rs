@@ -76,3 +76,21 @@ fn a_fixed_window_says_how_many() {
     assert_eq!(view.count, Some(3));
     assert_eq!(view.play, RackPlay::Newest, "paging defaults to the newest");
 }
+#[test]
+fn a_frame_can_say_how_long_a_row_takes() {
+    let paced = rack(
+        r#"{"type":"rack","attrs":{"view":{"enter":"fade","enter_ms":1200,"leave_ms":900}},
+            "bind":{"value":{"kind":"source","source":"notice"}}}"#,
+    );
+    let view = paced.attrs.and_then(|a| a.view).expect("view decodes");
+    assert_eq!(view.enter_ms, Some(1200));
+    assert_eq!(view.leave_ms, Some(900));
+
+    let silent = rack(
+        r#"{"type":"rack","attrs":{"view":{"enter":"fade"}},
+            "bind":{"value":{"kind":"source","source":"notice"}}}"#,
+    );
+    let view = silent.attrs.and_then(|a| a.view).expect("view decodes");
+    assert_eq!(view.enter_ms, None, "absent means the CSS default");
+    assert_eq!(view.leave_ms, None);
+}
