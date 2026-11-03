@@ -26,11 +26,11 @@ Three invariants hold regardless of all of the above:
 
 The order below is the order of a message in a conversation, which is one case of the shape:
 
-1. **The client sends an event.** The payload carries what the person did (the text), plus — if this side wants a drawing — the slots to draw into (`rack` = the list of rows, `text` = a region). The client draws nothing.
+1. **The client sends an event.** The payload carries what the person did (the text), and — if it wants a drawing — that preference alone. It names no slots: the application serves the layout, so the application is the one that knows what its list is called.
 2. **The application turns the act into a fact first.** It writes it down, and that write is where the id of this exchange is minted. Without this step, everything spoken afterwards has no ground.
-3. **The application speaks before it works.** First a receipt (`{turn}` — the thing that lets a client tie the sentence it sent to the answer that follows), then ONE batch of operations: append the person's row to `rack`, set up the region the answer will stream into, and append the bubble that reads that region. Order inside the batch is meaning: a patch filling a region must come after the `set` that creates it.
+3. **The application speaks before it works.** First a receipt (`{turn}` — the thing that lets a client tie the sentence it sent to the answer that follows), then ONE batch: append the person's bubble, keyed `<turn>_0`. The reply's bubble is `<turn>_1`, created with its first content rather than at the open — bubble ids count up (`_2`, `_3` for anything that owns a bubble of its own, a confirmation form say), and an empty bubble that a failed turn never fills is not left on screen.
 
-The id has to travel INSIDE the payload, not only beside it: what a host hands a client is the payload (`{ev, args}`), so an id written next to `data` never arrives. A drawing is the exception by nature — an array of operations addressed by slot and row has nowhere to put an id — which is why two exchanges in flight must not aim at one region.
+The id has to travel INSIDE the payload, not only beside it: what a host hands a client is the payload (`{ev, args}`), so an id written next to `data` never arrives. A drawing carries it as row identity (`data.id`) and addresses its patches by that same id (`{slot, id, path}`), so two exchanges in flight patch their own bubbles and cannot interleave.
 4. **Only now does the work start.** Each piece of the answer only patches the region step 3 created; nothing re-draws the stage.
 5. **The end is said.** `done`, or `error` with its reason. A failure does not undo step 3: the person's sentence staying on screen is the truth.
 
@@ -38,7 +38,7 @@ A button or a form is the same case: a click sends an event, the application ans
 
 ## 3. Container shape belongs to the application
 
-Rows share one `rack`; what distinguishes them is each row's own container — in a conversation the person's row is end-aligned and accented while the answer's stretches and carries no accent. That difference **is a class list the frame carries**, not knowledge the renderer has: a renderer that has never heard of a conversation still draws both correctly.
+Rows share one list; what distinguishes them is a value the row carries — a `selector` (`user` / `assistant`, and a name of its own for anything else that earns a bubble). The list's item template matches on it and decides the container: end-aligned and accented for the person, stretched and plain for the answer. That decision **belongs to the layout**, which the application serves; the frames carry rows and selectors, never class lists.
 
 Row identity lives in the data (`data.id`), a reusable layout lives in `rack.item` (ADR 0020), and arrangement lives in `attrs.view` (ADR 0024). The application decides what a row is and what it holds; the renderer decides how those rows are arranged and how they enter and leave.
 
@@ -47,7 +47,6 @@ Row identity lives in the data (`data.id`), a reusable layout lives in `rack.ite
 - **How long a row stays, whether it fades, whether the list pins to the newest row.** Those are the renderer's vocabulary (ADR 0024); the application only sends rows.
 - **Type names like "notice", "banner", "chat bubble".** They are combinations of values, not types (ADR 0024 §8).
 - **A local optimistic insert.** See the premise: a client does not know what the thing should look like.
-- **Per-exchange slot names, today.** The slots are named by the caller when it submits, i.e. before the id exists, so two exchanges in flight share one region and their patches interleave. Closing that means the application deriving the names from the id it minted and stating them in the receipt — the same rule as everywhere (names are declared by whoever serves the layout), not yet the code.
 
 So "does the person see the message they sent" is answered by: yes, because the application sent that row the moment they sent it — not because a client guessed.
 
