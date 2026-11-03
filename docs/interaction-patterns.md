@@ -4,18 +4,23 @@ For whoever draws into a view: what an application's surface is made of, what ha
 
 The premise behind every section: **the renderer holds no business logic.** It executes operations; it does not interpret actions. "The message I sent appeared" and "submitting the form showed a line of notice" therefore cannot be inferred by a client, and cannot be optimistically inserted by one either: a client does not know that a message is a row, which list that row goes in, or what it looks like. **Display logic belongs to the application; mechanism belongs to the renderer.**
 
-## 1. An application is its surface
+## 1. A base view, and a series of operations on it
 
-An application's WHOLE surface — what it shows and how it is configured — is the same two things: layouts and events. Nothing about management is a different kind of thing.
+What this library gives an application is **an operable base view**: one view first — a surface to act on — and everything afterwards is a series of operations against it (`create`, `set`, `append`, `remove`, `patch`). That is what the name Accretes: the view accumulates, it is not rebuilt per change.
 
-- **The initial layout is pushed, not requested.** A client cannot know when it is ready; the venue states what it has on connect and the client draws whatever arrives.
-- **It is an EVENT that produces that layout, not a file and not a call.** The trigger is the connection notice (`ui:connect`); whichever booth declared it answers with frames. There is NO deployment-side layout configuration: the file form is gone (a layout with no logic is still an answer its carrier can produce, so a file only means the application is not answering), and the event name is fixed, so there is nothing left to name in an environment.
-- **Why an event and not `invoke`.** `invoke` is CALL semantics: one named target, one answer the caller waits for — right for special cases, wrong for composition. Several booths own different parts of one application, so the trigger has to be something every interested booth can receive, each answering with its own frames.
-- **Later layouts are ordinary traffic.** An application emits frames at any moment: `create`, `set`, `append`, `patch` against slots it declared earlier.
-- **Expansion is a control and an event.** A layout names a control whose `dest` is an application event (a button "manage models", say); the event reaches the booth; the booth emits the frames that create or append that section; its controls emit further events. The venue cannot tell a management section from a chat rack and is never asked to.
-- **So there is no admin surface per application**: no admin HTTP verb, no config file, no second origin. `/admin` on the venue is only about the VENUE (node approval, device revocation) — things about connections, devices and the plane itself.
-- **A program is a client too.** Automation opens its own connection, gets its own device, and submits the same events with the same payloads; "operable by an agent" is a property of this shape, not an extra API.
-- **The layout is the only thing a frame can be checked against.** A slot name is the sentence "my surface reads here", and only the party holding the layout can say whether that sentence is true — which is why the names inside a rendering are declared by whoever serves the layout, never guessed by the executor that draws into it.
+How the base view reaches the client has nothing to do with accrete:
+
+- Over a socket, the natural shape is to push it when the connection opens — there is no "request" to speak of; the connection is the start.
+- A conventional application can just as well keep the base view in a file and send it when the user asks for the home page.
+- Nor is the socket required anywhere else: the base view can carry a link, and following it requests ANOTHER view that replaces the current one. Replacement is an operation, not a new mechanism.
+
+Equally outside the view is **who produces the operations** — one process, several controllers, several services; where they are spread changes nothing about the view. The view answers to the shape of an operation, not to the shape of the organisation producing it.
+
+Three invariants hold regardless of all of the above:
+
+- **A slot name is a sentence the base view's author wrote** ("my surface reads here"), so only that author can say whether it is true — which is why names are declared by whoever serves the base view and never guessed by whatever draws into it.
+- **The base view is not modified by the operations** — operations address slots and rows that it declares, and a name it never wrote is an error, not a new slot.
+- **Row identity lives in the data** (`data.id`), so operations are idempotent against the row they name rather than against a position that may have moved.
 
 ## 2. One exchange, five steps
 
