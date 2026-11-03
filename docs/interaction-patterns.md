@@ -29,6 +29,8 @@ The order below is the order of a message in a conversation, which is one case o
 1. **The client sends an event.** The payload carries what the person did (the text), plus — if this side wants a drawing — the slots to draw into (`rack` = the list of rows, `text` = a region). The client draws nothing.
 2. **The application turns the act into a fact first.** It writes it down, and that write is where the id of this exchange is minted. Without this step, everything spoken afterwards has no ground.
 3. **The application speaks before it works.** First a receipt (`{turn}` — the thing that lets a client tie the sentence it sent to the answer that follows), then ONE batch of operations: append the person's row to `rack`, set up the region the answer will stream into, and append the bubble that reads that region. Order inside the batch is meaning: a patch filling a region must come after the `set` that creates it.
+
+The id has to travel INSIDE the payload, not only beside it: what a host hands a client is the payload (`{ev, args}`), so an id written next to `data` never arrives. A drawing is the exception by nature — an array of operations addressed by slot and row has nowhere to put an id — which is why two exchanges in flight must not aim at one region.
 4. **Only now does the work start.** Each piece of the answer only patches the region step 3 created; nothing re-draws the stage.
 5. **The end is said.** `done`, or `error` with its reason. A failure does not undo step 3: the person's sentence staying on screen is the truth.
 
@@ -45,6 +47,7 @@ Row identity lives in the data (`data.id`), a reusable layout lives in `rack.ite
 - **How long a row stays, whether it fades, whether the list pins to the newest row.** Those are the renderer's vocabulary (ADR 0024); the application only sends rows.
 - **Type names like "notice", "banner", "chat bubble".** They are combinations of values, not types (ADR 0024 §8).
 - **A local optimistic insert.** See the premise: a client does not know what the thing should look like.
+- **Per-exchange slot names, today.** The slots are named by the caller when it submits, i.e. before the id exists, so two exchanges in flight share one region and their patches interleave. Closing that means the application deriving the names from the id it minted and stating them in the receipt — the same rule as everywhere (names are declared by whoever serves the layout), not yet the code.
 
 So "does the person see the message they sent" is answered by: yes, because the application sent that row the moment they sent it — not because a client guessed.
 
