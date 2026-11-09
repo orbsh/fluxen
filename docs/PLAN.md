@@ -133,7 +133,7 @@ e2e 复验：create 布局 → patch `/children/.../item/1/attrs/class` → 新�
       收到 `<- {"event":"pick"}`）。后台标签页 rAF 节流会冻结模块的
       asset 泵——测试须 bringToFront，产品无关。
 - [x] ADR 0007 已接受。
-- [ ] forget() 仍是失败重试桩（示例够用，生产前补）。
+- [x] forget() 仍是失败重试桩（示例够用，生产前补）。 — LANDED 2026-11-09：`forget(ctx, id)` 现在真的从 `seen` 撤下该资产、并把「在位」从 `current_assets` 撤回（`examples/modules/3dbrowser/src/lib.rs`，两条失败臂 deserialize/load 都传 ctx）；成功路径那句 `forget(&id)` 删掉了——真实现在成功时执行会让下一次同 spec 的 update 重载一遍。验证：`cargo check --target wasm32-unknown-unknown` 通过；**运行时未验**（需要一个 404 的资产 + 浏览器，走 CDP 探针），同一 `key:url` 先失败再 update 应重新入 pending。
 宿主 e2e 修复三缺陷（canvas.rs）：`new URL()` 返回对象不是字符串
 （原 Rust 侧 dyn_into::<JsString> 必失败，import 解析整体移 JS 侧）；
 ES module namespace 原型链为 null，`dyn_into::<Object>` 必拒（保留

@@ -408,7 +408,6 @@ pub fn frame(ctx: u32) -> Result<(), JsError> {
         for (c, id, cpu) in q.borrow_mut().drain(..) {
             if c == ctx {
                 arrived.push(cpu);
-                forget(&id); // 装载闭环，撤掉失败重试占位语义
             } else {
                 rest.push((c, id, cpu));
             }
@@ -445,13 +444,13 @@ pub fn frame(ctx: u32) -> Result<(), JsError> {
                             web_sys::console::warn_1(
                                 &format!("3dbrowser: deserialize failed: {e:?} {url}").into(),
                             );
-                            forget(&id);
+                            forget(ctx, &id);
                         }
                     }
                 }
                 Err(e) => {
                     web_sys::console::warn_1(&format!("3dbrowser: load failed: {e:?} {url}").into());
-                    forget(&id);
+                    forget(ctx, &id);
                 }
             }
             // 队列空了才收过渡层：一次载荷多名资产时不中途闪
@@ -466,10 +465,19 @@ pub fn frame(ctx: u32) -> Result<(), JsError> {
     Ok(())
 }
 
-/// 异步失败的条目退回待重试：从 seen 撤下（简单路径：重新 apply 时再进 pending）。
-fn forget(_id: &str) {
-    // seen 是 (key:url) 复合 id；撤下后下次 update 同 key 仍被 seen 拦住属已知限制，
-    // 示例模块够用；正式版应记失败表并允许显式 reset。
+/// Give a failed asset back to the retry path: drop it from `seen` (so the next `apply` of
+/// the same `key:url` queues it again) and withdraw the "in place" claim from
+/// `current_assets`. Only the FAILURE paths call this — on success the id must stay in
+/// `seen`, or the next update of an unchanged spec would load it a second time.
+fn forget(ctx: u32, id: &str) {
+    if let Err(e) = with_ctx(ctx, |s| {
+        s.seen.remove(id);
+        s.current_assets.retain(|asset| asset != id);
+    }) {
+        web_sys::console::warn_1(
+            &format!("3dbrowser: forget after a failed load: {e:?}").into(),
+        );
+    }
 }
 
 /// 左键拖拽 = 绕 target 旋转（index.js 装事件后转发进来）。
