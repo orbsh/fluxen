@@ -5,7 +5,7 @@
 # 2) chat 行里放触发输入框（回车写槽 = 打开）与 portal（把模态内容传送进 layer，
 #    就地只留空锚点）。点卡片外的模糊区关闭 = 清空该槽；槽空过，再回车即重开
 #    （下次写入必是新值，"同值不写"不会误挡）。
-# 前置：先发 00.main.yaml + 00.chat.yaml。
+# 前置：先发 00.main.yaml。
 - action: patch
   slot: ""
   path: /children

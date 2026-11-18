@@ -3,29 +3,28 @@
 
 Steps (each waits for one Enter; --auto runs unattended, --delay paces the text):
   1  send 00.main.yaml      the two-column shell (left graph, right stream)
-  3  inject `page`=chat     switch the visible page remotely (ADR 0011)
-  4  append the ONE message row (9 children, every child bound to a slot) and
-                            seed the four text slots
-  5  TYPE the analytics intro
-  5b drag the bubble's pin chip to the rail at the window's right edge — the
+  2  append the ONE message row (13 children, every child bound to a slot) and
+                            seed the six text slots
+  3  TYPE the analytics intro
+  4  drag the bubble's pin chip to the rail at the window's right edge — the
                             stage console shows the `pin` frame (ADR 0019)
-  6  send the chart data    the two charts draw into their bands (line chart +
+  5  send the chart data    the two charts draw into their bands (line chart +
                             the three radars — 00.radar.yaml's set frames)
-  7  one patch per day      the line chart grows to 30 days
-  8  TYPE the summary
-  9  append the review table + form into the row's rack -> the form appears
- 10  TYPE the car paragraph, then set the splat payload
- 11  TYPE the shoe paragraph, then set the shoe payload
- 12  TYPE the code-review paragraph, then set the editor's {code, lang} payload
+  6  one patch per day      the line chart grows to 30 days
+  7  TYPE the summary
+  8  append the review table + form into the row's rack -> the form appears
+  9  TYPE the car paragraph, then set the splat payload
+ 10  TYPE the shoe paragraph, then set the shoe payload
+ 11  TYPE the code-review paragraph, then set the editor's {code, lang} payload
      (Monaco is pulled at THAT moment — ADR 0015) and press Ctrl/Cmd+S to watch
      the uplink land on the stage console
- 13  TYPE the graph paragraph — the left graph has been growing all along: every
+ 12  TYPE the graph paragraph — the left graph has been growing all along: every
      beat above pushed a cumulative snapshot, so a chart appearing on the right
      also added its node on the left (ADR 0018)
 
 The box in child order (what the reader watches fill in):
 
-    intro text | line chart | radar group | summary text | review form |
+    intro text | pin chip | line chart | radar group | summary text | review form |
     car text | splat canvas | shoe text | shoe canvas | patch text | code editor |
     graph text
 
@@ -63,8 +62,8 @@ Implementation choices worth naming:
   comes — an empty rack renders nothing and takes no space.
 - Models land AFTER the paragraph above them; the trend keeps growing one day per
   frame (the walkthrough's original "chart grows" beat).
-- The code editor is a module host like the canvases: it is in the row from the
-  start, bound to its own slot, so it costs ZERO requests until the code payload
+- The code editor is a canvas pointed at the editor module (ADR 0025): it is in
+  the row from the start, bound to its own slot, so it costs ZERO requests until the code payload
   lands (ADR 0015) — Monaco is ~4.5 MB and must never ride the page load. Its save
   is Ctrl/Cmd+S in the editor, which uplinks `{code, lang}` over the same leg the
   review form submits through (ADR 0016).
@@ -118,6 +117,7 @@ RADAR_FILE = "examples/yaml/00.radar.yaml"  # the single source of the chart dat
 
 THREED_URL = "/assets/3dbrowser/index.js"
 SPLAT_URL = "/assets/splatviewer/index.js"
+EDITOR_URL = "/assets/editor/index.js"
 SHOE_URL = "/assets/3dbrowser/MaterialsVariantsShoe.glb"
 TRUCK_URL = "/assets/splatviewer/truck.ksplat"
 
@@ -137,22 +137,22 @@ PATCH_CODE = """pub fn render(nodes: &[Node]) -> Frame {
 """
 
 # The closing graph: the renderer's own pieces, i.e. what the reader has been
-# watching work. Same 15 nodes / 14 links as examples/yaml/20.forcegraph.yaml
-# (that file is the standalone carrier; this table keeps the demo free of a YAML
-# parser). `weight` drives node size, `strength` drives edge width — both in the
-# module, both configurable through options.
+# watching work. 33 nodes / 42 links in five clusters; examples/
+# yaml/20.forcegraph.yaml is the smaller standalone carrier with the same
+# vocabulary (this table keeps the demo free of a YAML parser). `weight` drives
+# node size, `strength` drives edge width — both are typed `style` fields.
 # The graph is the project's own structure, not decoration: crates, the nodes
 # they render, the modules that ride inside them, and the libraries underneath.
-# Roughly forty nodes in five clusters — small graphs all look like a blob, and
-# a blob is exactly what this view must not look like.
+# Small graphs all look like a blob, and a blob is exactly what this view must
+# not look like.
 _CRATES = [
     ("accrete", 9), ("ui_leptos", 8), ("stage", 6), ("content", 7),
     ("transport", 5), ("transport_ws", 4), ("forcegraph", 7), ("ui_assets", 4),
     ("accrete_macro", 3), ("ui_leptos_macro", 3), ("fluxen", 6),
 ]
 _NODES = [
-    ("case", "component", 7), ("canvas", "component", 7), ("rack", "component", 6),
-    ("pages", "component", 5), ("form", "component", 6), ("diagram", "component", 5),
+    ("frame", "component", 7), ("canvas", "component", 7), ("rack", "component", 6),
+    ("pages", "component", 5), ("form", "component", 6),
     ("popup", "component", 4), ("layer", "component", 5), ("fold", "component", 4),
     ("svg", "component", 4), ("portal", "component", 3),
     ("3dbrowser", "module", 5), ("splatviewer", "module", 5), ("g2chart", "module", 4),
@@ -184,16 +184,14 @@ GRAPH_LINKS = [
     {"source": "fluxen", "target": "stage", "kind": "starts", "strength": 4},
     {"source": "fluxen", "target": "transport_ws", "kind": "starts", "strength": 3},
     # components the shell mounts, and the accrete nodes they are
-    {"source": "case", "target": "accrete", "kind": "node", "strength": 5},
-    {"source": "case", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
+    {"source": "frame", "target": "accrete", "kind": "node", "strength": 5},
+    {"source": "frame", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
     {"source": "canvas", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
     {"source": "rack", "target": "ui_leptos", "kind": "mounted-by", "strength": 3},
     {"source": "rack", "target": "pages", "kind": "rows", "strength": 3},
-    {"source": "pages", "target": "case", "kind": "arranges", "strength": 2},
+    {"source": "pages", "target": "frame", "kind": "arranges", "strength": 2},
     {"source": "form", "target": "accrete", "kind": "node", "strength": 3},
     {"source": "form", "target": "ui_leptos", "kind": "mounted-by", "strength": 2},
-    {"source": "diagram", "target": "ui_leptos", "kind": "mounted-by", "strength": 2},
-    {"source": "diagram", "target": "accrete", "kind": "node", "strength": 3},
     {"source": "popup", "target": "ui_leptos", "kind": "mounted-by", "strength": 2},
     {"source": "layer", "target": "ui_leptos", "kind": "mounted-by", "strength": 2},
     {"source": "fold", "target": "layer", "kind": "stacks-in", "strength": 2},
@@ -204,7 +202,7 @@ GRAPH_LINKS = [
     {"source": "splatviewer", "target": "canvas", "kind": "mounts", "strength": 4},
     {"source": "g2chart", "target": "canvas", "kind": "mounts", "strength": 3},
     {"source": "monaco", "target": "canvas", "kind": "mounts", "strength": 5},
-    {"source": "mermaid", "target": "diagram", "kind": "renders", "strength": 3},
+    {"source": "mermaid", "target": "canvas", "kind": "mounts", "strength": 3},
     # the platform underneath
     {"source": "leptos", "target": "wasm_bindgen", "kind": "compiles-to", "strength": 4},
     {"source": "web_sys", "target": "wasm_bindgen", "kind": "binds", "strength": 4},
@@ -226,7 +224,7 @@ GRAPH_LINKS = [
 GRAPH_SEED = {
     "accrete", "ui_leptos", "stage", "content", "transport", "transport_ws",
     "forcegraph", "ui_assets", "accrete_macro", "ui_leptos_macro", "fluxen",
-    "case", "canvas", "rack", "pages", "form", "diagram", "layer",
+    "frame", "canvas", "rack", "pages", "form", "layer",
     "leptos", "wasm_bindgen", "web_sys", "serde",
 }
 
@@ -386,10 +384,12 @@ def canvas_node(url, slot, width, height, options=None):
 
 
 def editor_node(node_id, slot, width, height):
-    """A code editor bound to a data slot (ADR 0016). Same module-host contract as a
-    canvas; what the module renders is Monaco, and the payload is `{code, lang}`."""
+    """A code editor bound to a data slot (ADR 0016). It is the same `canvas` host
+    as the model areas, pointed at the editor module (ADR 0025); what the module
+    renders is Monaco, and the payload is `{code, lang}`."""
     return {
-        "type": "editor",
+        "type": "canvas",
+        "url": EDITOR_URL,
         "id": node_id,
         "attrs": {"width": width, "height": height},
         "bind": {"value": {"kind": "source", "source": slot}},

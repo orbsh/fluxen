@@ -3,7 +3,7 @@
 # 前置：封装模块在 examples/renderer/assets/editor/（纯 JS，无构建，配方见
 # examples/renderer/modules/editor/index.js 头注释），Monaco 的 AMD 子集在
 # examples/renderer/assets/monaco/vs/（同理，两者都是 gitignore 的构建产物）；
-# 布局侧先发 00.main.yaml + 00.chat.yaml。
+# 布局侧先发 00.main.yaml。
 #
 # 两条形态各一个，演示同一契约的两种数据来源：
 #   1. inline 载荷（"代码作为参数"）——数据区原样就是 {code, lang}，节点只带尺寸；
@@ -14,7 +14,8 @@
 - action: append
   slot: chat
   data:
-    type: editor
+    type: canvas
+    url: /assets/editor/index.js
     id: patch-inline
     attrs:
       width: 100%
@@ -31,7 +32,8 @@
 - action: append
   slot: chat
   data:
-    type: editor
+    type: canvas
+    url: /assets/editor/index.js
     id: patch-staged
     attrs:
       width: 100%

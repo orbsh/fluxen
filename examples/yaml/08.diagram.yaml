@@ -4,7 +4,7 @@ data:
   type: frame
   children:
   - type: canvas
-  - url: /assets/diagram/index.js
+    url: /assets/diagram/index.js
     bind:
       value:
         kind: default
@@ -44,7 +44,7 @@ data:
               UI->>UI: Renders the AI's response in the chat interface
               deactivate UI
   - type: canvas
-  - url: /assets/diagram/index.js
+    url: /assets/diagram/index.js
     bind:
       value:
         kind: default
