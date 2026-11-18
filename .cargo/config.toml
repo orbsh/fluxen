@@ -1,8 +1,12 @@
-# The renderer recurses once per node level and each level builds a `Vec<AnyView>` of generic,
-# monomorphised closures; the wasm default of 1 MiB is not enough for a real surface tree (gravity's
-# page is ~10 levels with racks, pages and a scene inside). Overflowing it corrupts neighbouring
-# linear memory, which surfaces as scattered `memory access out of bounds` traps in malloc and in
-# `Option<String>::clone` — nowhere near the recursion. 8 MiB is the fix: it costs a slightly larger
-# shadow stack area, nothing at runtime.
+# wasm's default 1 MiB stack is not enough for a real surface tree rendered without optimisation:
+# overflowing it corrupts neighbouring linear memory, and the symptom is scattered
+# `memory access out of bounds` traps inside malloc or `Option<String>::clone` — nowhere near the
+# recursion that caused them. 8 MiB turns that class of overflow into a readable stack error.
+#
+# This does NOT save a tree that contains itself. A genuine render loop eats any stack size: measured
+# at 8 MiB and at 32 MiB, the same `RangeError: Maximum call stack size exceeded` appeared while the
+# depth guard (64 levels, in `render_accrete`) never fired — the loop ran through view closures,
+# where each entry starts the count afresh. The loop found that way was gravity emitting its own
+# pager inside the host's pager; the fix is in `gravity-turn`, not here.
 [target.wasm32-unknown-unknown]
 rustflags = ["-C", "link-arg=-zstack-size=8388608"]
