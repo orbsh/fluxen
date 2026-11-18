@@ -1,6 +1,6 @@
 # 原生力导向图组件（ADR 0018）：`forcegraph` 节点，不是 canvas 模块。
 #
-# 与 19.canvas.forcegraph.yaml 的区别是结构性的，不是配置：
+# 这不是 canvas 的一种，是独立组件（ADR 0029）。与 canvas 模块的区别是结构性的：
 #   * 没有 `url`——渲染器与布局都在 wasm 里（crates/forcegraph），没有 JS 资产、
 #     没有 mount/update/resize/unmount 契约、没有 3d-force-graph 与 three.js。
 #   * 没有 `options` 动态袋——旋钮是 DSL 里的 `style` 结构，字段类型化、可被

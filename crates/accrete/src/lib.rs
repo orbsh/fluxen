@@ -274,6 +274,13 @@ pub struct Canvas {
 /// 差量（整份快照重复送达幂等）。`focus` 是视图指令
 /// `{ids, seq?, padding_px?, duration_ms?}`——`seq` 变了同一个目标可以再飞一次，
 /// 不动 `seq` 的重复写入不碰相机。
+///
+/// **这是一个独立组件，不是 canvas 的一种**（ADR 0029）：渲染、布局、相机、拾取都在
+/// 同一个 wasm 里，所以它有自己的节点类型、自己的 `style` 词表（类型化，可被 schema
+/// 与 patch 校验），不走 url + options 那条动态袋。图数据是这个界面的主要读数面，
+/// 定制能力按"再加一个维度"来长：载荷是快照，加字段不换节点类型——`node_cluster` /
+/// `edge_cluster` 这类分组显示将作为 `Snapshot` 的新字段与 `style` 的新旋钮出现，
+/// 而不是变成另一个组件或换一个渲染器。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
