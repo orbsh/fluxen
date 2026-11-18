@@ -27,7 +27,7 @@ use leptos::leptos_dom::helpers::window_event_listener;
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
-pub fn popup_(accrete: Popup, ctx: &Ctx) -> AnyView {
+pub fn popup_(accrete: Popup, ctx: &Ctx, id: String) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["popup", "f"];
     use_common_css(&mut css, &accrete);
@@ -101,6 +101,8 @@ pub fn popup_(accrete: Popup, ctx: &Ctx) -> AnyView {
     };
 
     div()
+        // 身份：一个面板要能被找到（`portal` 指进来、别人的选择器指过来、调试时看得到）。
+        .id(id)
         .class(move || {
             if show.get() {
                 format!("{base} open")

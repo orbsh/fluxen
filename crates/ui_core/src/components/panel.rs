@@ -10,9 +10,9 @@
 //! 于是"右边滑出一个边栏"要么硬拗 popup 的位置，要么借 layer 的壳却拿不到触发器状态。
 //! 现在四格都在这一个名字下面，`place`/`state` 是唯一需要记的两件事。
 //!
-//! 实现上这一版把前三格**转成**原来那三个组件的形状再交给它们（三份实现已经过实测，
-//! 重写没有收益），第四格（抽屉）在这里实现。要把三份实现并进来是下一步的事，
-//! 术语先统一：帧里只写 `panel`。
+//! 前三格的实现仍然放在原来的三个模块里（经过实测，重写没有收益），这一版把面板**转成**
+//! 它们的形状再交给它们；`fold`/`popup`/`layer` 作为**节点类型**已经删除（ADR 0030），
+//! 帧里只能写 `panel`。把三份实现真正并进本文件是下一步，纯机械。
 
 use crate::Ctx;
 use crate::components::{fold_, layer_, popup_};
@@ -41,7 +41,7 @@ pub fn panel_(accrete: Panel, ctx: &Ctx, id: String) -> AnyView {
             if state == PanelState::Source {
                 tracing::warn!("panel {id}: anchor + source 按 toggle 画（浮层只认本地开关）");
             }
-            popup_(as_popup(&accrete, &attrs), ctx)
+            popup_(as_popup(&accrete, &attrs), ctx, id)
         }
         (PanelPlace::Viewport, PanelState::Source) => layer_(as_layer(&accrete, &attrs), ctx, id),
         (PanelPlace::Viewport, PanelState::Toggle) => drawer_(accrete, ctx, id, attrs),
@@ -82,7 +82,6 @@ fn as_layer(p: &Panel, a: &PanelAttr) -> Layer {
         attrs: Some(LayerAttr {
             class: a.class.clone(),
             selector: a.selector.clone(),
-            name: a.name.clone(),
             dismiss: a.dismiss,
         }),
         bind: p.bind.clone(),
@@ -140,35 +139,6 @@ fn drawer_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
         format!("width: {size}; height: 100%;")
     };
 
-    // 抽屉本体也是挂载点（`portal: to: <name>` 可以指进一个打开的边栏）。
-    // 只在开着的时候登记：关着的面板没有元素可投，portal 照旧 warn 并等 epoch。
-    let body_ref = NodeRef::<leptos::html::Div>::new();
-    if let Some(name) = attrs.name.clone() {
-        let held: StoredValue<Option<web_sys::Element>> = StoredValue::new(None);
-        let name_reg = name.clone();
-        Effect::new(move |_| {
-            if show.get() {
-                if held.get_value().is_some() {
-                    return;
-                }
-                if let Some(el) = body_ref.get() {
-                    let node: web_sys::Element = el.into();
-                    crate::components::mounts::register(&name_reg, node.clone());
-                    held.set_value(Some(node));
-                }
-            } else if let Some(node) = held.get_value() {
-                crate::components::mounts::unregister(&name_reg, &node);
-                held.set_value(None);
-            }
-        });
-        let name_clean = attrs.name.clone().unwrap_or_default();
-        on_cleanup(move || {
-            if let Some(node) = held.get_value() {
-                crate::components::mounts::unregister(&name_clean, &node);
-            }
-        });
-    }
-
     let trigger_ctx = ctx.clone();
     let body_ctx = ctx.clone();
     view! {
@@ -207,7 +177,6 @@ fn drawer_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
                         {mask}
                         <div
                             class="panel-body f col"
-                            node_ref=body_ref
                             style=format!(
                                 "position: relative; {body_style} background: var(--bg, Canvas); box-shadow: 0 0 2rem rgba(0,0,0,.25); overflow: auto;"
                             )

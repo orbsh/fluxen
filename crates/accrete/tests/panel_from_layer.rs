@@ -1,4 +1,5 @@
-//! ADR 0014：新增 `layer` / `portal` 两个变体（并撤掉 Float 的 overlay/dismiss）
+//! ADR 0014 的 `layer` 在 ADR 0030 里并进了 `panel`（place: viewport, state: source）。
+//! `portal` 已删除：跨处出现靠"服务端写槽、谁绑谁显示"，不需要搬运子树。
 //! 之后，各类形状都要过真实 codec 的往返——wire 是契约，Rust 端枚举构造不算数。
 //!
 //! 注意：accrere 的解码不设 `deny_unknown_fields`，所以旧帧里多带的
@@ -20,24 +21,14 @@ fn roundtrip(src: &str) -> Accrete {
 fn layer_roundtrip() {
     // 典型形状：local 槽控显隐 + dismiss + 模态内容
     roundtrip(
-        r##"{"type":"layer","id":"login_layer","attrs":{"dismiss":true},
+        r##"{"type":"panel","id":"login_layer","attrs":{"place":"viewport","state":"source","dismiss":true},
              "bind":{"value":{"kind":"local","slot":"login_modal"}},
              "children":[{"type":"text","bind":{"value":{"kind":"default","default":"hi"}}}]}"##,
     );
     // 无 attrs / 无 bind / 无 children：三项全可选，省略即空
-    roundtrip(r#"{"type":"layer","id":"bare"}"#);
+    roundtrip(r#"{"type":"panel","id":"bare","attrs":{"place":"viewport","state":"source"}}"#);
     // data 槽绑定也合法（渲染侧两支都读）
-    roundtrip(r#"{"type":"layer","id":"l2","bind":{"value":{"kind":"source","source":"modal"}}}"#);
-}
-
-#[test]
-fn portal_roundtrip() {
-    roundtrip(
-        r##"{"type":"portal","attrs":{"to":"#login_layer"},
-             "children":[{"type":"text","bind":{"value":{"kind":"default","default":"inside"}}}]}"##,
-    );
-    // children 省略
-    roundtrip(r##"{"type":"portal","attrs":{"to":"#login_layer"}}"##);
+    roundtrip(r#"{"type":"panel","id":"l2","attrs":{"place":"viewport","state":"source"},"bind":{"value":{"kind":"source","source":"modal"}}}"#);
 }
 
 #[test]
