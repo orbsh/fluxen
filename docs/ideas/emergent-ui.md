@@ -4,6 +4,8 @@ The reference is Breath of the Wild's stamina wheel: it exists only while you ar
 
 It has a counterpart, and the counterpart is already built: navigational UI — configuration and options, entries that must stay where the user last saw them. The two are the ends of one axis, **how stable the structure is**, and fluxen already splits along it: the shell is the stable frame (navigation, fixed entries), the `routes` slot is the part that moves. A fixed entry earns its fixedness because its position is a memory anchor. Emergent UI earns its instability only where the situation has already located attention — the ring is around the character, the drop target is under the pointer. Where attention is not already there, an appearing control is just a control that moved.
 
+Its companion is `islands.md`: islands answer *who owns which region*, this note answers *when a region or a control should exist at all*.
+
 ## What the tree already gives
 
 - Any block at any moment: `set` / `patch` on a named slot, `append` / `remove` by row identity, `create` for the root. Slot granularity is exactly what "one block appears" needs.
