@@ -432,65 +432,73 @@ fn inject_writes(current: Option<&Value>, incoming: &Value) -> bool {
 /// was measured entering each view closure at depth 1, one after another — never nested — so no
 /// render-time stack (depth counter, in-flight set) can see it.
 mod slots {
-    use accrete::Accrete;
-    use serde_json::Value;
+    use accrete::{Accrete, AccreteOps, BindVariant};
     use std::cell::RefCell;
     use std::collections::{HashMap, HashSet};
 
     thread_local! {
         static REFS: RefCell<HashMap<String, HashSet<String>>> = RefCell::new(HashMap::new());
+        /// Reused across calls: the walk allocates nothing beyond this set.
+        static SCRATCH: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
     }
 
-    /// Every slot a value mentions (`bind.*.source` and `bind.*.slot`), read off the wire shape —
-    /// the same shape the frame arrived in, so this needs no knowledge of the node variants.
-    fn collect(value: &Value, out: &mut HashSet<String>) {
-        match value {
-            Value::Object(map) => {
-                if let Some(bind) = map.get("bind").and_then(Value::as_object) {
-                    for variant in bind.values() {
-                        for key in ["source", "slot"] {
-                            if let Some(name) = variant.get(key).and_then(Value::as_str) {
-                                if !name.is_empty() {
-                                    out.insert(name.to_string());
-                                }
-                            }
-                        }
+    /// Every slot a value reads, walked directly over the tree — no serialising, no intermediate
+    /// shape. `borrow_children` is the trait method every variant answers, so this stays correct
+    /// when a variant is added.
+    fn collect(accrete: &Accrete, out: &mut HashSet<String>) {
+        if let Some(bind) = accrete.get_bind() {
+            for b in bind.values() {
+                match &b.variant {
+                    BindVariant::Source { source, .. } => {
+                        out.insert(source.clone());
                     }
-                }
-                for v in map.values() {
-                    collect(v, out);
-                }
-            }
-            Value::Array(items) => {
-                for v in items {
-                    collect(v, out);
+                    BindVariant::Local { slot, .. } => {
+                        out.insert(slot.clone());
+                    }
+                    _ => {}
                 }
             }
-            _ => {}
+        }
+        if let Some(children) = accrete.borrow_children() {
+            for c in children {
+                collect(c, out);
+            }
         }
     }
 
     /// Records what `slot` will reference and returns the cycle that would close, if any.
     /// `replacing` = a `set` replaces the contents; otherwise the references are added to them.
+    ///
+    /// Cost on the hot path is one walk of the value with no allocation beyond a reused set; a value
+    /// that reads nothing (a text row, most data frames) returns here without touching the graph.
     pub fn note(slot: &str, accrete: &Accrete, replacing: bool) -> Option<Vec<String>> {
-        let mut refs = HashSet::new();
-        if let Ok(v) = serde_json::to_value(accrete) {
-            collect(&v, &mut refs);
-        }
-        REFS.with(|r| {
-            let mut graph = r.borrow_mut();
-            if replacing {
-                graph.insert(slot.to_string(), refs);
-            } else {
-                graph.entry(slot.to_string()).or_default().extend(refs);
+        SCRATCH.with(|s| {
+            let mut refs = s.borrow_mut();
+            refs.clear();
+            collect(accrete, &mut refs);
+            if refs.is_empty() {
+                // Reads nothing: this value cannot be part of a cycle, and the graph is untouched.
+                return None;
             }
-            let mut path = vec![slot.to_string()];
-            let mut seen = HashSet::from([slot.to_string()]);
-            if walk(&graph, slot, slot, &mut path, &mut seen) {
-                Some(path)
-            } else {
-                None
-            }
+            let refs = &*refs;
+            REFS.with(|r| {
+                let mut graph = r.borrow_mut();
+                if replacing {
+                    graph.insert(slot.to_string(), refs.clone());
+                } else {
+                    graph
+                        .entry(slot.to_string())
+                        .or_default()
+                        .extend(refs.iter().cloned());
+                }
+                let mut path = vec![slot.to_string()];
+                let mut seen = HashSet::from([slot.to_string()]);
+                if walk(&graph, slot, slot, &mut path, &mut seen) {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
         })
     }
 
