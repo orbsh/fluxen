@@ -25,9 +25,24 @@
 
 ## 决定
 
-保留原生的 `forcegraph` 节点与 `crates/forcegraph`，删掉 JS 模块那一版
+`forcegraph` 是一个**独立组件**：自己的 enum 变体、自己的 crate、自己的组件函数、自己的
+`style` 词表。它不是 canvas 的一种，也不走 `url + options` 那条路。
+
+保留它，删掉 JS 模块那一版
 （`examples/modules/forcegraph/`、`examples/yaml/19.canvas.forcegraph.yaml`、
 Dockerfile 里 3d-force-graph 的装配）。
+
+## 定制能力往哪里长
+
+图上的显示不是"画一张图"，是读这个系统的主要界面，所以它的定制面按**加一个维度**设计，
+而不是"换一个渲染器"：
+
+    载荷（Snapshot）   加字段：node_cluster / edge_cluster 这类分组，作为节点与边的新属性
+                       进来，按 id 差量，整份快照重复送达仍然幂等
+    词表（style）      加旋钮：分组的分层、折叠、着色、可见性，类型化，进 schema 与 patch
+
+两条都不需要新的节点类型，也不需要换渲染器——这正是它留在框架里的理由：维度一多，
+跨模块边界的配置就成了猜谜。
 
 ## 与 ADR 0025 的关系
 
