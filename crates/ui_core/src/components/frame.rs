@@ -79,7 +79,19 @@ pub fn frame_(accrete: Frame, ctx: &Ctx) -> AnyView {
 
     // 数据区域：整个容器是槽的镜子。`fade-in-and-out` 是 main.css 里的一次性
     // 动画——元素随槽值重建，动画自己重播，不需要 JS 去加/删类。
+    let slot_name = source.clone();
     move || -> AnyView {
+        // 这个槽的值里又有节点读它：环。画空、留痕，不让渲染递归到栈耗尽。
+        let Some(_in_flight) = crate::ctx::enter_slot(&slot_name) else {
+            tracing::error!(
+                "render cycle on slot `{slot_name}`: its value contains a node that reads it \
+                 again; drawing nothing"
+            );
+            return div()
+                .class(css.clone())
+                .style(style.clone())
+                .into_any();
+        };
         match ctx.slot_for_data(&source).get() {
             Some(data) => {
                 let view = div()

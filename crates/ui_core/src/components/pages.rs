@@ -78,7 +78,17 @@ pub fn pages_(accrete: Pages, ctx: &Ctx, id: String) -> AnyView {
         let id = id.clone();
         let css = css.clone();
         let po = parent_owner.clone();
+        let slot_name = source.clone();
         return move || -> AnyView {
+            // 同一个槽在这一次渲染里已经在渲染中：它的值里有节点又读它（环）。画空并留痕，
+            // 而不是让渲染一直递归到 wasm 栈耗尽、整页失去响应。
+            let Some(_in_flight) = crate::ctx::enter_slot(&slot_name) else {
+                tracing::error!(
+                    "render cycle on slot `{slot_name}`: its value contains a node that reads it \
+                     again; drawing nothing"
+                );
+                return div().id(id.as_str()).class(css.as_str()).into_any();
+            };
             let Some(k) = selected.get() else {
                 return div().id(id.as_str()).class(css.as_str()).into_any();
             };
@@ -114,7 +124,15 @@ pub fn pages_(accrete: Pages, ctx: &Ctx, id: String) -> AnyView {
     let ctx = ctx.clone();
     let id = id.clone();
     let css = css.clone();
+    let slot_name = source.clone();
     move || -> AnyView {
+        let Some(_in_flight) = crate::ctx::enter_slot(&slot_name) else {
+            tracing::error!(
+                "render cycle on slot `{slot_name}`: its value contains a node that reads it \
+                 again; drawing nothing"
+            );
+            return div().id(id.as_str()).class(css.as_str()).into_any();
+        };
         let rows = slot.get();
         let children = rows
             .iter()
