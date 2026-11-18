@@ -424,6 +424,96 @@ pub struct Float {
     pub children: Option<Vec<Accrete>>,
 }
 
+/// How a panel sits on the page — the first of the two axes that used to be three components.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PanelPlace {
+    /// In the flow: opening it pushes the rest of the page down. (Was `fold`, `float_body: false`.)
+    #[default]
+    Inline,
+    /// Over the trigger it belongs to: the page around it does not move. (Was `popup`.)
+    Anchor,
+    /// Over the whole viewport, at the named edge, with a mask behind it. (Was `layer`; a panel at
+    /// the right edge is the drawer that had no spelling before.)
+    Viewport,
+}
+
+/// Who decides whether a panel is on screen — the second axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PanelState {
+    /// A local toggle: the trigger opens it, a click on the mask / Esc / outside closes it. Nothing
+    /// about it reaches the sender.
+    #[default]
+    Toggle,
+    /// The panel mirrors its bound slot: non-empty means on screen (ADR 0012's "empty is absent"),
+    /// and dismissing clears that slot — one state, not two.
+    Source,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
+pub struct PanelAttr {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    /// Where it sits. Absent = `inline`.
+    #[serde(default, skip_serializing_if = "is_default_place")]
+    pub place: PanelPlace,
+    /// Who decides. Absent = `toggle`.
+    #[serde(default, skip_serializing_if = "is_default_state")]
+    pub state: PanelState,
+    /// `viewport` only: which edge the body hugs. Absent = `L` — the left edge of the viewport
+    /// (`Direction` is the same enum `popup` positions with).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<Direction>,
+    /// Closes on a click outside the body — the mask for `viewport`, "anywhere else" for the rest.
+    /// A panel without it can only be closed by its trigger (a form that must not lose its work).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dismiss: Option<bool>,
+    /// `inline` only: the first child is the header and toggles the body (the old `fold` shape).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replace_header: Option<bool>,
+    /// `viewport` only: the body's width. Absent = whatever the class says.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<String>,
+    /// A NAME for this panel's element, so a `portal` can aim at it (`to: <name>`) instead of at a
+    /// CSS selector. The name is the contract; which element carries it is the renderer's business.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+fn is_default_place(p: &PanelPlace) -> bool {
+    *p == PanelPlace::Inline
+}
+
+fn is_default_state(s: &PanelState) -> bool {
+    *s == PanelState::Toggle
+}
+
+/// 面板：一个"出现/消失的内容区"。`attrs.place` 说它放在哪（inline / 贴触发器 / 贴视口），
+/// `attrs.state` 说谁决定它出现（本地切换 / 跟着所绑槽）。这两条轴上的四格就是原来的
+/// `fold`、`popup`、`layer`，以及它们没覆盖的一格 —— 贴视口 + 本地切换（抽屉）。
+///
+/// `children[0]` 是触发器，`children[1]` 是浮层内容（`state: source` 时触发器可以省：面板
+/// 的出现由槽决定，不需要人点）。缺内容就什么都不画 —— 少写一个子节点是帧的错误。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+pub struct Panel {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<PanelAttr>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bind: Option<HashMap<String, Bind>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<Accrete>>,
+}
+
 /// 模态层（ADR 0014）：应用显式声明的全屏挂载点，portal 把内容传送进来。
 /// 显隐只有一条规则——所绑 `bind["value"]` 槽非空即显示（空即无，ADR 0012 复用）；
 /// `dismiss` 点层自身（模糊区）时清空该槽（清空即关）。几何内联在渲染侧，
@@ -451,6 +541,9 @@ pub struct LayerAttr {
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
+    /// 具名挂载点：`portal` 用 `to: <name>` 指到这里，而不是用 CSS 选择器。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// dismiss（ADR 0014）：点层自身（模糊区，而非模态内容）清空所绑槽。
     /// 本页瞬时状态：只写 local/data 平面，不上线协议。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1107,6 +1200,8 @@ pub enum Accrete {
     portal(Portal),
     #[ui_acrete(has_id = "true")]
     fold(Fold),
+    #[ui_acrete(has_id = "true")]
+    panel(Panel),
     form(Form),
     popup(Popup),
     svg(Svg),

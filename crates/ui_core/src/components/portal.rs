@@ -40,9 +40,18 @@ pub fn portal_(accrete: Portal, ctx: &Ctx) -> AnyView {
         Effect::new(move |_| {
             // 订阅布局：目标随布局出现 / 更换
             let _ = ctx.layout.get();
-            let found = web_sys::window()
-                .and_then(|w| w.document())
-                .and_then(|d| d.query_selector(&to).ok().flatten());
+            // A NAME is the contract: the frame says where content goes, the renderer decides which
+            // element carries it (`mounts::register`). Anything shaped like a selector keeps the old
+            // path, so frames written before names existed still work.
+            let found = if crate::components::mounts::is_name(&to) {
+                // tracked: a mount point may appear AFTER this portal (a panel opening later).
+                let _ = crate::components::mounts::epoch();
+                crate::components::mounts::element(&to)
+            } else {
+                web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.query_selector(&to).ok().flatten())
+            };
             let same = match (found.as_ref(), cur.borrow().as_ref()) {
                 (Some(a), Some(b)) => a == b,
                 (None, None) => true,
@@ -64,7 +73,7 @@ pub fn portal_(accrete: Portal, ctx: &Ctx) -> AnyView {
                     let h = leptos::mount::mount_to(parent, move || div().child(views));
                     *handle.borrow_mut() = Some(Box::new(h));
                 }
-                None => tracing::warn!("portal: target {to:?} not found"),
+                None => tracing::warn!("portal: mount point {to:?} not found (no panel has that name)"),
             }
         });
     }

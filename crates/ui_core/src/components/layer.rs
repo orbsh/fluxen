@@ -6,6 +6,7 @@ use accrete::{AccreteOps, Bind, Layer};
 use leptos::ev::click;
 use leptos::html::*;
 use leptos::prelude::*;
+use wasm_bindgen::JsCast;
 use serde_json::Value;
 
 /// 模态层（ADR 0014）：应用在骨架里显式声明的全屏挂载点，portal 把内容传送进来。
@@ -50,6 +51,28 @@ pub fn layer_(accrete: Layer, ctx: &Ctx, id: String) -> AnyView {
             };
             if let Some(el) = nr.get() {
                 el.set_attribute("style", want).ok();
+            }
+        });
+    }
+
+    // 具名挂载点（`portal` 的 `to: <name>` 指到这里）。登记在挂出之后，注销在组件消亡时；
+    // 名字是契约，元素是谁由这里决定 —— 帧不再写选择器。
+    if let Some(name) = accrete.attrs.as_ref().and_then(|a| a.name.clone()) {
+        let held: StoredValue<Option<web_sys::Element>> = StoredValue::new(None);
+        Effect::new(move |_| {
+            if held.get_value().is_some() {
+                return;
+            }
+            if let Some(el) = nr.get() {
+                let node: web_sys::Element = el.unchecked_into();
+                crate::components::mounts::register(&name, node.clone());
+                held.set_value(Some(node));
+            }
+        });
+        let name = accrete.attrs.as_ref().and_then(|a| a.name.clone()).unwrap_or_default();
+        on_cleanup(move || {
+            if let Some(node) = held.get_value() {
+                crate::components::mounts::unregister(&name, &node);
             }
         });
     }
