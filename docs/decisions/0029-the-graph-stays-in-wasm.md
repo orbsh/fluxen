@@ -12,6 +12,11 @@
     crates/forcegraph            4884 行 Rust + three-d 0.19，wasm 里渲染、拾取、布局
     examples/modules/forcegraph 3d-force-graph（vasturiano）的 JS 模块，走 ADR 0007 契约
 
+**两个都是三维的，而且都基于 three.js**：`three-d` 是 Rust 侧的 three.js 绑定，在 wasm 里
+驱动 WebGL2；`3d-force-graph` 把 three.js 打包进 JS 库。差别不在维度，在实现位置（wasm 内
+vs 模块边界外）与能力（同帧拾取、发光层、边的朝向几何、可达高亮）。把它们说成"3D 版 vs
+另一版"会读成维度差异——那不是本文的论据。
+
 把原生实现删掉、只留 JS 模块的路走过一次，被推翻：那次删除按"种类住在数据里"（ADR
 0025）处理，但这份图不是"一种可视化"，是这台机器的**观察面**——它的能力清单里有一半
 是模块给不了的：
