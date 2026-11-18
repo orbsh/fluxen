@@ -1,7 +1,7 @@
 # 初始布局：左图右流（ADR 0018 之后的主界面形态）。
 #
 # 屏幕固定两栏，没有菜单、没有 Tab、没有路由：
-#   左栏  常驻三维力导向图（canvas + `/assets/forcegraph/index.js`），管结构、关联和状态；
+#   左栏  常驻三维力导向图（`forcegraph` 原生组件），管结构、关联和状态；
 #   右栏  一条消息流（rack + chat 数据槽），管阅读、输入和操作。
 # 宽度不够时先收缩左图（见 custom.css 的 .stage-graph / .stage-stream）。
 #
@@ -27,13 +27,12 @@
         class:
         - stage-graph
       children:
-      - type: canvas
-        url: /assets/forcegraph/index.js
+      - type: forcegraph
         attrs:
           width: 100%
           height: 100%
-        options:
-          fitPaddingPx: 56
+        style:
+          fit_padding_px: 56
         bind:
           value:
             kind: source
