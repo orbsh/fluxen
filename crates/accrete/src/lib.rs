@@ -426,6 +426,7 @@ pub struct Float {
 
 /// How a panel sits on the page — the first of the two axes that used to be three components.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum PanelPlace {
     /// In the flow: opening it pushes the rest of the page down. (Was `fold`, `float_body: false`.)
@@ -440,6 +441,7 @@ pub enum PanelPlace {
 
 /// Who decides whether a panel is on screen — the second axis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum PanelState {
     /// A local toggle: the trigger opens it, a click on the mask / Esc / outside closes it. Nothing
@@ -479,10 +481,6 @@ pub struct PanelAttr {
     /// `viewport` only: the body's width. Absent = whatever the class says.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<String>,
-    /// A NAME for this panel's element, so a `portal` can aim at it (`to: <name>`) instead of at a
-    /// CSS selector. The name is the contract; which element carries it is the renderer's business.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
 }
 
 fn is_default_place(p: &PanelPlace) -> bool {
@@ -541,39 +539,10 @@ pub struct LayerAttr {
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
-    /// 具名挂载点：`portal` 用 `to: <name>` 指到这里，而不是用 CSS 选择器。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
     /// dismiss（ADR 0014）：点层自身（模糊区，而非模态内容）清空所绑槽。
     /// 本页瞬时状态：只写 local/data 平面，不上线协议。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dismiss: Option<bool>,
-}
-
-/// 渲染位置传送（ADR 0014）：children 渲染到 `to` 选中的元素里，就地只留一个空锚点。
-/// 只做位置，不管显隐与遮罩——那是 layer 的语义。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Portal {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<PortalAttr>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct PortalAttr {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub class: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selector: Option<String>,
-    /// 目标挂载点：CSS 选择器，选中应用显式声明的 layer 宿主（ADR 0014：挂载点由
-    /// 应用声明，渲染器不加固定逻辑；解析不到就不渲染 + warn）。
-    pub to: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -1195,15 +1164,11 @@ pub enum Accrete {
     #[ui_acrete(has_id = "true")]
     forcegraph(ForceGraph),
     float(Float),
-    #[ui_acrete(has_id = "true")]
-    layer(Layer),
-    portal(Portal),
-    #[ui_acrete(has_id = "true")]
-    fold(Fold),
+    /// 内容区：`place` × `state` 两轴四格（ADR 0030）。`fold`/`popup`/`layer` 作为节点类型
+    /// 已删除 —— 它们的实现还在 ui_core 里给这里用，但帧里不再能写出来。
     #[ui_acrete(has_id = "true")]
     panel(Panel),
     form(Form),
-    popup(Popup),
     svg(Svg),
     group(Group),
     path(Path),

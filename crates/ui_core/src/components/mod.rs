@@ -14,8 +14,6 @@ pub mod float;
 pub use float::float_;
 pub mod layer;
 pub use layer::layer_;
-pub mod portal;
-pub use portal::portal_;
 pub mod fold;
 pub use fold::fold_;
 pub mod form;
@@ -26,7 +24,6 @@ pub use popup::popup_;
 pub mod panel;
 pub use panel::panel_;
 
-pub mod mounts;
 pub mod pages;
 pub use pages::pages_;
 pub mod rack;
