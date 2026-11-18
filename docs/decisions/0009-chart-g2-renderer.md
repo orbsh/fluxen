@@ -1,6 +1,6 @@
 # ADR 0009: Chart 渲染器演进——G2 spec + 模块通道（去 eval 注入）
 
-状态：已接受
+状态：已接受（节点类型已由 ADR 0025 移除——`chart` 现在是 `canvas` + `url: /assets/g2chart/index.js`，不是一种节点）
 日期：2026-10-01
 仓库：fluxen
 

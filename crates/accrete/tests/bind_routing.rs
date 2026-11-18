@@ -109,52 +109,26 @@ fn pages_variant_decodes_with_display_default() {
 }
 
 #[test]
-fn chart_url_has_backward_compatible_default() {
-    // ADR 0009: old frames without `url` still decode (serde default).
-    let c: accrete::Chart = serde_json::from_value(json!({
+fn a_module_url_is_the_only_way_to_name_a_renderer() {
+    // ADR 0007 的形态是唯一形态：种类住在数据里，框架不替任何渲染器选实现。
+    // 原来的 chart/editor 默认 url 已移除——那正是"种类内置"的痕迹。
+    let c: Accrete = serde_json::from_value(json!({
+        "type": "canvas",
+        "url": "/assets/g2chart/index.js",
         "bind": {"value": {"kind": "default", "default": {"type": "line"}}}
     }))
     .unwrap();
-    assert_eq!(c.url, "/assets/g2chart/index.js");
-    // explicit url wins
-    let c2: accrete::Chart =
-        serde_json::from_value(json!({"url": "https://cdn/g2chart/index.js"})).unwrap();
-    assert_eq!(c2.url, "https://cdn/g2chart/index.js");
+    assert!(matches!(c, Accrete::canvas(_)));
+    // 没有 url 的 canvas 是坏帧，不是"合法的默认"
+    assert!(
+        serde_json::from_value::<Accrete>(json!({"type": "canvas"})).is_err(),
+        "a canvas without a module url must not decode"
+    );
+    // 旧词汇不再 decode：框架没有 chart 这个种类
+    assert!(serde_json::from_value::<Accrete>(json!({"type": "chart"})).is_err());
+    assert!(serde_json::from_value::<Accrete>(json!({"type": "editor"})).is_err());
+    assert!(serde_json::from_value::<Accrete>(json!({"type": "diagram"})).is_err());
 }
-
-#[test]
-fn editor_url_has_backward_compatible_default() {
-    // ADR 0016: frames without `url` decode onto the vendored wrapper, so a
-    // producer only ever sends the data area.
-    let e: accrete::Editor = serde_json::from_value(json!({
-        "bind": {"value": {"kind": "default", "default": {"code": "fn main() {}", "lang": "rust"}}}
-    }))
-    .unwrap();
-    assert_eq!(e.url, "/assets/editor/index.js");
-    assert_eq!(e.id, None);
-    assert!(e.attrs.is_none());
-    // explicit url wins (swapping renderer/CDN is a frame edit, per ADR 0007)
-    let e2: accrete::Editor =
-        serde_json::from_value(json!({"url": "https://cdn/editor/index.js"})).unwrap();
-    assert_eq!(e2.url, "https://cdn/editor/index.js");
-    // the enum-level wire shape: type tag + has_id variant, empty bind/attrs omitted
-    let a: Accrete = serde_json::from_value(json!({"type": "editor", "id": "ed1"})).unwrap();
-    assert!(matches!(a, Accrete::editor(_)));
-    assert_eq!(a.get_id().as_deref(), Some("ed1"));
-    let back = serde_json::to_value(&a).unwrap();
-    assert_eq!(back["type"], json!("editor"));
-    assert_eq!(back["url"], json!("/assets/editor/index.js"));
-    assert!(back.get("bind").is_none());
-    assert!(back.get("attrs").is_none());
-    // payload shape: the data area IS the payload, verbatim — `{"code": ""}` is a
-    // (non-empty) map, i.e. "an editor with empty code", NOT the no-data-yet value
-    // (`{}`/Null stay that one, ADR 0012); nothing is synthesized from node fields.
-    let b: accrete::Bind =
-        serde_json::from_value(json!({"kind": "default", "default": {"code": "", "lang": "python"}}))
-            .unwrap();
-    assert_eq!(b.default, Some(json!({"code": "", "lang": "python"})));
-}
-
 #[test]
 fn local_roundtrips_through_serde() {
     let a: Accrete = serde_json::from_value(json!({

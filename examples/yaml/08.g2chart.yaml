@@ -1,9 +1,10 @@
 # G2 饼图（ADR 0009）：spec = GoG 词汇的纯 JSON，直装 bind.value.default；
-# url 省略 = 默认 /assets/g2chart/index.js（封装模块，eval 注入已退役）。
+# url 指向封装模块（ADR 0007 契约；框架不再有 chart 这个种类）。
 action: append
 slot: chat
 data:
-  type: chart
+  type: canvas
+  url: /assets/g2chart/index.js
   bind:
     value:
       kind: default

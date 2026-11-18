@@ -1,6 +1,6 @@
 # ADR 0016: 代码编辑器组件——Monaco 走模块通道，保存即上行
 
-状态：已接受（2026-10-15 实施；门槛全绿——见 `docs/PLAN.md` §22）
+状态：已接受（节点类型已由 ADR 0025 移除——`editor` 现在是 `canvas` + `url: /assets/editor/index.js`，不是一种节点）（2026-10-15 实施；门槛全绿——见 `docs/PLAN.md` §22）
 日期：2026-10-14
 仓库：fluxen
 

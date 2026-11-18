@@ -3,7 +3,8 @@ slot: chat
 data:
   type: case
   children:
-  - type: diagram
+  - type: canvas
+  - url: /assets/diagram/index.js
     bind:
       value:
         kind: default
@@ -42,7 +43,8 @@ data:
           
               UI->>UI: Renders the AI's response in the chat interface
               deactivate UI
-  - type: diagram
+  - type: canvas
+  - url: /assets/diagram/index.js
     bind:
       value:
         kind: default
