@@ -103,6 +103,12 @@ pub enum BindVariant {
         /// 包装里的那个名字，缺省 = 槽名。另起的名字才写它——落点本身是 `slot`。
         #[serde(skip_serializing_if = "Option::is_none")]
         name: Option<String>,
+        /// 本地切换之外的第二个去向：这是**点击**，venue 也需要知道（ADR 0028）。
+        /// 一次导航点击既是"页面里的选中值变了"，也是"这个人走到了某个岛"——前者是本地
+        /// 值槽，后者只有 venue 能记住（跨设备续上）。写本地槽之后再照发一份，事件名由
+        /// 帧给（框架不认识"岛"这个词），载荷是这次的值本身。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        report: Option<String>,
     },
     /// 上行目标：这个控件把交互送到宿主上的哪个目标（ADR 0023）。叫 `dest` 而不是 `slot`：
     /// 上下行并不对称（下行写页面里的位置，上行调起宿主的一个处理器），所以不共用一个词;

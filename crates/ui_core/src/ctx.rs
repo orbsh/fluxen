@@ -162,14 +162,23 @@ impl Ctx {
                 });
                 true
             }
-            accrete::BindVariant::Local { slot, name, .. } => {
+            accrete::BindVariant::Local { slot, name, report, .. } => {
                 let wrapped = to_value(&content::Outflow {
                     dest: name.clone().unwrap_or_else(|| slot.clone()),
-                    id,
-                    data: payload,
+                    id: id.clone(),
+                    data: payload.clone(),
                 })
                 .unwrap_or(Value::Null);
                 self.slot_for_value(slot).set(Some(wrapped));
+                // 一次点击，两个事件（ADR 0028）：本地槽已经写下（页面立刻切换），
+                // 再向 venue 发同一个值。落点各自处置载荷——槽按 ADR 0010 包成
+                // `Outflow`，远程那头把值当作事件的 `data`。
+                if let Some(event) = report.clone() {
+                    let ctx = self.clone();
+                    leptos::task::spawn_local(async move {
+                        ctx.send(event, id, payload).await;
+                    });
+                }
                 true
             }
             _ => false,

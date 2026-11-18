@@ -13,7 +13,7 @@ fn bind(js: serde_json::Value) -> BindVariant {
 #[test]
 fn local_kind_carries_slot_and_optional_path() {
     match bind(json!({"kind": "local", "slot": "page"})) {
-        BindVariant::Local { slot, path, name } => {
+        BindVariant::Local { slot, path, name, .. } => {
             assert_eq!(slot, "page");
             assert_eq!(path, None);
             assert_eq!(name, None);
@@ -21,7 +21,7 @@ fn local_kind_carries_slot_and_optional_path() {
         other => panic!("expected Local, got {other:?}"),
     }
     match bind(json!({"kind": "local", "slot": "chan", "path": "/id"})) {
-        BindVariant::Local { slot, path, name } => {
+        BindVariant::Local { slot, path, name, .. } => {
             assert_eq!(slot, "chan");
             assert_eq!(path.as_deref(), Some("/id"));
             assert_eq!(name, None);
@@ -144,4 +144,37 @@ fn local_roundtrips_through_serde() {
     assert_eq!(back["bind"]["value"]["slot"], json!("page"));
     // skip_serializing_if: absent path stays absent on the wire
     assert!(back["bind"]["value"].get("path").is_none());
+}
+
+#[test]
+fn a_local_binding_can_report_the_same_click_to_the_venue() {
+    // ADR 0028: a navigation click is BOTH "the page's selected value changed" (a local slot) and
+    // "this person walked to an island" (a fact only the venue can remember across devices). The
+    // frame names the report event; the framework knows no island vocabulary.
+    let a: Accrete = serde_json::from_value(json!({
+        "type": "select",
+        "bind": {
+            "value": {"kind": "local", "slot": "page", "report": "island", "default": "talk"},
+            "options": {"kind": "source", "source": "nav"}
+        }
+    }))
+    .unwrap();
+    match &a.get_bind().unwrap().get("value").unwrap().variant {
+        BindVariant::Local { slot, report, .. } => {
+            assert_eq!(slot, "page");
+            assert_eq!(report.as_deref(), Some("island"));
+        }
+        other => panic!("expected a local binding, got {other:?}"),
+    }
+    // absent report stays absent on the wire (skip_serializing_if)
+    let back = serde_json::to_value(&a).unwrap();
+    let plain: Accrete = serde_json::from_value(json!({
+        "type": "select",
+        "bind": {"value": {"kind": "local", "slot": "page"}}
+    }))
+    .unwrap();
+    assert_eq!(back["bind"]["value"]["report"], json!("island"));
+    assert!(serde_json::to_value(&plain).unwrap()["bind"]["value"]
+        .get("report")
+        .is_none());
 }
