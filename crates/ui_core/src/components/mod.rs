@@ -22,6 +22,11 @@ pub mod form;
 pub use form::form_;
 pub mod popup;
 pub use popup::popup_;
+
+pub mod panel;
+pub use panel::panel_;
+
+pub mod mounts;
 pub mod pages;
 pub use pages::pages_;
 pub mod rack;
