@@ -265,6 +265,143 @@ pub struct Canvas {
     pub bind: Option<HashMap<String, Bind>>,
 }
 
+/// 三维力导向关系图（ADR 0018）。原生组件，不是 canvas 模块：渲染器与布局
+/// 都在 wasm 里（`forcegraph` crate），所以没有 `url`、没有 JS 资产、没有
+/// mount/update/resize/unmount 契约——可写的只有 `attrs`、渲染器旋钮 `style`
+/// 和数据区 `bind["value"]`。
+///
+/// 数据区载荷 = `forcegraph::Snapshot`：`{nodes, links, focus?}`，按 id 求
+/// 差量（整份快照重复送达幂等）。`focus` 是视图指令
+/// `{ids, seq?, padding_px?, duration_ms?}`——`seq` 变了同一个目标可以再飞一次，
+/// 不动 `seq` 的重复写入不碰相机。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+pub struct ForceGraph {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<SizeAttr>,
+    /// 渲染器旋钮，全部有缺省值；缺省时不进 wire。
+    #[serde(default, skip_serializing_if = "force_graph_style_is_default")]
+    pub style: ForceGraphStyle,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bind: Option<HashMap<String, Bind>>,
+}
+
+/// 图渲染器的旋钮。语义与 canvas 的 `options` 同级：挂载期配置，改它要
+/// 重新挂载（不进 update 腿）。区别只在于这是自家渲染器的词表，所以可以
+/// 类型化、可以被 schema 和 patch 校验。
+/// 边的走向。两种朝向都是"节点上的接口"：连线从一个朝向离开，再从另一端的
+/// 朝向进入，中间用三次曲线接起来。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum LinkShape {
+    #[default]
+    Straight,
+    /// 直角坐标系：±x ±y ±z 六个朝向。
+    Axes,
+    /// 正四面体：四个顶点到中心的方向。
+    Tetra,
+}
+
+/// 图所在的底色。两套配色只差明度：莫兰迪色低彩度，同一套色在浅底上够
+/// 对比就会在深底上糊成一团，反之亦然。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    Light,
+    /// 默认：节点是光团、边是光线，光需要暗底才成立。
+    #[default]
+    Dark,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+// 结构级 default：帧里只写想改的旋钮，其余取 `Default::default()`。
+// 字段级 default 只管"整个 style 缺席"，写半个对象就会报 missing field。
+#[serde(default)]
+pub struct ForceGraphStyle {
+    /// 节点基础半径（屏幕像素）。
+    /// 节点半径（屏幕像素）；0 = 由 `node_size_ratio` 推导。
+    pub node_size_px: f32,
+    /// 节点球直径相对边宽的倍数（默认 2）。
+    pub node_size_ratio: f32,
+    /// 每档权重增加的半径（屏幕像素）；档数见 `node_tiers`。
+    pub node_size_step_px: f32,
+    pub node_tiers: u8,
+    pub link_width_px: f32,
+    /// 边的走向：`straight` 直连；`axes` 从六个坐标朝向里取最近的一个；
+    /// `tetra` 从正四面体的四个顶点方向里取最近的。
+    pub link_shape: LinkShape,
+    pub link_opacity: f32,
+    /// 斥力，负值 = 相互推开。
+    pub charge: f32,
+    pub link_distance: f32,
+    pub link_strength: Option<f32>,
+    pub velocity_decay: f32,
+    /// 常显名字标签层。
+    pub labels: bool,
+    pub label_px: f32,
+    /// 超过这个节点数只画不标（标签层是逐帧投影的 DOM，量大就成噪声）。
+    pub label_max_nodes: u32,
+    /// 首批数据后自动取景到整张图；之后的追加不重排、不飞相机。
+    pub auto_fit: bool,
+    pub fit_padding_px: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background: Option<String>,
+    /// 节点配色，按 `kind` 轮取；空 = 用 `theme` 对应的内置莫兰迪方案。
+    #[serde(default)]
+    pub palette: Vec<String>,
+    /// 底色：浅底 / 深底。只换配色与面板背景，不改布局。
+    pub theme: Theme,
+    /// 高亮节点的标记强度：光晕核心与每一圈波纹的峰值不透明度。
+    pub glow_alpha: f32,
+    /// 高亮可达路径（从选中/聚焦节点向外 `reach_hops` 条边），而不是压暗其它部分。
+    pub highlight_reach: bool,
+    /// 可达的跳数。
+    pub reach_hops: u32,
+}
+
+impl Default for ForceGraphStyle {
+    fn default() -> Self {
+        Self {
+            node_size_px: 0.0,
+            node_size_ratio: 2.0,
+            node_size_step_px: 0.6,
+            node_tiers: 3,
+            // 2.5 px / 0.6 alpha: at 1.5 px and 0.35 the edges were drawn but
+            // invisible on a light page (measured: 540 → 2486 coloured pixels
+            // when the width went to 16 px).
+            link_width_px: 2.5,
+            link_shape: LinkShape::Straight,
+            link_opacity: 0.8,
+            charge: -30.0,
+            link_distance: 30.0,
+            link_strength: None,
+            velocity_decay: 0.4,
+            labels: true,
+            label_px: 12.0,
+            label_max_nodes: 150,
+            auto_fit: true,
+            fit_padding_px: 40.0,
+            background: None,
+            palette: Vec::new(),
+            theme: Theme::default(),
+            glow_alpha: 0.45,
+            highlight_reach: true,
+            reach_hops: 1,
+        }
+    }
+}
+
+fn force_graph_style_is_default(style: &ForceGraphStyle) -> bool {
+    *style == ForceGraphStyle::default()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
@@ -950,6 +1087,8 @@ pub enum Accrete {
     frame(Frame),
     #[ui_acrete(has_id = "true")]
     canvas(Canvas),
+    #[ui_acrete(has_id = "true")]
+    forcegraph(ForceGraph),
     float(Float),
     #[ui_acrete(has_id = "true")]
     layer(Layer),

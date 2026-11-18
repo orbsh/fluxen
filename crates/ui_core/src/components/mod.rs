@@ -4,6 +4,8 @@ pub mod frame;
 pub use frame::frame_;
 pub mod canvas;
 pub use canvas::canvas_;
+pub mod forcegraph;
+pub use forcegraph::forcegraph_;
 pub mod dock;
 pub use dock::dock_;
 pub mod grab;
