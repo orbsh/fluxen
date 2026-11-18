@@ -404,14 +404,51 @@ fn inject_writes(current: Option<&Value>, incoming: &Value) -> bool {
     current != Some(incoming)
 }
 
+/// 渲染深度守卫（wasm 里递归渲染会把栈吃干，症状是 `memory access out of bounds` 或
+/// `Maximum call stack size exceeded` —— 崩在 malloc 或 `Option<String>::clone` 里，
+/// 与真正的递归点隔着几十层，看上去像内存 bug）。
+///
+/// 一旦某棵数据能渲染到自己（槽里的值里又有绑定同一个槽的节点），崩溃就是必然的，
+/// 而 wasm 崩掉之后**整页**都失去响应，不是某一个区域坏掉。所以这里限深：超限时
+/// 打一行指出是哪个节点、哪个 id，然后渲染成空——一个坏节点不该带走整张页面。
+const MAX_RENDER_DEPTH: usize = 64;
+
+thread_local! {
+    static RENDER_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+struct DepthGuard;
+
+impl Drop for DepthGuard {
+    fn drop(&mut self) {
+        RENDER_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+    }
+}
+
 /// 渲染一个 accrete 为视图（供 external 触发）。
 pub fn render_accrete(ctx: &Ctx, accrete: &Accrete) -> AnyView {
+    let depth = RENDER_DEPTH.with(|d| {
+        let v = d.get() + 1;
+        d.set(v);
+        v
+    });
+    if depth > MAX_RENDER_DEPTH {
+        RENDER_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+        tracing::error!(
+            "render depth {} exceeded at {} (id {:?}) — this node renders itself; drawing nothing",
+            MAX_RENDER_DEPTH,
+            accrete.get_type(),
+            accrete.get_id()
+        );
+        return ().into_any();
+    }
+    let _guard = DepthGuard;
     dispatch(accrete, ctx)
 }
 
 /// 渲染一组子 accrete。
 pub fn render_children(ctx: &Ctx, subs: &[Accrete]) -> Vec<AnyView> {
-    subs.iter().map(|b| dispatch(b, ctx)).collect()
+    subs.iter().map(|b| render_accrete(ctx, b)).collect()
 }
 
 #[cfg(test)]

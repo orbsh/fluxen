@@ -1,0 +1,8 @@
+# The renderer recurses once per node level and each level builds a `Vec<AnyView>` of generic,
+# monomorphised closures; the wasm default of 1 MiB is not enough for a real surface tree (gravity's
+# page is ~10 levels with racks, pages and a scene inside). Overflowing it corrupts neighbouring
+# linear memory, which surfaces as scattered `memory access out of bounds` traps in malloc and in
+# `Option<String>::clone` — nowhere near the recursion. 8 MiB is the fix: it costs a slightly larger
+# shadow stack area, nothing at runtime.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=-zstack-size=8388608"]
