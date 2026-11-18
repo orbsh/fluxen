@@ -61,28 +61,46 @@ pub fn frame_(accrete: Frame, ctx: &Ctx) -> AnyView {
     let css = css.join(" ");
 
     let children = accrete.children.clone().unwrap_or_default();
+    // The DOM id is the marker contract: a reserved-id node (`reflux:path` and
+    // friends) is read back with `getElementById`, and `placeholder` carried the
+    // id before the merge (ADR 0027 keeps its behaviour). The class token above
+    // stays — it is what CSS addressed — but a class is not addressable by id.
+    let dom_id = accrete.id.clone();
     let Some(source) = source_of(&accrete) else {
-        return div()
+        let view = div()
             .class(css.as_str())
             .style(style)
-            .child(render_children(&ctx, &children))
-            .into_any();
+            .child(render_children(&ctx, &children));
+        return match dom_id {
+            Some(id) => view.id(id).into_any(),
+            None => view.into_any(),
+        };
     };
 
     // 数据区域：整个容器是槽的镜子。`fade-in-and-out` 是 main.css 里的一次性
     // 动画——元素随槽值重建，动画自己重播，不需要 JS 去加/删类。
     move || -> AnyView {
         match ctx.slot_for_data(&source).get() {
-            Some(data) => div()
-                .class(format!("{css} fade-in-and-out"))
-                .style(style.clone())
-                .child(render_accrete(&ctx, &data))
-                .into_any(),
-            None => div()
-                .class(css.clone())
-                .style(style.clone())
-                .child(render_children(&ctx, &children))
-                .into_any(),
+            Some(data) => {
+                let view = div()
+                    .class(format!("{css} fade-in-and-out"))
+                    .style(style.clone())
+                    .child(render_accrete(&ctx, &data));
+                match dom_id.clone() {
+                    Some(id) => view.id(id).into_any(),
+                    None => view.into_any(),
+                }
+            }
+            None => {
+                let view = div()
+                    .class(css.clone())
+                    .style(style.clone())
+                    .child(render_children(&ctx, &children));
+                match dom_id.clone() {
+                    Some(id) => view.id(id).into_any(),
+                    None => view.into_any(),
+                }
+            }
         }
     }
     .into_any()
