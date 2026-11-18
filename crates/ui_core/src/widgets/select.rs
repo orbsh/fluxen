@@ -131,7 +131,8 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
         let children = option.iter().enumerate().map(|(idx, child)| {
             let key = child.get_id().clone().unwrap_or(idx.to_string());
             let selected = current.get() == key;
-            let mut option = child.clone();
+            // 行是共享的，而 `add_class` 要改它：拷这一行（不是整张表）。
+            let mut option = child.as_ref().clone();
             option.add_class("f as-stretch");
             if selected {
                 option.add_class("selected");

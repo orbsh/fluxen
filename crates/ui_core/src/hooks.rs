@@ -51,7 +51,7 @@ pub fn use_source_list(
     ctx: &Ctx,
     accrete: &impl AccreteOps,
     key: &str,
-) -> Option<std::sync::Arc<Vec<Accrete>>> {
+) -> Option<std::sync::Arc<Vec<std::sync::Arc<Accrete>>>> {
     source_of(accrete, key).map(|src| ctx.slot_for_list(src).get())
 }
 

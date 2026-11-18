@@ -9,13 +9,16 @@ use serde_json::Value;
 
 /// 行字典（ADR 0010）：键 = 行 `id`（同 rack 行身份纪律，无 id 退 `#{idx}`）。
 /// 纯函数，单测覆盖。
-pub(crate) fn dict_of(rows: &[Accrete]) -> std::collections::HashMap<String, Accrete> {
+pub(crate) fn dict_of(
+    rows: &[std::sync::Arc<Accrete>],
+) -> std::collections::HashMap<String, std::sync::Arc<Accrete>> {
     rows.iter()
         .enumerate()
         .map(|(idx, r)| {
             (
                 r.get_id().clone().unwrap_or_else(|| format!("#{idx}")),
-                r.clone(),
+                // 行本身是共享的：这里拿到的是一份指针，不是整棵子树。
+                std::sync::Arc::clone(r),
             )
         })
         .collect()
@@ -78,17 +81,21 @@ pub fn pages_(accrete: Pages, ctx: &Ctx, id: String) -> AnyView {
         let id = id.clone();
         let css = css.clone();
         let po = parent_owner.clone();
+        // 行表按 id 建一次、list 变了才重建（与 rack 的 index memo 同一模式）。建表本身是
+        // O(rows)，放进渲染闭包就变成每次重渲染都建一遍；包一层 `Arc` 让 `.get()` 交出的
+        // 是指针而不是整张表。
+        let dict = Memo::new(move |_| std::sync::Arc::new(dict_of(&slot.get()[..])));
         return move || -> AnyView {
             let Some(k) = selected.get() else {
                 return div().id(id.as_str()).class(css.as_str()).into_any();
             };
-            let rows = slot.get();
-            match dict_of(&rows).get(&k) {
+            let rows = dict.get();
+            match rows.get(&k) {
                 Some(row) => {
                     // 每次切换独立 owner：卸载即随 owner 清理（丢状态，正是
                     // render 模式的语义）；壳与 dom 模式同形（page f）
                     let owner = po.with(Owner::new);
-                    let view = owner.with(|| render_accrete(&ctx, row));
+                    let view = owner.with(|| render_accrete(&ctx, row.as_ref()));
                     div()
                         .id(id.as_str())
                         .class(css.as_str())
@@ -133,7 +140,7 @@ pub fn pages_(accrete: Pages, ctx: &Ctx, id: String) -> AnyView {
                             "page hide"
                         }
                     })
-                    .child(render_accrete(&ctx, row))
+                    .child(render_accrete(&ctx, row.as_ref()))
                     .into_any()
             })
             .collect::<Vec<_>>();
@@ -160,7 +167,12 @@ mod tests {
 
     #[test]
     fn dict_keys_rows_by_id_with_positional_fallback() {
-        let d = dict_of(&[row(Some("home"), "h"), row(None, "p"), row(Some("about"), "a")]);
+        let rows: Vec<std::sync::Arc<Accrete>> =
+            [row(Some("home"), "h"), row(None, "p"), row(Some("about"), "a")]
+                .into_iter()
+                .map(std::sync::Arc::new)
+                .collect();
+        let d = dict_of(&rows);
         assert_eq!(d.len(), 3);
         assert_eq!(d["home"].get_bind().unwrap()["value"].default, Some(json!("h")));
         assert_eq!(d["#1"].get_bind().unwrap()["value"].default, Some(json!("p")));
