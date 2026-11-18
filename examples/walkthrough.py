@@ -47,12 +47,13 @@ Implementation choices worth naming:
   only snippet-kind cargo can land; anything else is refused silently, which is
   the pairing rule working, not a failure. The source adds no style and no size
   of its own — what you see is the `text` child.
-- A chart has no size attrs (ADR 0009 — a chart's size always comes from its
-  container), so each chart sits in a borderless container whose definite size
-  comes from `attrs.grid`, the same shape `00.radar.yaml` uses. That band is part
-  of the row from the start: unlike a canvas (where the size is on the node and
-  ADR 0012 can collapse it), a chart's band cannot be derived from its data area,
-  so it reads as an empty band until the spec lands and draws into it.
+- The charts are canvases pointed at the g2chart module (ADR 0025) and carry no
+  size of their own, so the size comes from the container (ADR 0009): each one
+  sits in a borderless band whose definite size comes from `attrs.grid`, the
+  same shape `00.radar.yaml` uses. The band is part of the row from the start —
+  unlike the model canvases below (where the size is on the node and ADR 0012
+  can collapse it), nothing here can be derived from an empty data area, so it
+  reads as an empty band until the spec lands and draws into it.
 - The charts are slot-bound (`trend` / `radar_rd` / `radar_mkt` / `radar_ops`).
   `examples/yaml/00.radar.yaml` stays the single source of that chart data: this
   demo posts only its SET frames, because posting the whole file would open a
@@ -63,10 +64,10 @@ Implementation choices worth naming:
 - Models land AFTER the paragraph above them; the trend keeps growing one day per
   frame (the walkthrough's original "chart grows" beat).
 - The code editor is a canvas pointed at the editor module (ADR 0025): it is in
-  the row from the start, bound to its own slot, so it costs ZERO requests until the code payload
-  lands (ADR 0015) — Monaco is ~4.5 MB and must never ride the page load. Its save
-  is Ctrl/Cmd+S in the editor, which uplinks `{code, lang}` over the same leg the
-  review form submits through (ADR 0016).
+  the row from the start, bound to its own slot, so it costs ZERO requests until
+  the code payload lands (ADR 0015) — Monaco is ~4.5 MB and must never ride the
+  page load. Its save is Ctrl/Cmd+S in the editor, which uplinks `{code, lang}`
+  over the same leg the review form submits through (ADR 0016).
 - The graph is the LEFT COLUMN, not a message (ADR 0018), and it is not a finale:
   each beat above pushes the snapshot for what has appeared so far, so the two
   halves advance together. A native `forcegraph`
@@ -78,10 +79,11 @@ Implementation choices worth naming:
   final frame is a `focus` directive — the equivalent of "a search landed".
 
 Prerequisites: examples/renderer/assets/3dbrowser/ (with MaterialsVariantsShoe.glb),
-examples/renderer/assets/splatviewer/ (with truck.ksplat), and examples/renderer/assets/editor/
-+ examples/renderer/assets/monaco/ (the editor wrapper + Monaco's AMD subset; recipes in
-examples/renderer/modules/editor/index.js and the Dockerfile). The graph needs no assets:
-its renderer is compiled into the wasm bundle.
+examples/renderer/assets/splatviewer/ (with truck.ksplat), examples/renderer/assets/g2chart/
+(the chart module + its g2.min.js), and examples/renderer/assets/editor/ +
+examples/renderer/assets/monaco/ (the editor wrapper + Monaco's AMD subset). Build recipes
+for all of them are in the Dockerfile. The graph needs no assets: its renderer is compiled
+into the wasm bundle.
 Run from the repo root (paths below are relative to it).
 
 Usage:
@@ -117,6 +119,7 @@ RADAR_FILE = "examples/yaml/00.radar.yaml"  # the single source of the chart dat
 
 THREED_URL = "/assets/3dbrowser/index.js"
 SPLAT_URL = "/assets/splatviewer/index.js"
+G2CHART_URL = "/assets/g2chart/index.js"
 EDITOR_URL = "/assets/editor/index.js"
 SHOE_URL = "/assets/3dbrowser/MaterialsVariantsShoe.glb"
 TRUCK_URL = "/assets/splatviewer/truck.ksplat"
@@ -127,8 +130,9 @@ SPLAT_SIZE = ("720px", "460px")
 SHOE_SIZE = ("640px", "420px")
 
 
-# The editor area (ADR 0016). An editor is a module host with a definite size like a
-# canvas, and its payload is {code, lang} — "the code as a parameter".
+# The editor area (ADR 0016 + 0025). It is a canvas — the same host as the model
+# areas — pointed at the editor module, with a definite size; its payload is
+# {code, lang} — "the code as a parameter".
 CODE_SIZE = ("100%", "280px")
 PATCH_CODE = """pub fn render(nodes: &[Node]) -> Frame {
     // 改两笔再按 Ctrl/Cmd+S：整段代码连同语言 id 会从同一条上行通道回上去
@@ -137,10 +141,10 @@ PATCH_CODE = """pub fn render(nodes: &[Node]) -> Frame {
 """
 
 # The closing graph: the renderer's own pieces, i.e. what the reader has been
-# watching work. 33 nodes / 42 links in five clusters; examples/
-# yaml/20.forcegraph.yaml is the smaller standalone carrier with the same
-# vocabulary (this table keeps the demo free of a YAML parser). `weight` drives
-# node size, `strength` drives edge width — both are typed `style` fields.
+# watching work. 33 nodes / 42 links in five clusters; the standalone carrier is
+# examples/yaml/20.forcegraph.yaml (smaller, same vocabulary) — this table keeps
+# the demo free of a YAML parser. `weight` drives node size, `strength` drives
+# edge width — both are typed `style` fields.
 # The graph is the project's own structure, not decoration: crates, the nodes
 # they render, the modules that ride inside them, and the libraries underneath.
 # Small graphs all look like a blob, and a blob is exactly what this view must
@@ -352,10 +356,12 @@ def pin_chip(slot, title):
 
 
 def chart_node(node_id, slot):
-    """`f` mirrors 00.radar.yaml: the chart is a grid item of the band container,
-    and the container's track supplies the height."""
+    """A canvas pointed at the g2chart module (ADR 0025). `f` mirrors
+    00.radar.yaml: it is a grid item of the band container, and the container's
+    track supplies the height."""
     return {
-        "type": "chart",
+        "type": "canvas",
+        "url": G2CHART_URL,
         "id": node_id,
         "attrs": {"class": ["f"]},
         "bind": {"value": {"kind": "source", "source": slot}},
