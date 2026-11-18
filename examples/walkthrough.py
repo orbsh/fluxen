@@ -137,7 +137,7 @@ PATCH_CODE = """pub fn render(nodes: &[Node]) -> Frame {
 """
 
 # The closing graph: the renderer's own pieces, i.e. what the reader has been
-# watching work. Same 15 nodes / 14 links as examples/yaml/19.canvas.forcegraph.yaml
+# watching work. Same 15 nodes / 14 links as examples/yaml/20.forcegraph.yaml
 # (that file is the standalone carrier; this table keeps the demo free of a YAML
 # parser). `weight` drives node size, `strength` drives edge width — both in the
 # module, both configurable through options.

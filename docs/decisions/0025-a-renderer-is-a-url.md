@@ -62,7 +62,6 @@ struct 与 enum 变体）、改 `ui_core`（加组件函数）、重新编译 wa
   地方，`url` 指向它。
 - 一次 `cargo check` 就能看出框架里还有没有种类：`enum Accrete` 里不该再有
   跟渲染器同名的变体。
-- 未在此 ADR 裁决的：`forcegraph` 目前有两套实现——Rust 的 `three-d` 渲染器
-  （ADR 0018，在同一 wasm 里，带拾取与事件回传）和 `assets/forcegraph/index.js`
-  （3d-force-graph，走模块契约）。按本 ADR 它应该只剩后者，但那是能力取舍
-  （2D 自研 + 拾取 vs 3D 库），单独裁决。在此之前 `forcegraph` 节点保留。
+- `forcegraph` 已单独裁决（ADR 0029）：保留 wasm 里的 `three-d` 实现，删掉 JS 模块
+  那一版。它是本判据的**自觉例外**——同帧拾取、可达路径高亮、边的朝向几何在模块边界
+  之外，不能靠 url 换实现。其余可视化仍走 url。
