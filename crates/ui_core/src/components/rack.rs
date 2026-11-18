@@ -64,6 +64,20 @@ fn row_positions(rows: &[Accrete]) -> HashMap<String, usize> {
     pos
 }
 
+/// How many LEADING rows have outlived their stay. Dwell is uniform and rows arrive in order, so
+/// what has expired is always the head of the list — one number, not a per-row deadline. `stamps`
+/// holds the tick each row went on stage on; a row with no stamp has just arrived.
+fn expired_prefix(keys: &[String], stamps: &HashMap<String, u64>, tick: u64, stay: u64) -> usize {
+    let mut gone = 0;
+    for key in keys {
+        match stamps.get(key) {
+            Some(born) if tick.saturating_sub(*born) >= stay => gone += 1,
+            _ => break,
+        }
+    }
+    gone
+}
+
 /// Which row an exclusive rack has on stage. `newest` without a rotation means the last one: a
 /// frame that says "one at a time, follow the newest" must not show an empty area because nobody
 /// ever set a cursor.
@@ -71,7 +85,7 @@ fn stage_row(view: &RackView, active: Option<usize>, len: usize) -> Option<usize
     match view.layout {
         RackLayout::Exclusive => active.or_else(|| match view.play {
             RackPlay::Newest => len.checked_sub(1),
-            RackPlay::Rotate => None,
+            RackPlay::Rotate | RackPlay::Dwell => None,
         }),
         RackLayout::Fixed | RackLayout::Adaptive => None,
     }
@@ -276,7 +290,14 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
     // for; the only thing that jumps is an empty area meeting an unread row.
     let shown = RwSignal::new(0usize);
     let paused = RwSignal::new(false);
-    let rotating = view.play == RackPlay::Rotate && view.layout != RackLayout::Adaptive;
+    let rotating = (view.play == RackPlay::Rotate
+        || (view.play == RackPlay::Dwell && view.layout == RackLayout::Exclusive))
+        && view.layout != RackLayout::Adaptive;
+    // DWELL: every row carries its own clock and leaves when its stay is over — all of them are on
+    // stage at once. The row stays in the slot; the renderer only stops SHOWING it, the same rule
+    // the rotation follows. Retirement is a prefix (rows arrive in order and live equally long), so
+    // one timer and one counter cover the whole rack — never a timer per row.
+    let dwelling = view.play == RackPlay::Dwell && view.layout != RackLayout::Exclusive;
     if rotating {
         let tick_slot = slot.clone();
         let every = view.every.unwrap_or(4000).max(200);
@@ -336,6 +357,66 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
             }
         });
     }
+    // How many leading rows have left the stage, and when each row got there. The tick counter is
+    // the clock: arrival and expiry read the same number, so a throttled tab simply runs slower
+    // instead of expiring everything at once, and no wall-clock source is needed.
+    let retired = RwSignal::new(0usize);
+    let stamps = RwSignal::new(HashMap::<String, u64>::new());
+    let tick_no = RwSignal::new(0u64);
+    if dwelling {
+        let tick_slot = slot.clone();
+        let stay = view.every.unwrap_or(4000).max(200);
+        // Finer than the stay, so a row leaves close to its own deadline instead of up to a whole
+        // stay late.
+        let step = (stay / 8).clamp(50, 250);
+        let ticks_per_stay = stay.div_ceil(step).max(1);
+        let tick = set_interval_with_handle(
+            move || {
+                let tick_now = tick_no.get_untracked() + 1;
+                tick_no.set(tick_now);
+                let rows = tick_slot.get_untracked();
+                let keys: Vec<String> = rows
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, child)| row_key(child, idx))
+                    .collect();
+                let gone = expired_prefix(&keys, &stamps.get_untracked(), tick_now, ticks_per_stay);
+                if gone != retired.get_untracked() {
+                    retired.set(gone);
+                }
+            },
+            Duration::from_millis(step),
+        );
+        match tick {
+            Ok(handle) => {
+                let handle = send_wrapper::SendWrapper::new(handle);
+                on_cleanup(move || handle.take().clear());
+            }
+            Err(e) => tracing::warn!("rack: could not start the dwell timer: {e:?}"),
+        }
+        // A row's clock starts when it lands in the slot. Rows the sender removed take their stamps
+        // with them, and the counter never points past the list.
+        let watch = slot.clone();
+        Effect::new(move |_| {
+            let rows = watch.get();
+            let tick_now = tick_no.get_untracked();
+            stamps.update(|m| {
+                let live: std::collections::HashSet<String> = rows
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, child)| row_key(child, idx))
+                    .collect();
+                m.retain(|k, _| live.contains(k));
+                for (idx, child) in rows.iter().enumerate() {
+                    m.entry(row_key(child, idx)).or_insert(tick_now);
+                }
+            });
+            if retired.get_untracked() > rows.len() {
+                retired.set(rows.len());
+            }
+        });
+    }
+
     move || -> AnyView {
         // 只订阅本 source 的槽：其他键的更新不触发本闭包
         let c = slot.get();
@@ -346,12 +427,19 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
         // FIXED N: mount only the rows in the window (paging is driven by the index). Every other
         // layout mounts all of them — exclusive hides the rest with opacity, so the slot keeps the
         // whole history.
+        // A dwell clips the head of the list: those rows have had their turn and are off stage,
+        // but they are still in the slot (a log rack bound to the same slot shows every one).
+        let gone = if dwelling {
+            retired.get().min(c.len())
+        } else {
+            0
+        };
         let (from, to) = match view.layout {
             RackLayout::Fixed => {
-                let start = window_start(&view, active.get(), c.len());
+                let start = window_start(&view, active.get(), c.len()).max(gone);
                 (start, (start + per_page).min(c.len()))
             }
-            _ => (0, c.len()),
+            _ => (gone, c.len()),
         };
         let keys: Vec<String> = c
             .iter()
@@ -604,6 +692,28 @@ mod tests {
         assert_eq!(pos["#1"], 1);
         assert_eq!(pos["b"], 2);
         assert_eq!(pos.len(), 3);
+    }
+
+    /// A dwell retires the head of the list and only the head: rows arrive in order and live
+    /// equally long, so a row that outlived its stay sits in front of every row that has not.
+    #[test]
+    fn a_dwell_retires_the_head_of_the_list() {
+        let keys: Vec<String> = ["a", "b", "c"].iter().map(|s| s.to_string()).collect();
+        let mut stamps = HashMap::new();
+        stamps.insert("a".to_string(), 0u64);
+        stamps.insert("b".to_string(), 0u64);
+        stamps.insert("c".to_string(), 5u64);
+
+        // Nothing has served its full stay yet (8 ticks), so nothing has left.
+        assert_eq!(expired_prefix(&keys, &stamps, 7, 8), 0);
+        // At 8 the first two are done and the third, which arrived at 5, is not — and the walk
+        // stops there even though the row behind it will also be done later.
+        assert_eq!(expired_prefix(&keys, &stamps, 8, 8), 2);
+        // A row with no stamp (just arrived) holds the stage: the prefix cannot jump over it.
+        stamps.remove("c");
+        assert_eq!(expired_prefix(&keys, &stamps, 20, 8), 2);
+        // Everything retired is reported as such; the caller clamps it to the list length.
+        assert_eq!(expired_prefix(&keys, &stamps, 100, 8), 2);
     }
 
     fn view(layout: RackLayout, play: RackPlay, count: Option<usize>) -> RackView {
