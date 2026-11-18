@@ -56,7 +56,7 @@ fn row_key(child: &Accrete, idx: usize) -> String {
 /// 行位置索引：一个 list 值 → 键到位置。list 每次变更建一遍（O(rows)），
 /// 行 memo 取行由线性扫 id（N 行 × O(N) = O(N²)）降为查表 O(1)。
 /// 重复键取首个命中，与原 `iter().find` 的语义一致。
-fn row_positions(rows: &[Accrete]) -> HashMap<String, usize> {
+fn row_positions(rows: &[std::sync::Arc<Accrete>]) -> HashMap<String, usize> {
     let mut pos = HashMap::with_capacity(rows.len());
     for (idx, child) in rows.iter().enumerate() {
         pos.entry(row_key(child, idx)).or_insert(idx);
@@ -273,7 +273,10 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
     // 行位置索引：list 每次变更只建一遍，所有行 memo 共用。建在外层闭包之外
     // ——闭包每次重跑都会重建自身状态，索引必须比它活得久（索引与行 owner 同
     // 挂 rack 作用域，父渲染重跑时一起重建）。
-    let index = Memo::new(move |_| std::sync::Arc::new(row_positions(&slot.get())));
+    let index = Memo::new(move |_| {
+        let snapshot = slot.get();
+        std::sync::Arc::new(row_positions(&snapshot[..]))
+    });
     // How many rows there are, as a signal: a row's own closure outlives the render pass that built
     // it, so "which row is on stage" has to read the CURRENT length, not a captured one.
     let row_count = Memo::new(move |_| slot.get().len());
@@ -478,13 +481,13 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
                         let Some(child) = memo.get() else {
                             return div().into_any();
                         };
-                        let inner = match item.select(&child) {
+                        let inner = match item.select(child.as_ref()) {
                             Some(mut template) => {
-                                // 模板外壳 + child 作为其 children
-                                template.set_children(vec![child]);
+                                // 模板外壳 + child 作为其 children（模板是有主的，这里拷一次行）
+                                template.set_children(vec![(*child).clone()]);
                                 render_accrete(&rctx, &template)
                             }
-                            None => render_accrete(&rctx, &child),
+                            None => render_accrete(&rctx, child.as_ref()),
                         };
                         if !paints {
                             return inner;
@@ -680,11 +683,12 @@ mod tests {
 
     #[test]
     fn index_keys_are_the_keyed_row_keys() {
-        let rows = [row(Some("a")), row(None), row(Some("b"))];
+        let rows: [std::sync::Arc<Accrete>; 3] =
+            [row(Some("a")), row(None), row(Some("b"))].map(std::sync::Arc::new);
         let keys: Vec<String> = rows
             .iter()
             .enumerate()
-            .map(|(idx, r)| row_key(r, idx))
+            .map(|(idx, r)| row_key(r.as_ref(), idx))
             .collect();
         assert_eq!(keys, vec!["a", "#1", "b"]);
         let pos = row_positions(&rows);
@@ -760,7 +764,8 @@ mod tests {
     #[test]
     fn duplicate_keys_keep_the_first_hit() {
         // 同 id 两行：取首个，与原先 `iter().find` 一致
-        let rows = [row(Some("dup")), row(Some("dup"))];
+        let rows: [std::sync::Arc<Accrete>; 2] =
+            [row(Some("dup")), row(Some("dup"))].map(std::sync::Arc::new);
         assert_eq!(row_positions(&rows)["dup"], 0);
     }
 }

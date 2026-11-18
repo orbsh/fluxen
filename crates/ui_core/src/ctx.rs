@@ -21,7 +21,12 @@ static TMPL: LazyLock<RwLock<accrete::template::Templates>> =
 /// 嵌套表单靠遮蔽生效（内层覆盖外层）。
 /// per-key 信号槽：外层 map 只存句柄（键集变化时才写外层），
 /// 值经内层信号发布——某个键的更新不通知其他键的订阅者。
-pub type ListSlot = RwSignal<std::sync::Arc<Vec<Accrete>>>;
+/// 列表槽：一个共享的、不可变快照。
+///
+/// 外层 `Arc` 让渲染闭包抱着整个列表而不拷贝它；内层 `Arc<Accrete>` 让「加一行」只需要复制
+/// 指针，不必把已有的每一行都深拷贝一遍——那曾使每次 append 都 O(rows) 深拷贝，消息越多越慢
+/// （O(n²)）。行的内容是共享的，所以改动一行要 `Arc::make_mut`（独占就原地改，共享时克隆这一行）。
+pub type ListSlot = RwSignal<std::sync::Arc<Vec<std::sync::Arc<Accrete>>>>;
 pub type DataSlot = RwSignal<Option<std::sync::Arc<Accrete>>>;
 /// 裸 Value 槽（ADR 0008 local 平面）：事件数据不是展示形态，
 /// 与 data（Accrete）分平面。
@@ -326,7 +331,7 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                     );
                     continue;
                 }
-                list.insert(spot, d.clone());
+                list.insert(spot, std::sync::Arc::new(d));
                 slot.set(Arc::new(list));
             }
             Content::Remove(x) => {
@@ -360,7 +365,8 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                         .iter_mut()
                         .find(|i| i.get_id().as_deref() == Some(id.as_str()))
                     {
-                        Some(row) => apply_patch(row, x),
+                        // 行是共享的：独占时原地改，别处还持有时只克隆这一行。
+                        Some(row) => apply_patch(std::sync::Arc::make_mut(row), x),
                         None => Err(format!("no row {id:?} in {:?}", x.slot)),
                     };
                     if r.is_ok() {
