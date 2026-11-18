@@ -78,7 +78,7 @@ fn slot_carries_json_fragment_from_producer() {
     let mut env = Templates::new();
     env.insert(
         "wrap".into(),
-        r#"{"type": "case", "children": {{kids}}, "id": "{{id}}"}"#.into(),
+        r#"{"type": "frame", "children": {{kids}}, "id": "{{id}}"}"#.into(),
     );
 
     let mut b = accrete(json!({
@@ -91,7 +91,7 @@ fn slot_carries_json_fragment_from_producer() {
     }));
     assert!(b.expand(&env).is_empty());
 
-    assert_eq!(b.get_type(), "Accrete :: case");
+    assert_eq!(b.get_type(), "Accrete :: frame");
     assert_eq!(b.get_id().as_deref(), Some("r7"));
     assert_eq!(b.borrow_children().unwrap().len(), 2);
 }
@@ -109,7 +109,7 @@ fn expand_recurses_into_children() {
     );
 
     let mut b = accrete(json!({
-        "type": "case",
+        "type": "frame",
         "children": [
             { "type": "template", "name": "lbl", "data": { "t": "one" } },
             { "type": "template", "name": "lbl", "data": { "t": "two" } }

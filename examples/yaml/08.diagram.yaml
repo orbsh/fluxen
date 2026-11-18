@@ -1,7 +1,7 @@
 action: append
 slot: chat
 data:
-  type: case
+  type: frame
   children:
   - type: canvas
   - url: /assets/diagram/index.js

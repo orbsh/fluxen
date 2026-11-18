@@ -183,7 +183,7 @@ data:
             type: td
           type: tr
       type: table
-    type: case
+    type: frame
   - attrs:
       oneshot: false
     bind:

@@ -4,9 +4,9 @@ data:
   attrs:
     class:
     - maximize
-  type: case
+  type: frame
   children:
-  - type: case
+  - type: frame
     attrs:
       horizontal: true
       class:
@@ -48,7 +48,7 @@ data:
         kind: source
         source: chat
     item:
-    - type: case
+    - type: frame
       attrs:
         class:
         - box
@@ -58,7 +58,7 @@ data:
         - as-end
         - accent
         selector: ask
-    - type: case
+    - type: frame
       attrs:
         class:
         - box
@@ -66,14 +66,14 @@ data:
         - shadow
         - nogrow
         - as-start
-  - type: case
+  - type: frame
     attrs:
       class:
       - nogrow
       - box
       horizontal: true
     children:
-    - type: case
+    - type: frame
       attrs:
         horizontal: true
       children:

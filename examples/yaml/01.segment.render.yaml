@@ -7,11 +7,11 @@ data:
     id: seg1
     attrs: {}
     kids:
-      - type: case
-      - type: case
-      - type: case
-      - type: case
-      - type: case
+      - type: frame
+      - type: frame
+      - type: frame
+      - type: frame
+      - type: frame
       - type: text
         bind:
           value:

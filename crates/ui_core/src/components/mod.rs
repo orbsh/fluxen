@@ -1,7 +1,7 @@
 //! 容器组件与叶子组件入口。宏 `gen_dispatch!` 分派到 `crate::components::*_`，
 //! 故此处 re-export 所有组件函数，使它们在 `crate::components` 命名空间可见。
-pub mod case;
-pub use case::{case_, placeholder_};
+pub mod frame;
+pub use frame::frame_;
 pub mod canvas;
 pub use canvas::canvas_;
 pub mod forcegraph;

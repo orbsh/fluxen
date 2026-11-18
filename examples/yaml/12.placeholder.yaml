@@ -17,7 +17,7 @@ data:
   - type: template
     name: cart
     data: {}
-  - type: case
+  - type: frame
     children:
     - type: text
       bind:

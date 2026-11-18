@@ -24,13 +24,13 @@ data:
       value:
         kind: dest
         dest: test
-  - type: case
+  - type: frame
     attrs:
       class:
       - gap
       - md
     children:
-    - type: case
+    - type: frame
       attrs:
         horizontal: true
       children:
@@ -46,7 +46,7 @@ data:
             kind: field
             default: age
             field: age
-    - type: case
+    - type: frame
       attrs:
         horizontal: true
       children:
@@ -62,7 +62,7 @@ data:
           value:
             kind: field
             field: phone
-    - type: case
+    - type: frame
       attrs:
         horizontal: true
       children:

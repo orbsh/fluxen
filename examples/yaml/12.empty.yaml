@@ -1,5 +1,5 @@
 action: set
 slot: float
 data:
-  type: case
+  type: frame
 

@@ -14,7 +14,7 @@
 - action: create
   slot: ""
   data:
-    type: case
+    type: frame
     attrs:
       class:
       - maximize
@@ -22,7 +22,7 @@
       horizontal: true
     children:
     # ---- 左栏：常驻关系图 ----------------------------------------------------
-    - type: case
+    - type: frame
       attrs:
         class:
         - stage-graph
@@ -38,7 +38,7 @@
             kind: source
             source: graph
     # ---- 右栏：消息流 --------------------------------------------------------
-    - type: case
+    - type: frame
       attrs:
         class:
         - stage-stream
@@ -59,7 +59,7 @@
             kind: source
             source: chat
         item:
-        - type: case
+        - type: frame
           attrs:
             class:
             - nogrow
@@ -70,7 +70,7 @@
             - round
             - shadow
             selector: ask
-        - type: case
+        - type: frame
           attrs:
             class:
             - nogrow
@@ -79,7 +79,7 @@
             - border
             - round
             - shadow
-      - type: case
+      - type: frame
         attrs:
           class:
           - --input
@@ -87,7 +87,7 @@
           - box
           horizontal: true
         children:
-        - type: case
+        - type: frame
           attrs:
             horizontal: true
           children:

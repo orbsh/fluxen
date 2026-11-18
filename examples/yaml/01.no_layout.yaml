@@ -1,9 +1,9 @@
 action: create
 slot: ""
 data:
-  type: case
+  type: frame
   children:
-  - type: case
+  - type: frame
     attrs:
       class:
       - box

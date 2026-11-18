@@ -4,7 +4,7 @@
 - action: append
   slot: chat
   data:
-    type: case
+    type: frame
     id: s1
     attrs:
       class:

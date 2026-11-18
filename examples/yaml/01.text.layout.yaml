@@ -1,15 +1,15 @@
 action: create
 slot: ""
 data:
-  type: case
+  type: frame
   attrs:
     horizontal: true
     class:
     - box
   children:
-  - type: case
+  - type: frame
     children:
-    - type: case
+    - type: frame
       attrs:
         class:
         - box
@@ -34,13 +34,13 @@ data:
         kind: source
         source: chat
     item:
-    - type: case
+    - type: frame
       attrs:
         class:
         - box
         - border
         - shadow
-  - type: case
+  - type: frame
     children:
     - type: text
       bind:
@@ -48,16 +48,16 @@ data:
           kind: source
           default: lv 1
           source: test-data
-    - type: case
+    - type: frame
       children:
       - type: text
         bind:
           value:
             kind: default
             default: lv 2
-      - type: case
+      - type: frame
         children:
-        - type: case
+        - type: frame
           children: null
         - type: text
           bind:

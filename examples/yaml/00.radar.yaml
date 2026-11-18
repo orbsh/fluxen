@@ -50,7 +50,7 @@
 - action: append
   slot: chat
   data:
-    type: case
+    type: frame
     attrs:
       class:
       - gap
@@ -67,7 +67,7 @@
         value:
           kind: source
           source: trend
-    - type: case
+    - type: frame
       id: radar-row
       attrs:
         class:
