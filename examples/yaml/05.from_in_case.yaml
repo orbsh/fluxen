@@ -1,8 +1,8 @@
 action: append
 data:
   children:
-  - type: case
-  - type: case
+  - type: frame
+  - type: frame
   - attrs:
       class:
       - gap
@@ -192,7 +192,7 @@ data:
             type: tr
           type: tbody
         type: table
-      type: case
+      type: frame
     - attrs:
         oneshot: true
       bind:
@@ -207,6 +207,6 @@ data:
     id: QQucja82kxbHPGLozJWdbk
     type: form
   id: QQucja82kxbHPGLozJWdbk
-  type: case
+  type: frame
 slot: chat
 

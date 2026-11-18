@@ -156,7 +156,7 @@ three-d-asset 补 `http` feature（否则 FeatureMissing("reqwest")）；
       kind 集合改动是 wire 面——同步 schema/示例/生产端。
 - [x] 方案：bind 的事件类 kind 增加本地目标 `Local { signal }`：
       emit 组件命中本地目标 → 直接写 Ctx 具名 data 槽，不上行。接收侧
-      零改动：case/placeholder 渲染 source 槽 = 切页面；rack 订阅 list
+      零改动：frame 渲染 source 槽 = 切页面；rack 订阅 list
       槽 = 切内容。Canvas 只是新增的一个 emit 方（host.send 同样可路由
       本地），机制对它无特判。
 - [x] wire 面影响：kind 集合改动需同步 schema/examples/生产端；布局帧
@@ -942,7 +942,7 @@ same commit: emitter components read their initial value via
 closure subscribes the parent to the very slot the emitter writes, so
 every emit rebuilt the subtree and "restored" the sent content (DOM
 identity probe: textarea node replaced, value back). Pure readers
-(text/placeholder subscribers) keep tracked reads. e2e: Local path stays
+(text and slot-bound frame subscribers) keep tracked reads. e2e: Local path stays
 cleared across two sends with subscriber updating draft-one→draft-two,
 zero uplinks; Event path regression `<- note` intact.
 

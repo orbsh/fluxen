@@ -9,8 +9,8 @@ data:
     - xxx
     - md
   children:
-  - type: case
-  - type: case
+  - type: frame
+  - type: frame
   - attrs:
       class:
       - box
@@ -47,6 +47,6 @@ data:
             kind: default
             default: PartStarting
       type: fold
-    type: case
-  type: case
+    type: frame
+  type: frame
 

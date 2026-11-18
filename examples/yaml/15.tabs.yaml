@@ -8,12 +8,12 @@
 - action: create
   slot: ""
   data:
-    type: case
+    type: frame
     attrs:
       class:
       - maximize
     children:
-    - type: case
+    - type: frame
       attrs:
         class:
         - --tabs
@@ -99,7 +99,7 @@
 - action: append
   slot: pages
   data:
-    type: case
+    type: frame
     id: docs
     children:
     - type: text

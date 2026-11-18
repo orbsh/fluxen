@@ -37,7 +37,7 @@ fn replace_deep_value() {
 #[test]
 fn replace_attrs_field() {
     let mut b = accrete(json!({
-        "type": "case",
+        "type": "frame",
         "attrs": { "class": ["a"], "horizontal": false },
         "children": [ { "type": "text", "attrs": { "format": "md" } } ]
     }));
@@ -89,7 +89,7 @@ fn type_violation_rolls_back() {
     // attrs.class is Vec<String> — a non-array must fail deserialize and
     // leave the node exactly as it was (atomicity via the type system).
     let mut b = accrete(json!({
-        "type": "case",
+        "type": "frame",
         "attrs": { "class": ["keep"] },
     }));
     assert!(

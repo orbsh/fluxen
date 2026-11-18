@@ -369,7 +369,7 @@ def chart_band(children, grid, css_class=None):
     attrs = {"grid": grid}
     if css_class:
         attrs["class"] = css_class
-    return {"type": "case", "attrs": attrs, "children": children}
+    return {"type": "frame", "attrs": attrs, "children": children}
 
 
 def canvas_node(url, slot, width, height, options=None):
@@ -402,7 +402,7 @@ def frame_message():
         "action": "append",
         "slot": "chat",
         "data": {
-            "type": "case",
+            "type": "frame",
             "children": [
                 text_node(ANALYTICS),
                 # 气泡内部的一枚可拖单元（ADR 0019）：段落是内容，这一格是动作。
@@ -494,7 +494,7 @@ def frame_review_form():
                         "复核（第一列可改，三种字段各一；点提交后字段值随 `review` 事件上行，stage 控制台可见）"}},
                 },
                 {
-                    "type": "case",
+                    "type": "frame",
                     "attrs": {"class": ["gap", "md"]},
                     "children": [
                         {

@@ -144,7 +144,7 @@ pub struct ClassAttr {
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
-    /// 容器自身的排布方向（同 CaseAttr 字段；ADR 0010 缺陷修复：
+    /// 容器自身的排布方向（同 FrameAttr 字段；ADR 0010 缺陷修复：
     /// 此前只有 Case 认识 horizontal，select/rack 的 col 类无法被
     /// 自己的 attrs 推翻——父 case 的 horizontal 只管父 div）。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -229,22 +229,6 @@ pub struct StyleAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<HashMap<String, String>>,
 }
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Placeholder {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<ClassAttr>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
 
 /// 外部渲染模块的原位挂载容器（ADR 0007）。
 /// 核心不解释 `data`——载荷语义完全归模块；尺寸/样式走 `attrs`，
@@ -963,7 +947,7 @@ pub struct TextArea {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct CaseAttr {
+pub struct FrameAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -979,11 +963,11 @@ pub struct CaseAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Case {
+pub struct Frame {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<CaseAttr>,
+    pub attrs: Option<FrameAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bind: Option<HashMap<String, Bind>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1094,9 +1078,7 @@ pub struct Dock {
 #[cfg_attr(feature = "classify", derive(ClassifyVariant))]
 #[serde(tag = "type")]
 pub enum Accrete {
-    case(Case),
-    #[ui_acrete(has_id = "true")]
-    placeholder(Placeholder),
+    frame(Frame),
     #[ui_acrete(has_id = "true")]
     canvas(Canvas),
     #[ui_acrete(has_id = "true")]

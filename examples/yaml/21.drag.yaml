@@ -5,13 +5,13 @@
 action: create
 slot: ""
 data:
-  type: case
+  type: frame
   attrs:
     class:
     - maximize
     horizontal: true
   children:
-  - type: case
+  - type: frame
     attrs:
       class:
       - box

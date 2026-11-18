@@ -69,7 +69,7 @@ fn target_variant_is_retired() {
 #[test]
 fn get_at_walks_wire_shape() {
     let a: Accrete = serde_json::from_value(json!({
-        "type": "case",
+        "type": "frame",
         "children": [
             {"type": "text", "bind": {"value": {"kind": "default", "default": "hello"}}}
         ]
