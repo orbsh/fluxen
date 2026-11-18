@@ -545,12 +545,26 @@
         }
     }
 
+    /* 弹窗（ADR 0026）：状态在信号里，不在 CSS 里。`:hover` 只有指针设备才有，
+       而触屏恰恰是最需要"点一下弹出来"的地方——原来的写法等于在手机上不存在。
+       `.open` 是唯一开关；位置由宿主容器给基准，浮层贴在触发器下方。 */
     .popup {
-        & > .body {
-            display: none;
+        position: relative;
+
+        & > .trigger {
+            cursor: pointer;
         }
 
-        &:hover > .body {
+        & > .body {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 20;
+            min-width: 100%;
+        }
+
+        &.open > .body {
             display: flex;
         }
     }
