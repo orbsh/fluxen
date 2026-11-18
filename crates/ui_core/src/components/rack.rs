@@ -7,7 +7,7 @@ use accrete::{
     RackScroll, RackView,
 };
 use leptos::html::*;
-use leptos::leptos_dom::helpers::set_interval;
+use leptos::leptos_dom::helpers::set_interval_with_handle;
 use leptos::prelude::*;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -280,7 +280,11 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
     if rotating {
         let tick_slot = slot.clone();
         let every = view.every.unwrap_or(4000).max(200);
-        set_interval(
+        // The timer must die with the component. `set_interval` returns nothing to cancel with, so
+        // an unmounted rack keeps a live callback ticking against signals that no longer exist —
+        // the wasm trap this fixes (`memory access out of bounds` inside `rack_::{closure#3}`,
+        // seen when a page row was swapped under a rotation rack).
+        let tick = set_interval_with_handle(
             move || {
                 if paused.get_untracked() {
                     return;
@@ -301,6 +305,15 @@ pub fn rack_(accrete: Rack, ctx: &Ctx, id: String) -> AnyView {
             },
             Duration::from_millis(every),
         );
+        match tick {
+            // `on_cleanup` wants a `Send` closure; the handle is thread-local (a JS timer), so it
+            // rides a `SendWrapper` — cleanup runs on the main thread in CSR, where it is transparent.
+            Ok(handle) => {
+                let handle = send_wrapper::SendWrapper::new(handle);
+                on_cleanup(move || handle.take().clear());
+            }
+            Err(e) => tracing::warn!("rack: could not start the rotation timer: {e:?}"),
+        }
         // An empty area shows the next unread row at once, so a refusal never waits for a turn that
         // has nothing to wait behind.
         let watch = slot.clone();
