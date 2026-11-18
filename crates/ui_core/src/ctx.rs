@@ -404,6 +404,127 @@ fn inject_writes(current: Option<&Value>, incoming: &Value) -> bool {
     current != Some(incoming)
 }
 
+/// A slot that is being rendered right now.
+///
+/// Reading a slot again before the first read has finished means the slot's value contains a node
+/// that reads the same slot — the tree contains itself, and rendering it never terminates. Measured
+/// on a real page: `pages` read `pages`, whose rows held the booth's whole tree, which held another
+/// `pages` over the same slot; the loop ran through view closures until the wasm stack died.
+///
+/// This check exists because a depth counter cannot see that loop: every closure entry restarts the
+/// count, which is exactly how this class of cycle hides (the depth guard below stayed silent while
+/// it happened). Entering is per synchronous render of one slot, so siblings that read the same slot
+/// in sequence are fine — only nesting is a cycle.
+mod cycle {
+    use std::cell::RefCell;
+    use std::collections::HashSet;
+
+    thread_local! {
+        static IN_FLIGHT: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
+    }
+
+    /// Two slots taking turns. A cycle that runs through view closures is not catchable by the
+    /// in-flight set above: measured on the real page, every entry came back as depth 1 — the
+    /// closures are entered one after another, not nested, and only the wasm stack records that
+    /// they are the same loop. Taking turns IS the signature: nothing in a healthy tree renders
+    /// `pages` → `island:x` → `pages` → … for sixteen entries without any other slot in between.
+    const TURNS: usize = 6;
+
+    /// The last slots entered, with when (ms). A loop turns sixteen times in a few milliseconds;
+    /// a person clicking through pages takes far longer than the window, so their clicks are not a
+    /// loop even when they alternate the same two slots.
+    thread_local! {
+        static RECENT: RefCell<Vec<(String, f64)>> = const { RefCell::new(Vec::new()) };
+    }
+
+    const WINDOW_MS: f64 = 250.0;
+
+    fn now_ms() -> f64 {
+        #[cfg(target_arch = "wasm32")]
+        {
+            js_sys::Date::now()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs_f64() * 1000.0)
+                .unwrap_or(0.0)
+        }
+    }
+
+    fn taking_turns(slot: &str) -> bool {
+        let now = now_ms();
+        RECENT.with(|r| {
+            let mut v = r.borrow_mut();
+            v.push((slot.to_string(), now));
+            if v.len() > 4 * TURNS {
+                let cut = v.len() - 4 * TURNS;
+                v.drain(0..cut);
+            }
+            let from = v
+                .iter()
+                .position(|(_, at)| now - *at <= WINDOW_MS)
+                .unwrap_or(v.len());
+            let run = &v[from..];
+            let n = run.len();
+            if n < TURNS {
+                return false;
+            }
+            let a = &run[n - 1].0;
+            let b = &run[n - 2].0;
+            if a == b {
+                return false;
+            }
+            let mut count = 0;
+            let mut i = n - 1;
+            while i >= 1 && &run[i].0 == a && &run[i - 1].0 == b {
+                count += 1;
+                if i < 2 {
+                    break;
+                }
+                i -= 2;
+            }
+            count >= TURNS / 2
+        })
+    }
+
+    /// Enters `slot`. `None` means it is already being rendered further up this stack.
+    pub fn enter(slot: &str) -> Option<Guard> {
+        let nested = IN_FLIGHT.with(|s| {
+            let mut set = s.borrow_mut();
+            if !set.insert(slot.to_string()) {
+                return false;
+            }
+            true
+        });
+        if !nested {
+            return None;
+        }
+        if taking_turns(slot) {
+            IN_FLIGHT.with(|s| {
+                s.borrow_mut().remove(slot);
+            });
+            return None;
+        }
+        Some(Guard(slot.to_string()))
+    }
+
+    pub struct Guard(String);
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            let name = std::mem::take(&mut self.0);
+            IN_FLIGHT.with(|s| {
+                s.borrow_mut().remove(&name);
+            });
+        }
+    }
+}
+
+pub use cycle::enter as enter_slot;
+
 /// 渲染深度守卫（wasm 里递归渲染会把栈吃干，症状是 `memory access out of bounds` 或
 /// `Maximum call stack size exceeded` —— 崩在 malloc 或 `Option<String>::clone` 里，
 /// 与真正的递归点隔着几十层，看上去像内存 bug）。
