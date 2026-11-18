@@ -5,7 +5,7 @@
 # 日记评分模拟数据：三个部门的维度数不同——研发部 5 维（出勤纪律/工作质量/工作量
 # 投入/协作沟通/学习成长）、市场部 6 维（再加创新性）、运营部 7 维（再加客户意识），
 # 0–5 分；11 人 × 3 部门。轴数由数据的 dim 值决定，spec 里没有维度数这个旋钮。
-# 六个帧：append 一行（外层 case 用 grid 把容器分成三条轨道——折线图 / 雷达图 /
+# 六个帧：append 一行（外层 frame 用 grid 把容器分成三条轨道——折线图 / 雷达图 /
 #   摘要）+ set `trend`（折线 spec）+ set `summary`（摘要 text）+ set 三个
 #   雷达 spec（set 帧可整体发、也可只发它要的那几个）。
 #   （grid-template-rows: minmax(160px, 1fr) minmax(360px, 2fr) auto + 固定
@@ -42,8 +42,7 @@
 # 流式内容（逐日数据、逐 token 摘要）全部走数据槽：写布局节点会重渲染整行、
 #   重挂模块宿主（实测见 docs/PLAN.md），槽写入只通知该槽订阅者。行不带 id：
 #   本文件可反复 /send（无 id = 位置行，重复推不冲突），追加不按行寻址。
-# 用法：依次 send examples/yaml/00.main.yaml（骨架 + home/about）、
-#       examples/yaml/00.chat.yaml（chat 页进菜单），再 send 本文件
+# 用法：先 send examples/yaml/00.main.yaml（左图右流的骨架），再 send 本文件
 #       （append 行进 chat rack + set 五个槽）。合并演示
 #       python3 examples/walkthrough.py 搭自己的一行，只把本文件的 set 帧
 #       当作图表数据的唯一来源（发整份会多开一个 box），再逐段流式填充。
@@ -58,7 +57,8 @@
         grid-template-rows: minmax(160px, 1fr) minmax(360px, 2fr) auto
         height: 70vh
     children:
-    - type: chart
+    - type: canvas
+      url: /assets/g2chart/index.js
       id: dept-trend
       attrs:
         class:
@@ -75,7 +75,8 @@
         grid:
           grid-template-columns: repeat(3, minmax(0, 1fr))
       children:
-      - type: chart
+      - type: canvas
+        url: /assets/g2chart/index.js
         id: radar-rd
         attrs:
           class:
@@ -84,7 +85,8 @@
           value:
             kind: source
             source: radar_rd
-      - type: chart
+      - type: canvas
+        url: /assets/g2chart/index.js
         id: radar-mkt
         attrs:
           class:
@@ -93,7 +95,8 @@
           value:
             kind: source
             source: radar_mkt
-      - type: chart
+      - type: canvas
+        url: /assets/g2chart/index.js
         id: radar-ops
         attrs:
           class:
@@ -118,7 +121,8 @@
 - action: set
   slot: trend
   data:
-    type: chart
+    type: canvas
+    url: /assets/g2chart/index.js
     bind:
       value:
         kind: default
@@ -286,7 +290,8 @@
 - action: set
   slot: radar_rd
   data:
-    type: chart
+    type: canvas
+    url: /assets/g2chart/index.js
     bind:
       value:
         kind: default
@@ -419,7 +424,8 @@
 - action: set
   slot: radar_mkt
   data:
-    type: chart
+    type: canvas
+    url: /assets/g2chart/index.js
     bind:
       value:
         kind: default
@@ -544,7 +550,8 @@
 - action: set
   slot: radar_ops
   data:
-    type: chart
+    type: canvas
+    url: /assets/g2chart/index.js
     bind:
       value:
         kind: default

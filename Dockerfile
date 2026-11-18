@@ -94,6 +94,14 @@ RUN mkdir -p examples/renderer/assets/g2chart \
          -o examples/renderer/assets/g2chart/g2.min.js \
     && echo "7e7d346cab68c002a889dc6145bfc1f9ae1391be82ce8d514fb106ef3a6e6412  examples/renderer/assets/g2chart/g2.min.js" | sha256sum -c -
 
+# The diagram module's runtime (ADR 0025): plain ES module source, no bundling and
+# no pinned download — the mermaid it loads on demand is the tracked
+# assets/mermaid.min.js that the rest of the page already uses.
+RUN mkdir -p examples/renderer/assets/diagram \
+    && cp examples/renderer/modules/diagram/index.js \
+          examples/renderer/modules/diagram/cbor.js \
+          examples/renderer/assets/diagram/
+
 # The editor module's runtime (ADR 0016): the wrapper is tracked source
 # (examples/renderer/modules/editor/) — only its deployed copy is gitignored —
 # and Monaco's AMD subset is unpacked from the pinned npm tarball, sha1-checked

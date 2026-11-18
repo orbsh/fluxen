@@ -86,12 +86,13 @@ fn yaml_array_of_content_items() {
 
 #[test]
 fn yaml_rejects_retired_sub_shape() {
-    // fluxora's retired `sub:` must NOT deserialize (children is the model)
+    // fluxora's retired `sub:` must NOT deserialize (children is the model).
+    // The node itself is current vocabulary, so the refusal can only come from `sub:`.
     let src = r#"
 action: create
 slot: stage
 data:
-  type: case
+  type: frame
   sub:
   - type: text
 "#;

@@ -5,7 +5,7 @@
 # "归一化必须与节点变换复合、不能覆盖"的回归样本（见模块 src/lib.rs 的注释）。
 # 前置：模块产物在 examples/renderer/assets/3dbrowser/（配方见
 # examples/modules/3dbrowser/Cargo.toml 头注释；stage serve 自带静态服务）；
-# 布局侧先发 00.main.yaml + 00.chat.yaml（本文件往 chat rack 追加两行）。
+# 布局侧先发 00.main.yaml（本文件往 chat rack 追加两行）。
 #
 # 每个模型一条独立消息：每个 canvas 自成一帧 append 进 chat，聊天流里
 # 竖排。两条消息各挂各的数据槽（m3d_shoe / m3d_car）——数据槽是单值的，
