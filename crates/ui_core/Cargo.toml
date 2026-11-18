@@ -9,7 +9,6 @@ crate-type = ["rlib"]
 [dependencies]
 accrete = { workspace = true, features = ["classify", "ops"] }
 content.workspace = true
-forcegraph.workspace = true
 futures.workspace = true
 itertools.workspace = true
 js-sys.workspace = true
