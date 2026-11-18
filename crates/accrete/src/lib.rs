@@ -683,7 +683,8 @@ pub struct RackView {
     pub enter_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub leave_ms: Option<u64>,
-    /// `rotate` 每一步停留多久（毫秒）。
+    /// 一行在台上待多久（毫秒）：`rotate` 的一步（然后轮到下一行），`dwell` 的全部（到点就下台）。
+    /// 缺席 = 4000，渲染器另有下限 200。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub every: Option<u64>,
     #[serde(default)]
@@ -741,6 +742,10 @@ pub enum RackPlay {
     #[default]
     Newest,
     Rotate,
+    /// Every row lives `every` ms from the moment it went on stage, then leaves — all of them are
+    /// on stage at once, unlike `rotate`, which takes turns. The row stays in the slot; only the
+    /// stage changes, so an area that keeps its rows (a log, a management page) shows all of them.
+    Dwell,
 }
 
 /// What holds the rotation still.
