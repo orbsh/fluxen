@@ -8,7 +8,8 @@
 - action: append
   slot: chat
   data:
-    type: chart
+    type: canvas
+    url: /assets/g2chart/index.js
     id: stream-chart
     attrs:
       class:

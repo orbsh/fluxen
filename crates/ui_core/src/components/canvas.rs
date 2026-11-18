@@ -1,6 +1,6 @@
 use crate::Ctx;
 use accrete::classify::Classify;
-use accrete::{AccreteOps, Canvas, Chart, Editor};
+use accrete::{AccreteOps, Canvas};
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::Value;
@@ -8,7 +8,7 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
-/// 外部渲染模块的原位挂载（ADR 0007 宿主 + ADR 0009 Chart 共用通道）。
+/// 外部渲染模块的原位挂载（ADR 0007）。这是**唯一**的可视化宿主：
 ///
 /// 核心不知道模块是什么：url 指向 ES module，须导出
 /// mount/update/resize/unmount 四函数；数据区（`bind["value"]` 惯例）
@@ -16,8 +16,9 @@ use wasm_bindgen::JsCast;
 /// `{primitives, assets}`，g2chart 用 G2 spec）。渲染循环与输入事件归
 /// 模块自己，宿主只提供容器、载荷变化通知与尺寸。
 ///
-/// canvas 与 chart 的差异全在三个入参：url、容器样式（chart 用 class
-/// 无显式尺寸）、其余同构——因此共享一个 mount_module，不复制挂载逻辑。
+/// 宿主不认识模块是什么，也不给它分类：`url` 指向能导出四个函数的 ES module，
+/// 种类只在数据里。图表、编辑器、关系图、流程图都是同一个节点 + 不同的 url，
+/// 框架里没有它们的名字（ADR 0020）。
 pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
     let style = accrete
         .attrs
@@ -42,37 +43,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
     )
 }
 
-/// G2 图表：载荷 = G2 spec（GoG 词汇的纯 JSON），渲染器 = url 指向的
-/// 封装模块（ADR 0009，默认 /assets/g2chart/index.js）。eval 注入已
-/// 退役——挂载走 canvas 同一条 import(url) 契约通道。
-pub fn chart_(accrete: Chart, ctx: &Ctx, id: String) -> AnyView {
-    let css = accrete
-        .attrs
-        .as_ref()
-        .and_then(|a| a.get_class().clone().map(|c| c.join(" ")))
-        .unwrap_or_default();
-    let (source, inline) = bind_value(&accrete);
-    mount_module(&id, &accrete.url, String::new(), css, source, inline, None, ctx)
-}
 
-/// 代码编辑器（ADR 0016）：载荷 = `{code, lang?, event?}`（"代码作为参数"），
-/// 渲染器 = url 指向的封装模块（默认 /assets/editor/index.js）。尺寸族与
-/// canvas 同（编辑器必须有确定高度），挂载走同一条 mount_module 通道——
-/// 库（Monaco）由模块自己在 mount() 里拉（ADR 0015）。
-pub fn editor_(accrete: Editor, ctx: &Ctx, id: String) -> AnyView {
-    let style = accrete
-        .attrs
-        .as_ref()
-        .map(|a| a.size_style())
-        .unwrap_or_default();
-    let css = accrete
-        .attrs
-        .as_ref()
-        .and_then(|a| a.get_class().clone().map(|c| c.join(" ")))
-        .unwrap_or_default();
-    let (source, inline) = bind_value(&accrete);
-    mount_module(&id, &accrete.url, style, css, source, inline, None, ctx)
-}
 
 /// `bind["value"]` → (source 槽名, inline default)。
 fn bind_value(a: &impl AccreteOps) -> (Option<String>, Option<Value>) {
