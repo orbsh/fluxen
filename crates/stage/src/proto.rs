@@ -60,6 +60,9 @@ pub fn parse_yaml_to_frame(
         if let Some(msg) = retired_header_rows(&v) {
             return Err(crate::error::ParseError { msg });
         }
+        if let Some(msg) = retired_template_body(&v) {
+            return Err(crate::error::ParseError { msg });
+        }
     }
     let content = match items {
         ContentItems::One(c) => vec![c],
@@ -245,11 +248,34 @@ fn retired_header_rows(v: &serde_yaml::Value) -> Option<String> {
     }
 }
 
+/// A `tmpl` whose body is still a string is the retired `{{key}}` form (ADR 0037): a
+/// definition is the node tree itself now. serde would take the string and the renderer
+/// would reject it at registration — refused here instead, with the spelling that replaced it.
+fn retired_template_body(v: &serde_yaml::Value) -> Option<String> {
+    match v {
+        serde_yaml::Value::Mapping(m) => {
+            if m.get("action").and_then(|a| a.as_str()) == Some("tmpl")
+                && m.get("data").is_some_and(|d| d.is_string())
+            {
+                return Some(
+                    "a `tmpl` body is a node tree, not a `{{key}}` JSON string — write the \
+                     tree under `data:` and put `\"$name\"` (the whole value) where a value \
+                     goes; list the names it takes in `params:`"
+                        .into(),
+                );
+            }
+            m.iter().find_map(|(_, val)| retired_template_body(val))
+        }
+        serde_yaml::Value::Sequence(s) => s.iter().find_map(retired_template_body),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         dead_end_drop, header_without_fields, illegal_channel, retired_header_rows, retired_stage,
-        stepper_without_window,
+        retired_template_body, stepper_without_window,
     };
 
     fn y(src: &str) -> serde_yaml::Value {
@@ -340,5 +366,16 @@ mod tests {
 
         let ok = y("type: tiles\nattrs: {header: {selector: h, layers: 2}, fields: [{key: q}]}\n");
         assert!(retired_header_rows(&ok).is_none(), "layers 是现在的拼法");
+    }
+
+    #[test]
+    fn a_template_body_must_be_a_tree() {
+        let bad = y("action: tmpl\nname: segment\ndata: \"{\\\"type\\\": \\\"text\\\"}\"\n");
+        let msg = retired_template_body(&bad).expect("字符串本体应当报错");
+        assert!(msg.contains("node tree"), "错误要说定义是什么：{msg}");
+        assert!(msg.contains("$name"), "错误要说新拼法：{msg}");
+
+        let ok = y("action: tmpl\nname: segment\nparams: [q]\ndata:\n  type: text\n  source: {default: \"$q\"}\n");
+        assert!(retired_template_body(&ok).is_none(), "树本体成立");
     }
 }

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::sync::{LazyLock, RwLock};
 use transport::Transport;
 
-/// 已注册模板表（ADR 0006：`{{key}}` 纯槽位替换，无模板引擎）。
+/// 已注册的 stamp 定义表（ADR 0037：定义是节点树，值是整值替换）。
 static TMPL: LazyLock<RwLock<accrete::template::Templates>> =
     LazyLock::new(|| RwLock::new(accrete::template::Templates::new()));
 
@@ -243,11 +243,16 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
     for c in actions {
         match c {
             Content::Tmpl(x) => {
-                let n = x.name.clone();
-                let d = x.data.clone();
-                TMPL.write()
+                // 注册即校验（ADR 0037）：树上每个 `$name` 与 params 必须一一对上，
+                // 定义是一次解析出来的树。拒绝时定义不入表——下一次同名注册仍是
+                // 一次干净的尝试，而不是悄悄沿用上一份。
+                if let Err(e) = TMPL
+                    .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(n, d);
+                    .register(&x.name, &x.params.iter().map(String::as_str).collect::<Vec<_>>(), &x.data)
+                {
+                    tracing::warn!("{e}");
+                }
             }
             Content::Create(x) => {
                 let mut d = x.data.clone();

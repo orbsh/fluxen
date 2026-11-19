@@ -18,7 +18,7 @@ fn roundtrip(src: &str) -> Accrete {
 }
 
 #[test]
-fn layer_roundtrip() {
+fn viewport_bound_roundtrip() {
     // 典型形状：local 槽控显隐 + dismiss + 模态内容
     roundtrip(
         r##"{"type":"panel","id":"login_layer","attrs":{"place":"viewport","state":"bound","dismiss":true},

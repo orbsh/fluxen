@@ -92,7 +92,7 @@ directions pass through one seam: everything below is `ui-core` plus the transpo
 
    | action | writes | detail |
    |:--|:--|:--|
-   | `tmpl` | the template table | `{{key}}` substitution, run at `create`/`set`/`append` (ADR 0006) |
+   | `tmpl` | the stamp table | `{name, params, data}`: `data` is the node tree itself, `"$name"` values are filled in whole at `create`/`set`/`append` (ADR 0037) |
    | `create` | `ctx.layout` | the root document; the page's reactive root re-renders |
    | `set` | data slot `slot` | one named node |
    | `append` | list slot `slot` | row id read from `data.id`; duplicate ids rejected; `position` counts from the tail (0 = end) |

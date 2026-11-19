@@ -160,10 +160,18 @@ impl InjectOp {
     }
 }
 
+/// Registration of a stamp definition (ADR 0037). `data` is the node tree itself — a
+/// definition used to be a JSON *string* with `{{key}}` holes; that form is refused
+/// (see `accrete::template::Templates::register`), because a value with a quote in it
+/// used to break the body and nothing about the text could be checked at registration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct InfluxTmpl {
     pub name: String,
-    pub data: String,
+    /// The names the definition takes: every `$name` in `data` is one of these, and
+    /// every one of these is used.
+    #[serde(default)]
+    pub params: Vec<String>,
+    pub data: serde_json::Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

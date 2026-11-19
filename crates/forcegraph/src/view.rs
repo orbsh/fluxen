@@ -258,12 +258,12 @@ impl View {
 
         let layer = document.create_element("div").ok()?.dyn_into::<HtmlElement>().ok()?;
         layer.set_class_name("fg-labels");
-        let layer_css = layer.style();
-        layer_css.set_property("position", "absolute").ok()?;
-        layer_css.set_property("inset", "0").ok()?;
-        layer_css.set_property("overflow", "hidden").ok()?;
-        layer_css.set_property("pointer-events", "none").ok()?;
-        layer_css.set_property("z-index", "1").ok()?;
+        let css = layer.style();
+        css.set_property("position", "absolute").ok()?;
+        css.set_property("inset", "0").ok()?;
+        css.set_property("overflow", "hidden").ok()?;
+        css.set_property("pointer-events", "none").ok()?;
+        css.set_property("z-index", "1").ok()?;
         host.append_child(&layer).ok()?;
 
         let card = document.create_element("div").ok()?.dyn_into::<HtmlElement>().ok()?;

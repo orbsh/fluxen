@@ -9,7 +9,7 @@ AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set
 ## 迁入内容
 
 - **Accrete DSL**（`accrete` / `accrete_macro`）：闭合类型 enum，`#[serde(tag = "type")]`，Bind 系统，面向 AI 生成的 JsonSchema 校验
-- **操作协议**（ADR 0005，取代原流式合并）：create/set/append/patch/remove 动作；`patch` 以 JSON Pointer 寻址任意节点的线上形状；`tmpl` 注册槽位替换模板（ADR 0006）
+- **操作协议**（ADR 0005，取代原流式合并）：create/set/append/patch/remove 动作；`patch` 以 JSON Pointer 寻址任意节点的线上形状；`tmpl` 注册 stamp 定义——一棵节点树，`"$name"` 整值在实例化时填进去（ADR 0037）
 - **编码**（`codec`）：`ActiveCodec` 枚举分发（Json/CBOR），URL 参数握手定版，`encode_ws()` 辅助函数
 
 ## 定位

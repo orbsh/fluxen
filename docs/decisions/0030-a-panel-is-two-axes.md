@@ -32,6 +32,11 @@ before handing over. That is deliberate: those three have been exercised in prod
 rewriting working code in the same change that renames it makes any regression impossible to
 attribute. Moving them into `panel.rs` is a separate, mechanical change with no vocabulary in it.
 
+> **Landed** (2026-11-19). The three files are gone and the three implementations live in
+> `components/panel.rs` as private functions beside `drawer_`, named for the axis they fill
+> (`inline_`, `anchor_`, `overlay_`) rather than for the retired nodes. Nothing outside that file
+> calls them, and the `Fold` / `Popup` / `Layer` shells are out of the model as well.
+
 ## There is no portal, and no mount points
 
 `portal` (ADR 0014) moved a subtree into another DOM element found by selector, and this decision

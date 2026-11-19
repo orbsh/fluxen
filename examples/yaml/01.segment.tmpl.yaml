@@ -1,3 +1,8 @@
 action: tmpl
 name: segment
-data: "{\"type\": \"frame\", \"children\": {{kids}}, \"id\": \"{{id}}\", \"attrs\": {{attrs}}}"
+params: [id, attrs, kids]
+data:
+  type: frame
+  id: "$id"
+  attrs: "$attrs"
+  children: "$kids"

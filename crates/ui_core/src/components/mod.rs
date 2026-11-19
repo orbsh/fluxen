@@ -6,14 +6,8 @@ pub mod canvas;
 pub use canvas::canvas_;
 pub mod forcegraph;
 pub use forcegraph::forcegraph_;
-pub mod layer;
-pub use layer::layer_;
-pub mod fold;
-pub use fold::fold_;
 pub mod bundle;
 pub use bundle::bundle_;
-pub mod popup;
-pub use popup::popup_;
 
 pub mod panel;
 pub use panel::panel_;
