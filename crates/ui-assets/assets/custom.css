@@ -79,11 +79,24 @@
         min-width: 0;
     }
 
-    /* 贴右边缘的落点（ADR 0019）：展开向左长——面板默认锚在自己的左边，
-       贴边时会直接长到屏幕外。 */
-    .--rail > .dock-panel {
-        left: auto;
+    /* 贴右边缘的落点（ADR 0034）：落点就是框本身（没有内层 panel 了），所以
+       「常态一条细条、拖拽在飞时展开」这套几何也长在框上。绝对定位在右边缘：
+       宽度一变不推挤邻居（拖拽期间光标下面的内容不许移动），`right: 0` 让它
+       向左长——长在流里会直接长到屏幕外。 */
+    .--rail {
+        position: absolute;
+        top: 0;
         right: 0;
+        bottom: 0;
+        width: 0.75rem;
+        z-index: 10;
+        background-color: var(--bg);
+        transition: width 0.16s ease-out;
+    }
+
+    .--rail.drop-armed {
+        width: 14rem;
+        z-index: 30;
     }
 
     @media (max-width: 1000px) {

@@ -1,10 +1,10 @@
 //! `tiles` — one container for a slot's items, cut into blocks (ADR 0031 §4).
 //!
-//! Two axes, not two components: `stage` says how many items are on it (`all` lays every one out,
-//! `one` gives the area to a single item), and `step` says what advances it (a clock the node owns,
-//! or a slot the world writes). `rack` and `pages` were this node with different steppers, so the
-//! machinery below is theirs: the keyed list, the position index, the rotation, the dwell, the
-//! follow-the-tail scroll.
+//! Two axes, not two components: `window` says how many items are on stage at once (absent lays
+//! every one out, `{size: 1}` gives the area to a single item, `{size: N}` is a moving window of N
+//! consecutive items), and `step` says what advances it (a clock the node owns, or a slot the world
+//! writes). `rack` and `pages` were this node with different steppers, so the machinery below is
+//! theirs: the keyed list, the position index, the rotation, the follow-the-tail scroll.
 //!
 //! One rule runs through all of it: **every item has a key**, read once when the item arrives
 //! (ADR 0031 §4, "Every item has a key"). Selection, removal and replacement address items by
@@ -14,7 +14,7 @@ use crate::Ctx;
 use crate::ctx::render_accrete;
 use crate::hooks::{self, use_common_css, use_source_id};
 use accrete::classify::Classify;
-use accrete::{Accrete, AccreteOps, Align, Bind, Column, Header, Scope, Stage, Step, Tiles};
+use accrete::{Accrete, AccreteOps, Align, Bind, Column, Header, Scope, Step, Tiles};
 use leptos::html::*;
 use leptos::leptos_dom::helpers::set_interval_with_handle;
 use leptos::prelude::*;
@@ -110,18 +110,11 @@ fn staged_key(v: Option<Value>) -> Option<String> {
     }
 }
 
-/// How many LEADING items have outlived their stay. Arrivals are ordered and a stay is uniform, so
-/// what has expired is always the head of the list — one number, not a deadline per item. `stamps`
-/// holds the tick each item went on stage on; an item with no stamp has just arrived.
-fn expired_prefix(keys: &[String], stamps: &HashMap<String, u64>, tick: u64, stay: u64) -> usize {
-    let mut gone = 0;
-    for key in keys {
-        match stamps.get(key) {
-            Some(born) if tick.saturating_sub(*born) >= stay => gone += 1,
-            _ => break,
-        }
-    }
-    gone
+/// Is position `at` inside the window that starts at `start` and is `width` items wide? The one
+/// rule a window has: N CONSECUTIVE items, from the cursor. Past the end of the list the window is
+/// simply shorter — there is nothing to pad it with.
+fn in_window(at: usize, start: usize, width: usize) -> bool {
+    at >= start && at < start.saturating_add(width)
 }
 
 /// The field a column projects: the record's child whose `selector` is the key. This is ADR 0020's
@@ -295,10 +288,11 @@ fn head_view(header: &Header, columns: &[Column]) -> AnyView {
 
 /// A slot's items, cut into blocks (ADR 0031 §4).
 ///
-/// `stage: all` lays every item out; `stage: one` gives the area to a single one, chosen by
-/// `step` — a slot that names its key, or a clock that rotates. With neither, the newest item
-/// holds the area: a frame that asks for "one at a time" must not show nothing because nobody ever
-/// set a cursor.
+/// No `window` lays every item out. `window: {size: 1}` gives the area to a single item, chosen by
+/// `step` — a slot that names its key, or a clock that rotates; with no stepper the newest item
+/// holds the area, because a frame that asks for "one at a time" must not show nothing for want of
+/// a cursor. `window: {size: N}` is the same rule with N consecutive items starting at the cursor:
+/// the marquee, the page, and a page of rows are one thing.
 pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
     let ctx = ctx.clone();
     // Rows get their owner from here: the subscriptions of a row outlive the render pass that
@@ -306,7 +300,13 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
     #[allow(clippy::expect_used)]
     let parent_owner = Owner::current().expect("tiles_ requires a reactive owner");
 
-    let stage = accrete.attrs.as_ref().map(|a| a.stage).unwrap_or_default();
+    // The window is the number of items on stage at once; absent = all of them. A stepper only
+    // exists to move a window, so a `step` with no `window` is refused at load (stage/proto.rs).
+    let window = accrete
+        .attrs
+        .as_ref()
+        .and_then(|a| a.window)
+        .map(|w| w.size);
     let step = accrete.attrs.as_ref().and_then(|a| a.step.clone());
     // `columns` decides the data shape (ADR 0031 §4): present means each item is a RECORD and the
     // node is a grid; absent means each item is drawn as it is. An empty list of columns says
@@ -319,10 +319,15 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
     let header = accrete.attrs.as_ref().and_then(|a| a.header.clone());
 
     let mut css = vec!["tiles", "f"];
-    if stage == Stage::One {
-        // One at a time is a stack of blocks with one of them opaque: CSS draws it, the class
-        // says which container it is. A grid stacks rows instead — same idea, one row visible.
-        css.push(if columns.is_some() { "one" } else { "rot" });
+    if window.is_some() {
+        // One class says the container is a stage, one custom property says how wide it is: a
+        // size-N hook rather than a class per answer, because N is a number and CSS cannot count
+        // items. `size: 1` keeps the stack (`.rot`) for the non-grid case — one item in the area,
+        // the others behind it — which is what "one at a time" always looked like.
+        css.push("window");
+        if window == Some(1) && columns.is_none() {
+            css.push("rot");
+        }
     }
     if columns.is_some() {
         css.push("cols");
@@ -332,13 +337,22 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
 
     // Every row of a grid is its own track list, all read from one custom property: the header and
     // the body cannot drift apart, and a frame still overrides any of it with CSS.
-    let style = columns.as_ref().map(|cols| {
+    let mut decls: Vec<String> = Vec::new();
+    if let Some(size) = window {
+        decls.push(format!("--tile-window: {size};"));
+    }
+    if let Some(cols) = columns.as_ref() {
         let tracks: Vec<String> = cols
             .iter()
             .map(|c| c.width.clone().unwrap_or_else(|| "minmax(0, 1fr)".into()))
             .collect();
-        format!("--tile-cols: {};", tracks.join(" "))
-    });
+        decls.push(format!("--tile-cols: {};", tracks.join(" ")));
+    }
+    let style = if decls.is_empty() {
+        None
+    } else {
+        Some(decls.join(" "))
+    };
 
     let layout: Layout = accrete.children.clone().unwrap_or_default().into();
     // No slot = nothing to tile. A list channel without an address has no items, not one.
@@ -363,17 +377,40 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
     let index: Memo<Arc<HashMap<String, usize>>> =
         Memo::new(move |_| Arc::new(positions(&keys.get()[..])));
 
-    // The cursor is a KEY, never a position: an item removed ahead of it must not slide the thing
-    // on screen to its neighbour.
+    // The cursor is a KEY, never a position: an item removed ahead of it must not slide the window
+    // onto its neighbour. It names the FIRST item of the window; with `size: 1` that is the whole
+    // window, so this is the single-item stage in the only case that ever existed.
     let on = RwSignal::new(None::<String>);
-    // WHO IS ON STAGE, as the render pass asks it. A slot names the key (`step: {slot}`), a clock
-    // names the next one (`step: {timer}`), and with no stepper at all the newest item holds the
-    // area.
-    let step_for_stage = step.clone();
-    let staged: Memo<Option<String>> = Memo::new(move |_| match step_for_stage {
-        Some(_) => on.get(),
-        None => keys.get().last().cloned(),
+    // The window's first key, as the render pass asks it. A slot names it (`step: {slot}`), a
+    // clock names the next one (`step: {timer}`), and with no stepper the window follows the tail
+    // — the last N items, which for `size: 1` is the newest one that used to hold the area.
+    let stepped = step.is_some() && window.is_some();
+    let width = window.unwrap_or(0);
+    let first: Memo<Option<String>> = Memo::new(move |_| {
+        if stepped {
+            return on.get();
+        }
+        let ks = keys.get();
+        ks.get(ks.len().saturating_sub(width)).cloned()
     });
+    // The window as positions: `start .. start + width`. Empty while a step slot has named no key
+    // yet — a page before the first click shows nothing, not something arbitrary.
+    let start: Memo<Option<usize>> = Memo::new(move |_| {
+        let key = first.get()?;
+        index.get().get(&key).copied()
+    });
+    // Is this key inside the window? No window at all = everything is drawn, so the answer is
+    // yes; a window whose start names no item = nothing is.
+    let in_stage = move |key: &str| -> bool {
+        match (start.get(), window) {
+            (Some(s), Some(n)) => index
+                .get()
+                .get(key)
+                .is_some_and(|at| in_window(*at, s, n)),
+            (None, Some(_)) => false,
+            (_, None) => true,
+        }
+    };
 
     // A slot the world writes: that is what `pages` was — a selection driven from outside (a nav
     // click, a route, another component). No clock.
@@ -399,11 +436,7 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
         Step::Timer { timer } => Some(timer.max(&200).to_owned()),
         Step::Slot { .. } => None,
     });
-    let rotating = every.is_some() && stage == Stage::One;
-    // DWELL: every item carries its own clock and leaves when its stay is over — all of them are on
-    // stage at once, unlike a rotation, which takes turns. The item stays in the slot; the renderer
-    // only stops SHOWING it.
-    let dwelling = every.is_some() && stage == Stage::All;
+    let rotating = every.is_some() && window.is_some();
 
     // How many items have had their turn. Rotation walks the queue in the order it was said — an
     // item arriving while another is being read waits behind it, which is what a queue is for.
@@ -426,7 +459,7 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
                     Some(pos) => pos + 1,
                     None => shown.get_untracked(),
                 };
-                if next < ks.len() {
+                if next + width <= ks.len() {
                     shown.set(next + 1);
                     on.set(Some(ks[next].clone()));
                 } else {
@@ -471,7 +504,7 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
             }
             if ks.len() > before && on.get_untracked().is_none() {
                 let next = shown.get_untracked();
-                if next < ks.len() {
+                if next + width <= ks.len() {
                     shown.set(next + 1);
                     on.set(Some(ks[next].clone()));
                 }
@@ -479,73 +512,18 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
         });
     }
 
-    // How many leading items have left the stage, and when each one got there. The tick counter is
-    // the clock: arrival and expiry read the same number, so a throttled tab simply runs slower
-    // instead of expiring everything at once, and no wall-clock source is needed.
-    let retired = RwSignal::new(0usize);
-    let stamps = RwSignal::new(HashMap::<String, u64>::new());
-    let tick_no = RwSignal::new(0u64);
-    if dwelling {
-        let stay = every.unwrap_or(4000);
-        // Finer than the stay, so an item leaves close to its own deadline instead of up to a
-        // whole stay late.
-        let tick_ms = (stay / 8).clamp(50, 250);
-        let ticks_per_stay = stay.div_ceil(tick_ms).max(1);
-        let tick_keys = keys;
-        let tick = set_interval_with_handle(
-            move || {
-                let now = tick_no.get_untracked() + 1;
-                tick_no.set(now);
-                let ks = tick_keys.get_untracked();
-                let gone = expired_prefix(&ks[..], &stamps.get_untracked(), now, ticks_per_stay);
-                if gone != retired.get_untracked() {
-                    retired.set(gone);
-                }
-            },
-            Duration::from_millis(tick_ms),
-        );
-        match tick {
-            Ok(handle) => {
-                let handle = send_wrapper::SendWrapper::new(handle);
-                on_cleanup(move || handle.take().clear());
-            }
-            Err(e) => tracing::warn!("tiles: could not start the dwell timer: {e:?}"),
-        }
-        // An item's clock starts when it lands in the slot. Items the sender removed take their
-        // stamps with them, and the counter never points past the list.
-        let watch = keys;
-        Effect::new(move |_| {
-            let ks = watch.get();
-            let now = tick_no.get_untracked();
-            stamps.update(|m| {
-                let live: HashSet<&String> = ks.iter().collect();
-                m.retain(|k, _| live.contains(k));
-                for k in ks.iter() {
-                    m.entry(k.clone()).or_insert(now);
-                }
-            });
-            if retired.get_untracked() > ks.len() {
-                retired.set(ks.len());
-            }
-        });
-    }
-
     // Many items in one area follow the tail. Which area has a tail is the frame's business (its
-    // CSS decides whether it scrolls); following is what `all` means when it does.
-    let follows = stage == Stage::All;
+    // CSS decides whether it scrolls); following is what "no window" means when it does.
+    let follows = window.is_none();
 
     move || -> AnyView {
         // Subscribing to this one slot: writes to other keys do not re-run the container.
-        let rows = slot.get();
+        let _rows = slot.get();
         let ks = keys.get();
-        // A dwell clips the head of the list: those items have had their turn and are off stage,
-        // but they are still in the slot (a log bound to the same slot shows every one).
-        let gone = if dwelling {
-            retired.get().min(rows.len())
-        } else {
-            0
-        };
-        let visible: Vec<String> = ks.iter().skip(gone).cloned().collect();
+        // Every item stays in the list; the window only decides which of them are ON it, so a
+        // paged table keeps the state of the pages around it (that is why `pages` kept every row
+        // mounted rather than swapping one in).
+        let visible: Vec<String> = ks.iter().cloned().collect();
         let lcx = ctx.clone();
         let layout2 = layout.clone();
         let columns2 = columns.clone();
@@ -580,15 +558,7 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
                         // with stays the identity of ALL of its rows, so stepping and selection
                         // address the same thing they addressed before `columns` existed.
                         if let Some(columns) = &columns {
-                            let state = if stage == Stage::One {
-                                if staged.get().as_deref() == Some(name.as_str()) {
-                                    "active"
-                                } else {
-                                    "off"
-                                }
-                            } else {
-                                ""
-                            };
+                            let state = if in_stage(&name) { "" } else { "off" };
                             return record_rows(&rctx, child.as_ref(), columns, state, 0)
                                 .into_any();
                         }
@@ -601,17 +571,18 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
                             }
                             None => render_accrete(&rctx, child.as_ref()),
                         };
-                        if stage != Stage::One {
+                        if window.is_none() {
                             return inner;
                         }
-                        // One at a time: the tile needs a handle that can be switched. Enter and
-                        // leave are CSS; the class only says which one is current.
+                        // On stage: the tile needs a handle that can be switched. Which one is
+                        // current is a class; what "current" looks like is CSS. Size 1 stacks
+                        // them and fades (`.rot`); a wider window just hides the others.
                         let n = name.clone();
                         let cls = move || {
-                            if staged.get().as_deref() == Some(n.as_str()) {
+                            if in_stage(&n) {
                                 "slide active"
                             } else {
-                                "slide"
+                                "slide off"
                             }
                         };
                         div().class(cls).child(inner).into_any()
@@ -771,12 +742,12 @@ mod tests {
             "children": [
                 {"type": "text", "attrs": {"selector": "name"},
                  "source": {"default": "x"}},
-                {"type": "group", "attrs": {"selector": "options"},
+                {"type": "frame", "attrs": {"selector": "options"},
                  "children": [
                     {"type": "record", "id": "a"},
                     {"type": "record", "id": "b"}
                  ]},
-                {"type": "group", "attrs": {"selector": "mixed"},
+                {"type": "frame", "attrs": {"selector": "mixed"},
                  "children": [
                     {"type": "record", "id": "c"},
                     {"type": "text", "attrs": {"selector": "name"}}
@@ -820,7 +791,7 @@ mod tests {
 
         // An empty field is not a list either: `is_empty` would otherwise say "all records" of
         // nothing and the row would vanish.
-        let empty = node(json!({"type": "group", "attrs": {"selector": "e"}, "children": []}));
+        let empty = node(json!({"type": "frame", "attrs": {"selector": "e"}, "children": []}));
         assert!(child_records(&empty).is_empty());
     }
 
@@ -934,6 +905,24 @@ mod tests {
         assert_eq!(positions(&["dup".into(), "dup".into()])["dup"], 0);
     }
 
+    /// A window is N consecutive positions from the cursor — one is a page, forty is a paged table,
+    /// and there is no second rule. Past the end it is simply shorter.
+    #[test]
+    fn a_window_is_n_consecutive_positions() {
+        // `size: 1`: only the cursor's item is on stage — the old `stage: one`, unchanged.
+        assert!(in_window(3, 3, 1));
+        assert!(!in_window(2, 3, 1));
+        assert!(!in_window(4, 3, 1));
+
+        // `size: 3`: the cursor and the two behind it, and nothing before the cursor.
+        let on: Vec<usize> = (0..6).filter(|at| in_window(*at, 2, 3)).collect();
+        assert_eq!(on, vec![2, 3, 4]);
+
+        // A cursor near the tail gives a shorter window rather than wrapping to the head.
+        assert!(in_window(5, 4, 3));
+        assert!(!in_window(1, 4, 3));
+    }
+
     #[test]
     fn a_step_slot_names_a_key() {
         assert_eq!(staged_key(Some(json!("home"))), Some("home".into()));
@@ -946,27 +935,5 @@ mod tests {
         assert_eq!(staged_key(Some(json!({ "dest": "page" }))), None);
         assert_eq!(staged_key(Some(json!(2))), None);
         assert_eq!(staged_key(None), None);
-    }
-
-    /// A dwell retires the head of the list and only the head: items arrive in order and live
-    /// equally long, so one that outlived its stay sits in front of every one that has not.
-    #[test]
-    fn a_dwell_retires_the_head_of_the_list() {
-        let keys: Vec<String> = ["a", "b", "c"].iter().map(|s| s.to_string()).collect();
-        let mut stamps = HashMap::new();
-        stamps.insert("a".to_string(), 0u64);
-        stamps.insert("b".to_string(), 0u64);
-        stamps.insert("c".to_string(), 5u64);
-
-        // Nothing has served its full stay yet (8 ticks), so nothing has left.
-        assert_eq!(expired_prefix(&keys, &stamps, 7, 8), 0);
-        // At 8 the first two are done and the third, which arrived at 5, is not — and the walk
-        // stops there even though the one behind it will also be done later.
-        assert_eq!(expired_prefix(&keys, &stamps, 8, 8), 2);
-        // An item with no stamp (just arrived) holds the stage: the prefix cannot jump over it.
-        stamps.remove("c");
-        assert_eq!(expired_prefix(&keys, &stamps, 20, 8), 2);
-        // Everything retired is reported as such; the caller clamps it to the list length.
-        assert_eq!(expired_prefix(&keys, &stamps, 100, 8), 2);
     }
 }

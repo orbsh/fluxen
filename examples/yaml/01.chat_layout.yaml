@@ -94,7 +94,7 @@ data:
             class: [--cart, box, border, shadow, primary]
           source: {slot: cart}
           children:
-          - type: template
+          - type: stamp
             name: cart
             data: {}
           - type: frame

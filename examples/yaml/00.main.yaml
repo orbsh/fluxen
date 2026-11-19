@@ -87,24 +87,23 @@
           - type: input
             id: test
             sink: {slot: message}
-    # ---- 右侧窄轨：拖拽的落点（ADR 0019）------------------------------------
+    # ---- 右侧窄轨：拖拽的落点（ADR 0034）------------------------------------
     # 气泡里的单元往这边一拖就成一条 pin。落点贴在窗口右边缘，常态一条细条，
     # 拖拽在飞时展开；`--rail` 让它向左长，否则长到屏幕外（custom.css）。
-    # `accept: [snippet]` 就是配对：只收标了 snippet 的货物。
-    - type: dock
+    # `accept: {tag: snippet}` 就是配对：只收标了 snippet 的货物。
+    - type: frame
       id: rail
       attrs:
         class:
         - --rail
-        accept:
-        - snippet
+        accept: {tag: snippet}
       sink: {slot: pin}
 
 # ---- 图的初始快照：crate 层 --------------------------------------------------
 - action: set
   slot: graph
   data:
-    type: group
+    type: frame
     source:
       default:
         focus: null

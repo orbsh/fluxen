@@ -2,7 +2,7 @@
 # 菜单项（tab 栏，短标签行）与页面内容（tiles 的行），内容不等于被点的 id。
 # select 点击 emit 包装对象 {slot, id?, data}（与上行同形）落 local 槽
 # `page`；标题与 tiles 订阅同槽、各按 data 取件——同事件两处消费。
-# 页面行就在 tiles 的槽里（行 id = 键）：`stage: one` 是页，`step: {slot: page}`
+# 页面行就在 tiles 的槽里（行 id = 键）：`window: {size: 1}` 是页，`step: {slot: page}`
 # 是导航写的那根轴——不引入任何寻址语法。
 # 纯前端往返为零：菜单与页面都由服务端喂（list 平面），此后每次点击
 # 不经过 transport。横排 tab 栏 = select 自身 attrs.horizontal: true。
@@ -44,7 +44,7 @@
         class:
         - --content
         - shrink
-        stage: one
+        window: {size: 1}
       source: {slot: pages}
       step: {slot: page}
 # ---- 菜单行：短标签 + id（tab 栏的选项） ----

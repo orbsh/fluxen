@@ -462,10 +462,16 @@
         }
     }
 
-    /* One at a time on a grid: the staged item's rows show, the rest do not. A class per row, not a
-       parent, because a child row is a SIBLING of the row it belongs to (that is how it lines up
-       with the same tracks). */
-    .tiles.cols.one > .tiles-row.off {
+    /* A window of N (ADR 0031 §4): the renderer draws every item and marks the ones outside the
+       window `off`, because every row stays mounted (switching pages must not lose the page's
+       state). Which items are in it is the renderer's business; hiding the rest is this one rule.
+       The width travels as `--tile-window` for a page that wants the count for its own math. */
+    .tiles.window {
+        --tile-window: 1;
+    }
+
+    .tiles.window:not(.rot) > .tiles-row.off,
+    .tiles.window:not(.rot) > .slide.off {
         display: none;
     }
 
@@ -494,7 +500,7 @@
 
     /* The notice area: floats above everything, takes no room in the layout, does nothing while
        empty. Where it stands is this file's business; how long a line stays and when it is replaced
-       are `tiles`' `stage: one` + `step: {timer}`. */
+       are `tiles`' `window: {size: 1}` + `step: {timer}`. */
     .toast {
         position: fixed;
         top: 1rem;
@@ -534,34 +540,23 @@
         }
     }
 
-    /* 拖拽的落点（ADR 0019）：源那边没有样式（它只是一层包装，尺寸由 children
-       给），样式全在这里。三态——常态（reveal 一条细条 / reserved 提前占位）、
-       拖拽在飞（全局展开）、悬停在上（高亮）。展开在覆盖层里长：落点是 flex
-       子项，宽度一变就推挤邻居，而拖拽期间光标下面的内容不许移动。 */
-    .dock-reveal {
-        flex: 0 0 0.75rem;
-    }
-
-    .dock > .dock-panel {
+    /* 拖拽的落点（ADR 0034）：落点就是框本身，样式也长在框上——`dock` 那个内层
+       panel 没有了，所以 `--rail` 的细条几何跟着搬到了 custom.css（那是一个页面
+       的决定，不是渲染器的）。这里只剩三态：常态一条虚线说「这里能放」、拖拽在
+       飞时每个落点亮起来说「哪里能放」、悬停在上说「放这里」。几何一概不动：
+       拖拽期间光标下面的内容不许移动。 */
+    .drop {
         overflow: hidden;
         border-radius: var(--round);
         outline: 1px dashed var(--border-color);
     }
 
-    .dock-reveal > .dock-panel {
-        position: absolute;
-        inset: 0 auto 0 0;
-        width: 0.75rem;
-        background-color: var(--bg);
-        transition: width 0.16s ease-out;
+    .drop-armed {
+        outline-style: solid;
+        outline-color: var(--secondary);
     }
 
-    .dock-reveal.dock-armed > .dock-panel {
-        width: 14rem;
-        z-index: 30;
-    }
-
-    .dock-over > .dock-panel {
+    .drop-over {
         outline: 2px solid var(--accent);
         background-color: var(--secondary);
     }

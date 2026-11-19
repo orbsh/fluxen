@@ -1,7 +1,7 @@
 action: append
 slot: chat
 data:
-  type: template
+  type: stamp
   name: segment
   data:
     id: seg1

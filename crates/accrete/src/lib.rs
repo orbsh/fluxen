@@ -220,18 +220,6 @@ pub struct DirectionAttr {
     pub direction: Option<Direction>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct StyleAttr {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub class: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selector: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub style: Option<HashMap<String, String>>,
-}
-
 /// 外部渲染模块的原位挂载容器（ADR 0007）。
 /// 核心不解释 `data`——载荷语义完全归模块；尺寸/样式走 `attrs`，
 /// 与数据流的联动走现有 bind 槽协议（`set`/`patch` 按 `data_event` 寻址）。
@@ -692,20 +680,6 @@ pub struct Svg {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Group {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<StyleAttr>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
 pub struct Path {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -715,21 +689,33 @@ pub struct Path {
     pub source: Option<Bind>,
 }
 
-/// How much of the slot a `tiles` node puts on stage (ADR 0031 §4): every item, laid out the way
-/// the frame's CSS says; or one at a time, occupying the whole area — the marquee, and also the
-/// page. Nothing about the container changes between the two.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+/// How much of the slot a `tiles` node puts on stage at once (ADR 0031 §4). Absent = every item is
+/// laid out, the way the frame's CSS says; `{size: 1}` = one at a time, occupying the whole area —
+/// the marquee, and also the page; `{size: N}` = a moving window of N consecutive items, which is
+/// what a paged table needs (and what `rack.view.count` used to be). Nothing about the container
+/// changes between the three: a window is a count, not a mode.
+///
+/// There is no default: a frame that says nothing has no window at all, and a window of zero would
+/// be a box that can never show anything, so it is refused at decode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum Stage {
-    #[default]
-    All,
-    One,
+#[serde(deny_unknown_fields)]
+pub struct Window {
+    #[serde(deserialize_with = "size_at_least_one")]
+    #[cfg_attr(feature = "schema", schemars(range(min = 1)))]
+    pub size: usize,
 }
 
-/// Absent on the wire: `all` is what a frame that says nothing means.
-fn stage_is_all(s: &Stage) -> bool {
-    *s == Stage::All
+/// A window narrower than one item is not a window: it would render an area that can never show
+/// anything the frame asked for.
+fn size_at_least_one<'de, D: serde::Deserializer<'de>>(d: D) -> Result<usize, D::Error> {
+    use serde::de::Error;
+    match usize::deserialize(d)? {
+        0 => Err(D::Error::custom(
+            "window size is at least 1; a zero-width window shows nothing",
+        )),
+        n => Ok(n),
+    }
 }
 
 /// What advances the stage (ADR 0031 §4). Exactly two answers, because there are exactly two ways
@@ -772,9 +758,12 @@ pub struct TilesAttr {
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
-    #[serde(default, skip_serializing_if = "stage_is_all")]
-    pub stage: Stage,
-    /// Absent = nothing steps: every item stays where it is.
+    /// Absent = every item is laid out and nothing steers; present = that many consecutive items
+    /// are on stage at once, starting at the cursor (ADR 0031 §4).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window: Option<Window>,
+    /// What advances the window. Only meaningful with a `window`: a stepper with nothing to step is
+    /// a frame error at load, not a clock that ticks for nobody.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub step: Option<Step>,
     /// Absent = each item is a node drawn as it is, one block per item. Present = each item is a
@@ -1012,6 +1001,9 @@ pub struct Text {
     pub source: Option<Bind>,
 }
 
+/// A frame is a box: it wraps children, it can read a slot, and (ADR 0034) it is the
+/// only thing that can carry cargo — as a source (`draggable`), as a landing
+/// (`accept` + `sink`), or as both.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
@@ -1025,6 +1017,37 @@ pub struct FrameAttr {
     #[allow(non_camel_case_types)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grid: Option<Map<String, Value>>,
+    /// Inline style, written as it is. This is the surface `group` had: a frame can
+    /// say everything a `group` could.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<HashMap<String, String>>,
+    /// This box may be dragged away (ADR 0034). Its cargo is its own subtree — there
+    /// is no second payload to keep in step with it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub draggable: Option<Draggable>,
+    /// What cargo this box takes (ADR 0034). Absent `tag` = takes any. Needs `sink`:
+    /// a drop that cannot emit is a frame error at load.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accept: Option<Accept>,
+}
+
+/// The tag of a draggable box's cargo (ADR 0034). Absent = untagged: a target that
+/// names no tag takes it, a target that names one does not.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Draggable {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
+}
+
+/// Which cargo a box takes (ADR 0034): absent `tag` = any, a tag = that one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Accept {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -1038,105 +1061,23 @@ pub struct Frame {
     pub attrs: Option<FrameAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Bind>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Template {
-    name: String,
-    data: Map<String, Value>,
-}
-
-/// 拖拽的源（ADR 0019）：一层**无样式、不占位**的包装（它自己不加 padding、
-/// 边框、背景，也不消费额外尺寸——尺寸全由 children 给），唯一职责是把
-/// 「这件东西可以被拖走」和它的货物说清楚。
-///
-/// 拖动本身不上报：`dragstart` 只把「谁在飞、带什么、是什么」写进渲染器的
-/// 页面级拖拽会话，上行发生在落点（`dock`）。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Grab {
-    /// 行身份（可选但强烈建议）：`rack` 的 keyed diff 用**行节点自己**的 id，
-    /// 没有就退 `#{idx}` 位置键——中间删一行会让后面所有行重建、本地态丢。
-    /// grab 就是「一层无样式包装」，可以当行的根节点，所以 id 落在这里。
-    /// 渲染器不替它从子节点借 id：那会造出两个同 id 的节点，按 id 定位的行
-    /// 操作（append／remove／patch）从此指向不明——身份只能生产者给。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    /// 货物的标签，供落点配对（`dock.attrs.accept`）。缺省 = 没有标签：
-    /// 不限定的落点照收，写了 `accept` 的落点不收（配不上就是配不上）。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub kind: Option<String>,
-    /// 货物本身：任意 JSON，原样进上行帧的 `payload`。写的是声明时的快照，
-    /// 渲染器不校验它与任何槽是否一致——一致性是生产者的编排责任。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub payload: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
-/// 落点常态的形态（ADR 0019）。闭枚举：两个取值就是两种可用策略，不给自由值。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum DockExpand {
-    /// 默认：常态一条细条，拖拽在飞时展开。零宽的盒子没有命中区，所以展开的
-    /// 触发面是 `dragstart`（全局），不是悬停——先看得见才落得进去。
-    #[default]
-    Reveal,
-    /// 提前占好位：常态就是完整尺寸，拖拽在飞与悬停只做高亮，不动几何。
-    Reserved,
-}
-
-/// 缺省值不进 wire（ADR 0012 的空即无；与 forcegraph 的 style 同款）。
-fn dock_expand_is_reveal(e: &DockExpand) -> bool {
-    *e == DockExpand::Reveal
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct DockAttr {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub class: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selector: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "dock_expand_is_reveal"
-    )]
-    pub expand: DockExpand,
-    /// 收哪些 `grab.kind`。缺席 = 全收（只有一个落点时不必写）；写了就是闭集合
-    /// 比对，配不上的拖拽落在这里等于没落（不发射、不高亮）。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub accept: Option<Vec<String>>,
-}
-
-/// 拖拽的落点（ADR 0019）：`children` = 已放下的内容（生产者随后往里追加钉住的
-/// 流）。事件名与落点身份在这一侧定义，于是多个 dock 天然可分；释放时由本节点
-/// 发射，`id` 是它自己的 id，「被拖来的是什么」进 `data`。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Dock {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<DockAttr>,
-    /// `bind["value"]`：`event` 上行（事件名就是这里的名字），或 `local` 写槽
-    /// （包装与上行同形，ADR 0010）。带什么货由源（`grab`）给，落点不再附加任何
-    /// 元数据——事件名与帧的 `id` 已经唯一确定是哪个落点。
+    /// The landing uplink (ADR 0034): where a drop on this box goes — an event name or
+    /// a local slot, the same `Bind` `dock` had.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sink: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
+}
+
+/// A registered template, instantiated by name (ADR 0006). Renamed from `Template`
+/// (ADR 0034); the definition side is unchanged.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+pub struct Stamp {
+    name: String,
+    data: Map<String, Value>,
 }
 
 #[allow(non_camel_case_types)]
@@ -1146,6 +1087,11 @@ pub struct Dock {
 #[cfg_attr(feature = "classify", derive(ClassifyVariant))]
 #[serde(tag = "type")]
 pub enum Accrete {
+    /// A box (ADR 0027/0034). It reads a slot and it is the only place cargo lives:
+    /// `attrs.draggable` makes it a drag source, `attrs.accept` + `sink` a landing.
+    /// It takes a fallback id because a landing emits, and the frame's id is the id
+    /// of what was dropped on.
+    #[ui_acrete(has_id = "true")]
     frame(Frame),
     #[ui_acrete(has_id = "true")]
     canvas(Canvas),
@@ -1157,9 +1103,8 @@ pub enum Accrete {
     panel(Panel),
     bundle(Bundle),
     svg(Svg),
-    group(Group),
     path(Path),
-    /// One container for a slot's items (ADR 0031 §4): `stage` says how many are on it, `step`
+    /// One container for a slot's items (ADR 0031 §4): `window` says how many are on it, `step`
     /// what advances it. `rack` and `pages` were the same node with different steppers.
     #[ui_acrete(has_id = "true")]
     tiles(Tiles),
@@ -1171,13 +1116,8 @@ pub enum Accrete {
     input(Input),
     select(Select),
     text(Text),
-    template(Template),
-    /// 拖拽的两端（ADR 0019）：手势、飞行态与落点高亮都在渲染器里，两端各一个
-    /// 角色——源可以被提起，落点接受释放并发射那一帧。源不领兜底 id：身份只有
-    /// 生产者给的才算数（合成的 `grab-N` 进不了帧）；落点领，因为它要发那一帧。
-    grab(Grab),
-    #[ui_acrete(has_id = "true")]
-    dock(Dock),
+    /// A registered template by name (ADR 0006), spelled `stamp` since ADR 0034.
+    stamp(Stamp),
 }
 
 #[cfg(feature = "ops")]

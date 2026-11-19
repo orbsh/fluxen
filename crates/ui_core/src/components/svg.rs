@@ -1,7 +1,7 @@
 use crate::Ctx;
 use crate::ctx::render_children;
 use crate::hooks::{use_common_css, use_default};
-use accrete::{Group, Path, Svg};
+use accrete::{Path, Svg};
 use leptos::html::*;
 use leptos::prelude::*;
 use leptos::svg;
@@ -22,33 +22,6 @@ pub fn svg_(accrete: Svg, ctx: &Ctx) -> AnyView {
         .map(|s| render_children(ctx, s))
         .unwrap_or_default();
     svg::svg()
-        .class(css.as_str())
-        .style(style)
-        .child(children)
-        .into_any()
-}
-
-/// SVG 分组：`StyleAttr.style` 内联样式。
-pub fn group_(accrete: Group, ctx: &Ctx) -> AnyView {
-    let mut css = vec!["group"];
-    use_common_css(&mut css, &accrete);
-    let css = css.join(" ");
-    let mut style = String::new();
-    if let Some(x) = &accrete.attrs
-        && let Some(s) = &x.style
-    {
-        style = s
-            .iter()
-            .map(|(k, v)| format!("{}: {};", k, v))
-            .collect::<Vec<String>>()
-            .join("\n");
-    }
-    let children = accrete
-        .children
-        .as_deref()
-        .map(|s| render_children(ctx, s))
-        .unwrap_or_default();
-    svg::g()
         .class(css.as_str())
         .style(style)
         .child(children)

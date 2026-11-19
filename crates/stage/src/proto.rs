@@ -45,6 +45,18 @@ pub fn parse_yaml_to_frame(
         if let Some(msg) = illegal_channel(&v) {
             return Err(crate::error::ParseError { msg });
         }
+        if let Some(msg) = dead_end_drop(&v) {
+            return Err(crate::error::ParseError { msg });
+        }
+        if let Some(msg) = header_without_columns(&v) {
+            return Err(crate::error::ParseError { msg });
+        }
+        if let Some(msg) = stepper_without_window(&v) {
+            return Err(crate::error::ParseError { msg });
+        }
+        if let Some(msg) = retired_stage(&v) {
+            return Err(crate::error::ParseError { msg });
+        }
     }
     let content = match items {
         ContentItems::One(c) => vec![c],
@@ -74,7 +86,7 @@ fn has_retired_key(v: &serde_yaml::Value) -> bool {
 /// 内联展开，`$defs` 的具名类型随之消失，SDK 生成器只能按顺序编号）。所以"接了不支持的
 /// 通道"这条错误在这里响亮地报，而不是在 serde 里。
 fn illegal_channel(v: &serde_yaml::Value) -> Option<String> {
-    const WRITERS: &[&str] = &["input", "select", "button", "bundle", "dock"];
+    const WRITERS: &[&str] = &["input", "select", "button", "bundle", "frame"];
     match v {
         serde_yaml::Value::Mapping(m) => {
             let kind = m.get("type").and_then(|t| t.as_str());
@@ -93,9 +105,122 @@ fn illegal_channel(v: &serde_yaml::Value) -> Option<String> {
     }
 }
 
+/// A drop that cannot emit is a dead end (ADR 0034): `accept` promises the box takes
+/// cargo, and `sink` is the only way the landing says what arrived. Nothing downstream
+/// can repair that, so it is refused where every other impossible frame is — at load,
+/// next to `illegal_channel` (same reason: serde would take the key and drop it).
+fn dead_end_drop(v: &serde_yaml::Value) -> Option<String> {
+    match v {
+        serde_yaml::Value::Mapping(m) => {
+            let accepts = m
+                .get("attrs")
+                .and_then(|a| a.get("accept"))
+                .is_some_and(|a| !a.is_null());
+            if accepts && !m.contains_key("sink") {
+                let kind = m.get("type").and_then(|t| t.as_str()).unwrap_or("frame");
+                return Some(format!(
+                    "node `{kind}` has `attrs.accept` but no `sink` — a drop that cannot \
+                     emit is a dead end; add `sink: {{slot: <event name or local slot>}}`"
+                ));
+            }
+            m.iter().find_map(|(_, val)| dead_end_drop(val))
+        }
+        serde_yaml::Value::Sequence(s) => s.iter().find_map(dead_end_drop),
+        _ => None,
+    }
+}
+
+/// A header cell is derived from a column key (ADR 0031 §4): with no columns there is no key to
+/// derive one from, so `attrs.header` on a `tiles` without `attrs.columns` can never render. Same
+/// rule as `dead_end_drop` — refused at load, because serde would take the key and draw nothing.
+fn header_without_columns(v: &serde_yaml::Value) -> Option<String> {
+    match v {
+        serde_yaml::Value::Mapping(m) => {
+            let kind = m.get("type").and_then(|t| t.as_str());
+            let attrs = m.get("attrs");
+            let headed = attrs
+                .and_then(|a| a.get("header"))
+                .is_some_and(|h| !h.is_null());
+            // An empty column list is the same as none: a grid with no columns has no cells, so
+            // the renderer treats `columns: []` as absent and so does this check.
+            let columned = attrs
+                .and_then(|a| a.get("columns"))
+                .and_then(|c| c.as_sequence())
+                .is_some_and(|c| !c.is_empty());
+            if kind == Some("tiles") && headed && !columned {
+                return Some(
+                    "node `tiles` has `attrs.header` but no `attrs.columns` — a header cell is \
+                     derived from a column key, so it can never render; add `attrs.columns: \
+                     [{key: <record field>}]`"
+                        .into(),
+                );
+            }
+            m.iter().find_map(|(_, val)| header_without_columns(val))
+        }
+        serde_yaml::Value::Sequence(s) => s.iter().find_map(header_without_columns),
+        _ => None,
+    }
+}
+
+/// A `step` moves a window and nothing else, so a stepper on a `tiles` that says no `window` is a
+/// clock ticking for nobody: either the frame wants a window (`{size: 1}` for a page or a marquee)
+/// or it does not want the step.
+fn stepper_without_window(v: &serde_yaml::Value) -> Option<String> {
+    match v {
+        serde_yaml::Value::Mapping(m) => {
+            let kind = m.get("type").and_then(|t| t.as_str());
+            let attrs = m.get("attrs");
+            let stepped = attrs
+                .and_then(|a| a.get("step"))
+                .is_some_and(|s| !s.is_null());
+            let windowed = attrs
+                .and_then(|a| a.get("window"))
+                .is_some_and(|w| !w.is_null());
+            if kind == Some("tiles") && stepped && !windowed {
+                return Some(
+                    "node `tiles` has `attrs.step` but no `attrs.window` — a stepper only advances \
+                     a window; add `attrs.window: {size: 1}` (one item on stage) or drop the step"
+                        .into(),
+                );
+            }
+            m.iter().find_map(|(_, val)| stepper_without_window(val))
+        }
+        serde_yaml::Value::Sequence(s) => s.iter().find_map(stepper_without_window),
+        _ => None,
+    }
+}
+
+/// `attrs.stage` was the count before ADR 0031's `window`: the attribute bag drops keys it does not
+/// know, so a frame that still says `stage: one` would silently lay every item out. Refused at
+/// load, with the spelling that replaced it.
+fn retired_stage(v: &serde_yaml::Value) -> Option<String> {
+    match v {
+        serde_yaml::Value::Mapping(m) => {
+            let kind = m.get("type").and_then(|t| t.as_str());
+            let staged = m
+                .get("attrs")
+                .and_then(|a| a.get("stage"))
+                .is_some_and(|s| !s.is_null());
+            if kind == Some("tiles") && staged {
+                return Some(
+                    "node `tiles` has `attrs.stage`, which is gone — the count of items on stage \
+                     is `attrs.window: {size: N}` (`size: 1` is what `stage: one` meant)"
+                        .into(),
+                );
+            }
+            m.iter().find_map(|(_, val)| retired_stage(val))
+        }
+        serde_yaml::Value::Sequence(s) => s.iter().find_map(retired_stage),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::illegal_channel;
+    use super::{
+        dead_end_drop, header_without_columns, illegal_channel, retired_stage,
+        stepper_without_window,
+    };
 
     fn y(src: &str) -> serde_yaml::Value {
         serde_yaml::from_str(src).expect("yaml")
@@ -114,5 +239,63 @@ mod tests {
     fn the_check_reaches_into_children() {
         let nested = y("type: frame\nchildren:\n- type: text\n  sink: {slot: y}\n");
         assert!(illegal_channel(&nested).is_some(), "子节点也要查");
+    }
+
+    #[test]
+    fn a_drop_needs_a_sink() {
+        let bad = y("type: frame\nattrs: {accept: {tag: note}}\n");
+        let msg = dead_end_drop(&bad).expect("accept 没有 sink 应当报错");
+        assert!(msg.contains("sink"), "错误要说该补什么：{msg}");
+
+        let ok = y("type: frame\nattrs: {accept: {tag: note}}\nsink: {slot: pin}\n");
+        assert!(dead_end_drop(&ok).is_none(), "落点带 sink 就成立");
+    }
+
+    #[test]
+    fn the_drop_check_reaches_into_children() {
+        let nested = y("type: frame\nchildren:\n- type: frame\n  attrs: {accept: {}}\n");
+        assert!(dead_end_drop(&nested).is_some(), "子节点也要查");
+    }
+
+    #[test]
+    fn a_header_needs_columns() {
+        let bad = y("type: tiles\nattrs: {header: {selector: --head}}\n");
+        let msg = header_without_columns(&bad).expect("有 header 没有 columns 应当报错");
+        assert!(msg.contains("columns"), "错误要说该补什么：{msg}");
+
+        // An empty column list is no columns: nothing to derive a header cell from.
+        let empty = y("type: tiles\nattrs: {header: {selector: h}, columns: []}\n");
+        assert!(header_without_columns(&empty).is_some(), "空列表也算没有列");
+
+        let ok = y("type: tiles\nattrs: {header: {selector: h}, columns: [{key: qty}]}\n");
+        assert!(header_without_columns(&ok).is_none(), "有列才有表头");
+    }
+
+    #[test]
+    fn a_stepper_needs_a_window() {
+        let bad = y("type: tiles\nattrs: {step: {slot: page}}\n");
+        let msg = stepper_without_window(&bad).expect("step 没有 window 应当报错");
+        assert!(msg.contains("window"), "错误要说该补什么：{msg}");
+
+        let ok = y("type: tiles\nattrs: {window: {size: 1}, step: {slot: page}}\n");
+        assert!(
+            stepper_without_window(&ok).is_none(),
+            "窗口上的 stepper 成立"
+        );
+
+        // The checks are per node: a sibling's window does not license this node's stepper.
+        let mixed = y("children:\n- type: tiles\n  attrs: {step: {timer: 100}}\n");
+        assert!(stepper_without_window(&mixed).is_some(), "子节点也要查");
+    }
+
+    #[test]
+    fn the_old_stage_key_is_refused_by_name() {
+        let bad = y("type: tiles\nattrs: {stage: one}\n");
+        let msg = retired_stage(&bad).expect("stage 应当报错");
+        assert!(msg.contains("window"), "错误要说新拼法：{msg}");
+
+        // `stage` as a VALUE is not this key: only a tiles node's `attrs.stage` is the old count.
+        let slot = y("type: tiles\nattrs: {}\nsource: {slot: stage}\n");
+        assert!(retired_stage(&slot).is_none(), "`slot: stage` 是值，不是键");
     }
 }
