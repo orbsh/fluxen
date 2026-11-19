@@ -1,6 +1,7 @@
 # 0031 — A value has a slot and a scope; `rack` and `pages` become `tiles`; `float` and `table` are not words
 
-Status: **Proposed** (draft for review — nothing here is implemented)
+Status: **Accepted** (2026-11-19). Implementation proceeds in the order below; the old
+spellings are not kept — nothing is shipped to users yet.
 
 Four questions, one theme: the vocabulary encodes distinctions the framework does not need, so a
 frame author has to know more than the model contains.
