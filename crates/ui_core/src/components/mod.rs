@@ -10,8 +10,6 @@ pub mod dock;
 pub use dock::dock_;
 pub mod grab;
 pub use grab::grab_;
-pub mod float;
-pub use float::float_;
 pub mod layer;
 pub use layer::layer_;
 pub mod fold;

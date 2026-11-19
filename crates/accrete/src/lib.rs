@@ -409,21 +409,6 @@ fn force_graph_style_is_default(style: &ForceGraphStyle) -> bool {
     *style == ForceGraphStyle::default()
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Float {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<PositionAttr>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
 /// How a panel sits on the page — the first of the two axes that used to be three components.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -482,6 +467,10 @@ pub struct PanelAttr {
     /// `viewport` only: the body's width. Absent = whatever the class says.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<String>,
+    /// `viewport` only: where on the page it sits (`right: 1rem, top: 1rem`, …). Absent = the whole
+    /// viewport, with the body centred and a mask behind it. This is what `float` used to be.
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub pos: Option<PositionAttr>,
 }
 
 fn is_default_place(p: &PanelPlace) -> bool {
@@ -540,6 +529,9 @@ pub struct LayerAttr {
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
+    /// 位置：给了就贴在页面的那一角（原来的 `float`），没给就铺满视口居中。
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub pos: Option<PositionAttr>,
     /// dismiss（ADR 0014）：点层自身（模糊区，而非模态内容）清空所绑槽。
     /// 本页瞬时状态：只写 local/data 平面，不上线协议。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1164,7 +1156,6 @@ pub enum Accrete {
     canvas(Canvas),
     #[ui_acrete(has_id = "true")]
     forcegraph(ForceGraph),
-    float(Float),
     /// 内容区：`place` × `state` 两轴四格（ADR 0030）。`fold`/`popup`/`layer` 作为节点类型
     /// 已删除 —— 它们的实现还在 ui_core 里给这里用，但帧里不再能写出来。
     #[ui_acrete(has_id = "true")]

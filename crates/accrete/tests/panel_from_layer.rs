@@ -32,15 +32,17 @@ fn layer_roundtrip() {
 }
 
 #[test]
-fn float_overlay_fields_are_gone() {
-    // 撤掉 overlay/dismiss 后：编码结果里不再出现这两个键（旧帧多带的键被忽略）
-    let f = roundtrip(r#"{"type":"float","attrs":{"overlay":true,"dismiss":true},"children":[]}"#);
-    let v = serde_json::to_value(&f).expect("to_value");
-    let s = v.to_string();
-    assert!(
-        !s.contains("overlay") && !s.contains("dismiss"),
-        "overlay/dismiss 应已从 wire 撤掉，实际编码：{s}"
+fn float_is_not_a_word_any_more() {
+    // `float` 整个删掉了（ADR 0031）：贴角的东西是 panel 的 viewport 那一格 + 位置。
+    let err = serde_json::from_str::<Accrete>(r#"{"type":"float","attrs":{"top":"1rem"}}"#)
+        .expect_err("float 应当解码失败");
+    assert!(err.to_string().contains("unknown variant"), "{err}");
+
+    // 同一个形状换成 panel：位置键被展平进 attrs，不需要额外一层
+    let p = roundtrip(
+        r#"{"type":"panel","attrs":{"place":"viewport","state":"bound","right":"1rem","top":"1rem"},
+            "bind":{"value":{"kind":"source","source":"notice"}},"children":[]}"#,
     );
-    // 纯定位形状照旧
-    roundtrip(r#"{"type":"float","attrs":{"bottom":"0.2rem","left":"1rem"},"children":[]}"#);
+    let back = serde_json::to_value(&p).expect("to_value").to_string();
+    assert!(back.contains("\"right\"") && back.contains("\"top\""), "{back}");
 }

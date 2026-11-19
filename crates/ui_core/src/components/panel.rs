@@ -82,6 +82,7 @@ fn as_layer(p: &Panel, a: &PanelAttr) -> Layer {
         attrs: Some(LayerAttr {
             class: a.class.clone(),
             selector: a.selector.clone(),
+            pos: a.pos.clone(),
             dismiss: a.dismiss,
         }),
         bind: p.bind.clone(),

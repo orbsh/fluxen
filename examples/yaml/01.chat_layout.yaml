@@ -97,8 +97,9 @@ data:
               - border
               - round
               - shadow
-        - type: float
+        - type: panel
           attrs:
+            place: viewport
             bottom: 0.2rem
             left: 1rem
           children:
