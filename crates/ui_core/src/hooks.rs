@@ -3,13 +3,16 @@ use accrete::{Accrete, AccreteOps, Bind, classify::Classify};
 use leptos::prelude::*;
 use serde_json::Value;
 
-/// 追加公共 CSS：非横向的 Box/Case/Tiles/Text/Tab/Select 加 `col`，并扩展 class 列表。
+/// 追加公共 CSS：非横向的 Box/Case/Text/Tab/Select 加 `col`，并扩展 class 列表。
+///
+/// `Tiles` is left out: it names its own direction from `attrs.dir` (ADR 0035), and a second opinion
+/// here would fight it — `dir: row` has to be able to say row, whatever this function would add.
 pub fn use_common_css<'a, 'b: 'a, T>(css: &'a mut Vec<&'b str>, accrete: &'b T)
 where
     T: Classify + AccreteOps,
 {
     let t = accrete.get_type();
-    let mut v = ["Box", "Frame", "Tiles", "Entry", "Text", "Tab", "Select"].contains(&t);
+    let mut v = t != "Tiles" && ["Box", "Frame", "Entry", "Text", "Tab", "Select"].contains(&t);
     if let Some(a) = accrete.borrow_attrs() {
         if a.is_horizontal() {
             v = false;

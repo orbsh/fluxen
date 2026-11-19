@@ -150,3 +150,104 @@ fn a_tile_layout_arrives_as_children() {
     assert_eq!(t.children.as_ref().map(|c| c.len()), Some(1));
     assert!(t.get_id().is_none());
 }
+
+/// ADR 0035: the direction is the way the items flow, spelled as flex spells it — a frame author
+/// reads `row-reverse` and already knows what it means.
+#[test]
+fn the_four_directions_are_wire_words() {
+    for (word, dir) in [
+        ("row", accrete::Dir::Row),
+        ("row-reverse", accrete::Dir::RowReverse),
+        ("col", accrete::Dir::Col),
+        ("col-reverse", accrete::Dir::ColReverse),
+    ] {
+        let t = tiles(&format!(
+            r#"{{"type":"tiles","attrs":{{"dir":"{word}"}},"source":{{"slot":"x"}}}}"#
+        ));
+        assert_eq!(t.attrs.expect("attrs").dir, Some(dir), "dir: {word}");
+    }
+}
+
+/// Absent is `col`, not flex's `row`: `tiles` is a list of items, so an unlabelled `tiles` is a
+/// vertical list — which is also the shape every frame written before the axis existed already had.
+/// Nothing is added to the wire for it — a default that appears is a default that can disagree.
+#[test]
+fn an_absent_direction_is_col_and_stays_off_the_wire() {
+    let n: Accrete =
+        serde_json::from_str(r#"{"type":"tiles","source":{"slot":"chat"}}"#).expect("decode");
+    match &n {
+        Accrete::tiles(t) => {
+            assert_eq!(t.attrs.as_ref().and_then(|a| a.dir), None);
+            // The default the renderer reads when the field is absent.
+            assert_eq!(
+                t.attrs.as_ref().and_then(|a| a.dir).unwrap_or_default(),
+                accrete::Dir::Col,
+                "a tiles with no dir is a vertical list"
+            );
+        }
+        other => panic!("not tiles: {other:?}"),
+    }
+    assert_eq!(
+        serde_json::to_value(&n).expect("encode"),
+        serde_json::json!({"type":"tiles","source":{"slot":"chat"}})
+    );
+}
+
+/// The line axis: `wrap` is absent because a wall of cards is the shape that has no other
+/// spelling; `nowrap` is one word, as CSS writes it.
+#[test]
+fn the_line_axis_has_three_words() {
+    for (word, wrap) in [
+        ("wrap", accrete::Wrap::Wrap),
+        ("wrap-reverse", accrete::Wrap::WrapReverse),
+        ("nowrap", accrete::Wrap::NoWrap),
+    ] {
+        let t = tiles(&format!(
+            r#"{{"type":"tiles","attrs":{{"wrap":"{word}"}},"source":{{"slot":"x"}}}}"#
+        ));
+        assert_eq!(t.attrs.expect("attrs").wrap, Some(wrap), "wrap: {word}");
+    }
+    // `no-wrap` is not a spelling of anything: the word is CSS's.
+    assert!(
+        serde_json::from_str::<Accrete>(r#"{"type":"tiles","attrs":{"wrap":"no-wrap"}}"#).is_err(),
+        "`no-wrap` must not decode"
+    );
+}
+
+/// `layers` counts the lines of header cells along the FIELD axis: 1 or 2, because a third one has
+/// no key to group by. `rows` described where the header sat, which `dir: row` stopped being true.
+#[test]
+fn a_header_has_one_or_two_layers() {
+    let two = tiles(
+        r#"{"type":"tiles","attrs":{"fields":[{"key":"q"}],
+            "header":{"selector":"h","layers":2}},"source":{"slot":"x"}}"#,
+    );
+    assert_eq!(two.attrs.expect("attrs").header.expect("header").layers, 2);
+
+    let one = tiles(
+        r#"{"type":"tiles","attrs":{"fields":[{"key":"q"}],
+            "header":{"selector":"h"}},"source":{"slot":"x"}}"#,
+    );
+    let h = one.attrs.expect("attrs").header.expect("header");
+    assert_eq!(h.layers, 1, "absent layers is one line, not zero");
+    // One layer is the default, so it is not written out.
+    let n: Accrete = serde_json::from_str(
+        r#"{"type":"tiles","attrs":{"fields":[{"key":"q"}],
+            "header":{"selector":"h","layers":1}},"source":{"slot":"x"}}"#,
+    )
+    .expect("decode");
+    assert!(
+        !serde_json::to_string(&n).expect("encode").contains("layers"),
+        "the default must not appear on the wire"
+    );
+
+    // A third layer would render as something nobody chose, so it does not decode.
+    assert!(
+        serde_json::from_str::<Accrete>(
+            r#"{"type":"tiles","attrs":{"fields":[{"key":"q"}],
+                "header":{"selector":"h","layers":3}}}"#
+        )
+        .is_err(),
+        "layers: 3 must not decode"
+    );
+}

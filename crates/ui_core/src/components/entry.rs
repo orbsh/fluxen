@@ -13,7 +13,7 @@ use leptos::html::*;
 use leptos::prelude::*;
 
 pub fn entry_(accrete: Entry, ctx: &Ctx) -> AnyView {
-    let mut css = vec!["entry", "f"];
+    let mut css = vec!["entry", "flex"];
     use_common_css(&mut css, &accrete);
     let children = accrete
         .children

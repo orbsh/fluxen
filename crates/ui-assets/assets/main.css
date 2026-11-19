@@ -1,11 +1,78 @@
-@layer theme, base, layout, element, custom, style;
+@layer tokens, reset, components, utilities, custom;
 
-/* 层序必须先声明、再 import。层序由**首次出现**决定：import 写在前面的话
-   `custom` 会成为第一个（最弱）层，custom.css 里所有与 layout/element/style
-   同属性的声明全部被盖掉（老坑 `.hide` 打不过 `.f` 的根因，见 docs/PLAN.md §19）。 */
+/* 层序必须先声明、再 import：层序由**首次出现**决定，import 写在前面的话 `custom` 会成为
+   第一个（最弱）层，custom.css 里所有与 components/utilities 同属性的声明全部被盖掉（老坑
+   `.hide` 打不过 `.flex` 的根因，见 docs/PLAN.md §19）。五层从弱到强：
+
+     tokens     只声明变量
+     reset      元素归一（html/body/表单/排版）
+     components 结构名词（.flex/.grid/.box/.text/.tiles…）
+     utilities  尺寸（gap- / pad- / text- 三个前缀）、色调（.accent/.tone-clear…）、状态（.is-）
+     custom     页面自己的类（custom.css，以及 prism 的 shell.yaml 那一侧）
+
+   上一层永远打得过下一层，与选择器特异性无关——所以 utilities 不需要 `!important`，也不
+   需要靠堆类名（`.sm.f.gap`）来赢。 */
+
 @import url("custom.css") layer(custom);
 
-@layer theme {
+/* ---- 类型：注册过的自定义属性才会算错就出声 -----------------------------------
+   A custom property nobody registered has the universal syntax `*`: `--depth: hgih` inherits as a
+   string and `calc()` quietly returns nonsense, `--leave-ms: 350` (no unit) never transitions, and
+   nothing says so. Registered, the value is checked at computed-value time and a bad one falls
+   back to the initial value HERE instead of leaking down the tree meaning something else.
+
+   Only SINGLE typed values are registered. Lists are not: `--tile-fields` is a track list
+   (`minmax(0, 1fr) 5rem`) and `--shadow-width` is a shadow-offset list (`2px 2px 0 0`) — no
+   property syntax describes either, and registering one as `<length>` would invalidate every
+   real value it is ever given. `--shadow-color` is left unregistered too: it is consumed by the
+   relative-color function in `.is-shadow` (`oklch(from …)`), not by `calc`.
+
+   `--input-round`'s token is `0.35em`, but an `@property` initial value must be computationally
+   independent — no font-relative units — so its initial is `0px` and the token in `:root` stays
+   the real source (it inherits everywhere, so the initial is only the guard). */
+@property --depth {
+    syntax: "<integer>";
+    inherits: true; /* set on the row, read by its cells */
+    initial-value: 1;
+}
+
+@property --tile-window {
+    syntax: "<integer>";
+    inherits: true;
+    initial-value: 1;
+}
+
+@property --leave-ms {
+    syntax: "<time>";
+    inherits: true;
+    initial-value: 350ms;
+}
+
+@property --tone {
+    syntax: "<color>";
+    inherits: true;
+    initial-value: transparent;
+}
+
+@property --round {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 10px;
+}
+
+@property --input-round {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --border-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 1px;
+}
+
+@layer tokens {
     :root {
         --fg: light-dark(oklch(0.18 0 0), oklch(0.98 0 0));
         --bg: light-dark(oklch(1 0 0), oklch(0.15 0 0));
@@ -28,7 +95,7 @@
     }
 }
 
-@layer base {
+@layer reset {
     html {
         color-scheme: light dark; /* 激活浏览器的 light-dark 支持 */
         height: 100%;
@@ -87,19 +154,17 @@
             font-size: 1.2em;
         }
     }
-
-    .maximize {
-        width: 100vw;
-        height: 100vh;
-    }
 }
 
-@layer layout {
-    .g {
-        display: grid;
-    }
+@layer components {
+    /* ---- 结构：一个维度一个名词 -------------------------------------------------
+       容器只有两个：`.flex` 与 `.grid`。方向由子类说（`col` / `rev` / `inline` /
+       `wrap`），不再用单个字母——`.f` 那种名字谁也读不出是 flex 还是 float。
 
-    .f {
+       `:where()` 把这些默认值压到零特异性：utilities 层和页面 CSS 本来就该赢，不必靠
+       叠类名或 `!important` 去和默认值打架。`.grid` 写在 `.flex` 之后，于是两者同时出现
+       时 grid 赢（`attrs.grid` 自出生起没生效过，根因就是 `.f` 压在 `.g` 上）。 */
+    :where(.flex) {
         display: flex;
         flex: 1 0 auto;
         flex-wrap: nowrap;
@@ -126,6 +191,14 @@
             flex-wrap: wrap;
         }
 
+        /* `tiles` is the only node whose default is wrap (ADR 0035): a wall of cards is the shape
+           and a wall has lines. Reversing the lines is how the fields land on the other side. */
+        &.wrap-reverse {
+            flex-wrap: wrap-reverse;
+        }
+
+        /* The default gap stays on the flex container it always applied to; the steps themselves
+           are `gap-*` in the utilities layer, where the token names the property. */
         &.gap {
             gap: 1em;
         }
@@ -141,14 +214,18 @@
         }
     }
 
-    .f,
-    .g {
-        .f {
+    :where(.grid) {
+        display: grid;
+    }
+
+    :where(.flex),
+    :where(.grid) {
+        .flex {
             --start: flex-start;
             --end: flex-end;
         }
 
-        .g {
+        .grid {
             --start: start;
             --end: end;
         }
@@ -166,7 +243,7 @@
         }
 
         &.jc-stretch {
-            /* g */
+            /* grid */
             justify-content: stretch;
         }
 
@@ -179,7 +256,7 @@
         }
 
         &.jc-s-evently {
-            /* g */
+            /* grid */
             justify-content: space-evenly;
         }
 
@@ -208,7 +285,7 @@
         }
 
         &.ac-s-evently {
-            /* g */
+            /* grid */
             align-content: space-evenly;
         }
 
@@ -229,33 +306,33 @@
         }
 
         &.ai-baseline {
-            /* f */
+            /* flex */
             align-items: baseline;
         }
 
         &.ji-start {
-            /* g */
+            /* grid */
             justify-items: var(--start);
         }
 
         &.ji-end {
-            /* g */
+            /* grid */
             justify-items: var(--end);
         }
 
         &.ji-center {
-            /* g */
+            /* grid */
             justify-items: center;
         }
 
         &.ji-stretch {
-            /* g */
+            /* grid */
             justify-items: stretch;
         }
 
         &.as-auto,
         & > ._as-auto {
-            /* f */
+            /* flex */
             align-self: auto;
         }
 
@@ -281,36 +358,36 @@
 
         &.as-baseline,
         & > ._as-baseline {
-            /* f */
+            /* flex */
             align-self: baseline;
         }
 
         &.js-start,
         & > ._js-start {
-            /* g */
+            /* grid */
             justify-self: var(--start);
         }
 
         &.js-end,
         & > ._js-end {
-            /* g */
+            /* grid */
             justify-self: var(--end);
         }
 
         &.js-center,
         & > ._js-center {
-            /* g */
+            /* grid */
             justify-self: center;
         }
 
         &.js-stretch,
         & > ._js-stretch {
-            /* g */
+            /* grid */
             justify-self: stretch;
         }
     }
 
-    .overlay {
+    :where(.overlay) {
         position: absolute;
         width: 100%;
         opacity: 1;
@@ -318,15 +395,20 @@
         align-self: center;
     }
 
-    .abs {
+    :where(.absolute) {
         position: absolute;
     }
 
-    .scrollx {
+    :where(.maximize) {
+        width: 100vw;
+        height: 100vh;
+    }
+
+    :where(.scrollx) {
         overflow-x: auto;
         overflow-y: hidden;
         flex: 1 1 0;
-        -webkit-overflow-scrolli: ng touch;
+        -webkit-overflow-scrolling: touch;
 
         &::-webkit-scrollbar {
             width: 4px;
@@ -339,11 +421,11 @@
         }
     }
 
-    .scrolly {
+    :where(.scrolly) {
         overflow-x: hidden;
         overflow-y: auto;
         flex: 1 1 0;
-        -webkit-overflow-scrolli: ng touch;
+        -webkit-overflow-scrolling: touch;
 
         &::-webkit-scrollbar {
             width: 4px;
@@ -357,8 +439,8 @@
     }
 }
 
-@layer element {
-    .txt {
+@layer components {
+    :where(.text) {
         line-height: 1.5;
         color: var(--fg);
         word-break: break-all;
@@ -368,8 +450,8 @@
         }
     }
 
-    .__box > *,
-    .box {
+    :where(.__box) > *,
+    :where(.box) {
         padding: 0.5rem;
         color: var(--fg);
         background-color: var(--bg);
@@ -381,17 +463,17 @@
 
     /* The forcegraph is the panel: canvas geometry (fit, picking, labels) is
        measured against this box, so any padding here is inset canvas. */
-    .box.fg-host {
+    :where(.box).fg-host {
         padding: 0;
     }
 
-    .__circle > *,
-    .circle {
+    :where(.__circle) > *,
+    :where(.circle) {
         aspect-ratio: 1 / 1;
         border-radius: 50%;
     }
 
-    .select {
+    :where(.select) {
         & > * > * {
             cursor: pointer;
             transition: all 0.3s ease-in-out 0s;
@@ -406,31 +488,138 @@
         }
     }
 
-    .float {
-        position: absolute;
-    }
-
-    /* `tiles` (ADR 0031 §4): one container for a slot's items. What the blocks look like is CSS on
-       the container — a column of them is a list, a row of them is a strip. What is written here is
-       only how "one at a time" is drawn. */
+    /* `tiles` (ADR 0031 §4): one container for a slot's items. `dir` says which way the ITEMS flow,
+       in flex's sense (ADR 0035): `dir-col` is the default vertical list, `dir-row` a strip or card
+       wall. The class named for the axis IS the axis — it becomes `flex-direction` here, and the
+       generic `col` / `rev` pair `.flex` reads is deliberately not emitted, because two statements
+       of one axis can disagree. Otherwise what is written here is only how "one at a time" is drawn. */
     .tiles {
         /* The number this file was written with; there is no field that changes it now, so it is
            the fallback every frame gets. */
         --leave-ms: 350ms;
+
+        &.dir-row {
+            flex-direction: row;
+        }
+
+        &.dir-row-reverse {
+            flex-direction: row-reverse;
+        }
+
+        &.dir-col {
+            flex-direction: column;
+        }
+
+        &.dir-col-reverse {
+            flex-direction: column-reverse;
+        }
     }
 
     /* A grid: `fields` present means every item is an entry and every field projects one value
-       into a cell (ADR 0031 §4). Each row is its own grid reading ONE track list, so a row can be
-       styled — bordered, hovered, indented — where `display: contents` would have eaten it. */
-    .tiles.cols {
-        --tile-cols: minmax(0, 1fr);
+       into a cell (ADR 0031 §4). The CONTAINER is the grid; an entry is a grid item that borrows
+       the container's tracks with `grid-template-columns: subgrid` (`dir: col*` — the fields sit
+       on the column axis) or `grid-template-rows: subgrid` (`dir: row*` — the fields sit on the
+       row axis). One track list, declared once: `auto` and `max-content` widths then line up
+       across every entry too, where a per-entry grid only agreed because `minmax(0, 1fr)` divided
+       the same width N ways. A field's `width` is a container-level fact from here on, not a
+       number every entry is told again.
 
+       Entries stay real elements — bordered, hovered, indented. That is why `display: contents`
+       was refused, and subgrid lends the tracks without dissolving the box.
+
+       The fields sit ACROSS the item flow (ADR 0035), so `dir` decides which axis is subgridded:
+       `dir: col*` — the default — flows the items down and reads the fields as each entry's
+       COLUMN tracks: a row of cells, the header above it, the table. `dir: row*` flows the items
+       across and reads them as the entry's ROW tracks: one column of cells per entry, the header
+       beside it. One track list, one block: the axis is a value, not two copies of a grid. */
+    .tiles.cols {
+        /* `--tile-fields` is the track list the frame wrote, one per field; the other three say
+           how it is read. `--tile-columns` / `--tile-rows` are the container's track lists, and
+           `--tile-flow` is the axis the CELLS flow on inside one entry — the CROSS axis of `dir`,
+           which is why its word is the opposite one.
+
+           `--tile-fields` is a track LIST, not a typed value, so it is deliberately NOT
+           registered with `@property`: one type cannot hold `minmax(0, 1fr) 5rem auto`, and a
+           registration would make every real list invalid at computed-value time — the grid would
+           silently collapse to a single track instead of failing loudly. */
+        --tile-fields: minmax(0, 1fr);
+        --tile-flow: row;
+        --tile-columns: var(--tile-fields);
+        --tile-rows: none;
+
+        /* The container is the grid the header and every entry read. Its gap on the TRACK axis is
+           the field spacing an entry used to declare for itself; the flow axis keeps whatever gap
+           the page asked for (`gap-*`), because there it is the space BETWEEN entries. */
+        display: grid;
+        grid-template-columns: var(--tile-columns);
+        grid-template-rows: var(--tile-rows);
+        grid-auto-flow: row;
+        column-gap: 0.5em;
+
+        /* One rule for the header and for every entry: span the field tracks and re-use them.
+           `align-items` and `min-width` stay the entry's own — a long value wraps inside the track
+           the container sized, it does not widen it. */
         & > .tiles-head,
         & > .tiles-row {
             display: grid;
-            grid-template-columns: var(--tile-cols);
+            grid-auto-flow: var(--tile-flow);
+            grid-template-columns: subgrid;
+            grid-column: 1 / -1;
             align-items: center;
-            column-gap: 0.5em;
+            min-width: 0;
+        }
+
+        /* A two-layer header stacks its layers as ROWS of its own (the row axis is not subgridded
+           here), so the head's row gap is what separates the group line from the leaf line. */
+        & > .tiles-head {
+            row-gap: 0.5em;
+        }
+
+        /* `dir: row*`: the fields are the container's ROW tracks and an entry is one of the
+           columns, so the same two lines swap axes. */
+        &.dir-row,
+        &.dir-row-reverse {
+            --tile-flow: column;
+            --tile-columns: none;
+            --tile-rows: var(--tile-fields);
+
+            /* Entries are the columns now: one implicit column each, sharing the width the way
+               `flex: 1 1 0` made them, and the rows inside one are the container's field tracks. */
+            grid-auto-flow: column;
+            grid-auto-columns: minmax(0, 1fr);
+            column-gap: 0;
+            row-gap: 0.5em;
+
+            & > .tiles-head,
+            & > .tiles-row {
+                grid-template-columns: none;
+                grid-template-rows: subgrid;
+                grid-column: auto;
+                grid-row: 1 / -1;
+                row-gap: 0;
+            }
+
+            /* ...and the head's two layers are COLUMNS of its own, so its column gap is what
+               separates them. */
+            & > .tiles-head {
+                column-gap: 0.5em;
+            }
+        }
+
+        /* Where the fields land. The header is one line of cells at the start of the item flow:
+           above the entries when they flow down (`dir-col*`), to their left when they flow across
+           (`dir-row*`). `wrap-reverse` puts it at the end — underneath, or to the right. In a flex
+           container both are the same switch, so this is one rule. */
+        &.wrap-reverse > .tiles-head {
+            order: 1;
+        }
+
+        /* A reversed direction reverses the ENTRIES; the header's side is `wrap-reverse`'s
+           business. Laying the header out last and letting the reversed container put it back at
+           the start keeps the two switches from moving each other. */
+        &.dir-row-reverse > .tiles-head,
+        &.dir-col-reverse > .tiles-head {
+            order: 1;
         }
 
         & > .tiles-head > .tiles-hcell {
@@ -439,11 +628,24 @@
             border-bottom: 0.1em solid var(--fg);
         }
 
-        /* The group row of a two-row header: the cell covers the columns under it (the renderer
+        /* The group layer of a two-layer header: the cell covers the fields under it (the renderer
            counts them off the keys), and the line it draws is lighter than the header's own. */
         & > .tiles-head > .tiles-hcell.group {
             border-bottom: 0.05em solid var(--secondary);
             font-weight: 600;
+        }
+
+        /* `dir: row*` — the items flow across, so the header is a column beside them and its rule
+           faces them: on the right, not underneath. */
+        &.dir-row > .tiles-head > .tiles-hcell,
+        &.dir-row-reverse > .tiles-head > .tiles-hcell {
+            border-bottom: none;
+            border-right: 0.1em solid var(--fg);
+        }
+
+        &.dir-row > .tiles-head > .tiles-hcell.group,
+        &.dir-row-reverse > .tiles-head > .tiles-hcell.group {
+            border-right: 0.05em solid var(--secondary);
         }
 
         & > .tiles-row > .tiles-cell {
@@ -454,7 +656,7 @@
             border-bottom: 0.05em solid var(--secondary);
         }
 
-        /* A child row is one step down per level: the indent is the whole of "grouped", and the
+        /* A child entry is one step down per level: the indent is the whole of "grouped", and the
            depth arrives as a custom property from the renderer's recursion. */
         & > .tiles-row.tiles-child > .tiles-cell:first-child {
             padding-left: calc(var(--depth, 1) * 1.25em);
@@ -495,6 +697,42 @@
                 opacity: 1;
                 pointer-events: auto;
             }
+        }
+    }
+
+    /* Arrival (进场). A newly inserted item fades in and rises a little — no frame field, no JS, no
+       class to remember: `@starting-style` is the browser's own "the style this element had before
+       it existed", so the transition runs exactly once, when the node is inserted.
+
+       The frame does NOT describe this. `tiles` says which items exist and in what order, never how
+       they appear: arrival is this stylesheet's opinion about the vocabulary, not a property of it
+       (the same split as `--depth`: what a level looks like is CSS). A node that survives a
+       re-render keeps its style and does not re-run the starting style — only a new node starts
+       from it, which is exactly "the item that just arrived". */
+    .tiles > * {
+        opacity: 1;
+        translate: 0 0;
+        transition:
+            opacity 180ms ease,
+            translate 180ms ease;
+    }
+
+    @starting-style {
+        .tiles > * {
+            opacity: 0;
+            translate: 0 0.35em;
+        }
+    }
+
+    /* Motion is an opinion; `prefers-reduced-motion: reduce` is the reader's. Both the arrival
+       above and the fade `--leave-ms` drives stop here, and only the time between the two states
+       goes — the same elements still end up opaque or clear. (The `.rot` rule states its own
+       transition, hence naming it again; a more specific selector would not be enough, the
+       transition has to be taken away from the element that declares it.) */
+    @media (prefers-reduced-motion: reduce) {
+        .tiles > *,
+        .tiles.rot > .slide {
+            transition: none;
         }
     }
 
@@ -562,230 +800,165 @@
     }
 }
 
-@layer style {
-    .accent {
-        &.txt {
-            color: var(--accent);
+@layer utilities {
+    /* ---- 尺寸：一个维度一个前缀 -------------------------------------------------
+       `gap-*` 只管 gap，`pad-*` 只管 padding，`text-*` 只管 font-size。原来一个 `.md`
+       同时意味着这三件事，而且还要搭配 `flex` / `gap` / `box` 才生效，谁也说不清自己在量
+       什么。`pad-wide` 接 `.wd` 的班：它量的是横向留白（1em 4em），不是刻度上的下一级，
+       所以不叫 `pad-lg`。 */
+    .gap-sm {
+        gap: 0.2rem;
+    }
+
+    .gap-md {
+        gap: 0.4rem;
+    }
+
+    .gap-lg {
+        gap: 0.8rem;
+    }
+
+    .gap-xl {
+        gap: 1rem;
+    }
+
+    .gap-xxl {
+        gap: 2rem;
+    }
+
+    .pad-sm {
+        padding: 0.1rem;
+    }
+
+    .pad-md {
+        padding: 0.3rem;
+    }
+
+    .pad-wide {
+        padding: 1em 4em 1em 4em;
+    }
+
+    .text-sm {
+        font-size: 0.6rem;
+    }
+
+    .text-md {
+        font-size: 0.8rem;
+    }
+
+    .text-lg {
+        font-size: 1.6rem;
+    }
+
+    .text-xl {
+        font-size: 2rem;
+    }
+
+    .text-xxl {
+        font-size: 4rem;
+    }
+
+    /* ---- 归零：把节点已经带着的那个尺寸维度清零，不是颜色 -----------------------
+       这一组原来和下面"把颜色清成前景色"的色调维度共用一个词：一个名字两个意思，尺寸归零
+       会撞上颜色。色调那一组现在叫 `.tone-clear`。 */
+    .reset.box {
+        padding: 0;
+    }
+
+    .reset.text {
+        font-size: 1rem;
+    }
+
+    .reset.gap {
+        gap: 0;
+    }
+
+    /* ---- 色调：颜色角色，是变体不是状态 -----------------------------------------
+       `accent` / `primary` / `secondary` / `warn` / `error` / `tone-clear` 是色板上的角色
+       （`--accent` 这些变量），一个节点"是什么颜色"，不是"处于什么状态"，所以保留词形；
+       `is-disabled` 既是状态又是角色，跟着状态那一栏走 `is-` 前缀。角色后面接的
+       `.text` / `.is-border` / `.is-shadow` / `.is-highlight` 说的都是"把颜色涂到哪儿"。
+
+       七个角色只差一个变量，所以每个只声明 `--tone`，剩下的规则写在下面一次：一处说"节点是
+       什么颜色"，一处说"颜色涂到哪儿"，两件事不再各抄七遍。`--tone` 是注册过的 `<color>`
+       （文件顶部），拼错的值不会安静地变成一条没颜色的阴影。
+
+       角色后面那三条属性仍然读同一个 token；只有悬停底色是派生的——`color-mix(in oklch, …)`
+       把 token 洗成 25% 的一层。混合的对色是 `transparent`，不是 `--bg`：oklch 里插值会把
+       无彩色对色的色相当成 0 一起平均，实测 accent（182.49°）混白得到的是 45.6° 的粉调；
+       而对色透明时预乘插值不给任何分量，洗完仍是本角色的色相（`oklch(0.7 0.12 182.49 / 0.25)`），
+       落在哪个背景上就跟着哪个背景走。角色自己的颜色因此只有一个来源。 */
+    .accent,
+    .primary,
+    .secondary,
+    .is-disabled,
+    .warn,
+    .error,
+    .tone-clear {
+        &.text {
+            color: var(--tone);
         }
 
-        &.border {
-            --border-color: var(--accent);
+        &.is-border {
+            --border-color: var(--tone);
         }
 
-        &.shadow {
-            --shadow-color: var(--accent);
+        &.is-shadow {
+            --shadow-color: var(--tone);
         }
 
-        &.highlight {
+        &.is-highlight {
             &:hover {
-                background-color: var(--accent);
+                background-color: color-mix(in oklch, var(--tone) 25%, transparent);
             }
         }
+    }
+
+    /* 每个角色只有这一行是它自己的：色板上的哪个变量。 */
+    .accent {
+        --tone: var(--accent);
     }
 
     .primary {
-        &.txt {
-            color: var(--primary);
-        }
-
-        &.border {
-            --border-color: var(--primary);
-        }
-
-        &.shadow {
-            --shadow-color: var(--primary);
-        }
-
-        &.highlight {
-            &:hover {
-                background-color: var(--primary);
-            }
-        }
+        --tone: var(--primary);
     }
 
     .secondary {
-        &.txt {
-            color: var(--secondary);
-        }
-
-        &.border {
-            --border-color: var(--secondary);
-        }
-
-        &.shadow {
-            --shadow-color: var(--secondary);
-        }
-
-        &.highlight {
-            &:hover {
-                background-color: var(--secondary);
-            }
-        }
+        --tone: var(--secondary);
     }
 
-    .disabled {
-        &.txt {
-            color: var(--disabled);
-        }
-
-        &.border {
-            --border-color: var(--disabled);
-        }
-
-        &.shadow {
-            --shadow-color: var(--disabled);
-        }
-
-        &.highlight {
-            &:hover {
-                background-color: var(--disabled);
-            }
-        }
+    .is-disabled {
+        --tone: var(--disabled);
     }
 
     .warn {
-        &.txt {
-            color: var(--warn);
-        }
-
-        &.border {
-            --border-color: var(--warn);
-        }
-
-        &.shadow {
-            --shadow-color: var(--warn);
-        }
-
-        &.highlight {
-            &:hover {
-                background-color: var(--warn);
-            }
-        }
+        --tone: var(--warn);
     }
 
     .error {
-        &.txt {
-            color: var(--error);
-        }
-
-        &.border {
-            --border-color: var(--error);
-        }
-
-        &.shadow {
-            --shadow-color: var(--error);
-        }
-
-        &.highlight {
-            &:hover {
-                background-color: var(--error);
-            }
-        }
+        --tone: var(--error);
     }
 
-    .clear {
-        &.txt {
-            color: var(--fg);
-        }
-
-        &.border {
-            --border-color: var(--fg);
-        }
-
-        &.shadow {
-            --shadow-color: var(--fg);
-        }
-
-        &.highlight {
-            &:hover {
-                background-color: var(--fg);
-            }
-        }
+    /* 前景色这个角色：`clear` 说的是"清成前景色"，它只改颜色，和上面那组归零无关。 */
+    .tone-clear {
+        --tone: var(--fg);
     }
 
-    .wd {
-        &.box {
-            padding: 1em 4em 1em 4em;
-        }
-    }
+    /* ---- 状态与效果：`.is-*` 只描述节点此刻是什么样子，永远不是结构 --------------
+       结构那一栏只留名词（`.flex` / `.box` / `.absolute`），所以看到 `.is-*` 就知道它
+       不会改布局：`is-disabled` / `is-highlight` 是状态，`is-border` / `is-shadow` /
+        `is-glass` / `is-pointer` / `is-ease` / `is-filter-gray` / `is-fade-in-and-out`
+       是效果（画一条边、投一层影、动一次、指一指）。
 
-    .sm {
-        &.txt {
-            font-size: 0.6rem;
-        }
-
-        &.box {
-            padding: 0.1rem;
-        }
-
-        &.f.gap {
-            gap: 0.2rem;
-        }
-    }
-
-    .md {
-        &.txt {
-            font-size: 0.8rem;
-        }
-
-        &.box {
-            padding: 0.3rem;
-        }
-
-        &.f.gap {
-            gap: 0.4rem;
-        }
-    }
-
-    .lg {
-        &.txt {
-            font-size: 1.6rem;
-        }
-
-        &.f.gap {
-            gap: 0.8rem;
-        }
-    }
-
-    .xl {
-        &.txt {
-            font-size: 2rem;
-        }
-
-        &.f.gap {
-            gap: 1rem;
-        }
-    }
-
-    .xxl {
-        &.txt {
-            font-size: 4rem;
-        }
-
-        &.f.gap {
-            gap: 2rem;
-        }
-    }
-
-    .clear {
-        &.box {
-            padding: 0;
-        }
-
-        &.txt {
-            font-size: 1rem;
-        }
-
-        &.f.gap {
-            gap: 0;
-        }
-    }
-
-    .pointer {
+       留在词形里的是**只在基类旁边才有意义**的修饰：`.round`（`.is-border.round`）、
+       `.bold`（`.text.bold`）、`.col` / `.rev` / `.wrap` / `.inline`（`.flex` 的轴）、
+       `.selected` / `.active` / `.off`（组件内部态）。它们单独写出来什么也不做，所以
+       不占顶层的名字。 */
+    .is-pointer {
         cursor: pointer;
     }
 
-    .border {
+    .is-border {
         border: var(--border);
 
         &.round {
@@ -794,13 +967,13 @@
         }
     }
 
-    .highlight {
+    .is-highlight {
         &:hover {
             background-color: var(--bg);
         }
     }
 
-    .shadow {
+    .is-shadow {
         --csstools-color-scheme--light: initial;
         --shadow-color: var(--disabled);
         --shadow-color-calc: oklch(
@@ -817,19 +990,31 @@
         }
     }
 
-    .ease {
+    /* Buttons throw their shadow the other way: 4px at rest, 2px under the pointer — the inverse
+       of the rule above. It has to live in THIS layer: as a components-layer rule it lost to
+       `.is-shadow` for the only reason layers have, not specificity, so it never applied once.
+       Same layer, higher specificity (`.button.is-shadow` over `.is-shadow`), so it now does. */
+    .button.is-shadow {
+        --shadow-width: 4px 4px 0px 0px;
+
+        &:hover {
+            --shadow-width: 2px 2px 0px 0px;
+        }
+    }
+
+    .is-ease {
         transition: all 1s ease;
     }
 
-    .filter-gray {
+    .is-filter-gray {
         filter: grayscale(100%);
         filter: #808080;
     }
 
-    .glass {
+    .is-glass {
         backdrop-filter: blur(10px);
 
-        &.shadow {
+        &.is-shadow {
             box-shadow:
         /* Bottom and right depth effect */
                 inset -0.75px -0.5px oklch(1 0 0 / 0.1),
@@ -853,7 +1038,7 @@
         }
     }
 
-    .fade-in-and-out {
+    .is-fade-in-and-out {
         & > * {
             animation-name: fadeInThenOut;
             animation-duration: 0.6s;
@@ -864,7 +1049,7 @@
     }
 }
 
-@layer base {
+@layer reset {
     blockquote,
     pre {
         margin-left: 0;
@@ -1006,16 +1191,6 @@
         display: block;
         font-weight: bold;
         margin-bottom: 0.4rem;
-    }
-
-    .button {
-        &.shadow {
-            --shadow-width: 4px 4px 0px 0px;
-
-            &:hover {
-                --shadow-width: 2px 2px 0px 0px;
-            }
-        }
     }
 
     button,

@@ -1,0 +1,163 @@
+# Two axes, four directions (ADR 0035), with flex's meaning: `dir` names the way the ITEMS flow —
+# `row` left to right, `row-reverse` right to left, `col` top to bottom, `col-reverse` bottom to top.
+# `col` is the default, because `tiles` is a list of items and a list is vertical.
+#
+# The fields sit ACROSS the item flow: with `dir: col*` the items flow down and the track list is each
+# entry's COLUMN list — a row of cells, the header above it, the table. With `dir: row*` the items
+# flow across and the list is the entry's ROW list — one column of cells per entry, the header beside it.
+# The window/step keys are untouched: a window still selects ENTRIES, whichever way they flow.
+# `create` writes the layout root (slot ""); the rest of the file only feeds its slots.
+- action: create
+  slot: ""
+  data:
+    type: frame
+    attrs:
+      class: [box, gap, scrolly]
+    children:
+    # ---- 1. col (the default): items flow down, fields across, header on top — the table ----
+    - type: text
+      attrs: {class: [bold]}
+      source: {default: 'dir: col — items down, header row on top'}
+    - type: tiles
+      attrs:
+        class: [--dir-table]
+        dir: col
+        fields:
+        - {key: name, title: Name}
+        - {key: qty, title: Qty, width: 4rem, align: end}
+        header: {selector: --dir-table-head}
+      source: {slot: dir-table}
+
+    # ---- 2. col-reverse: the same vertical list, run back up the screen (newest first) ----
+    - type: text
+      attrs: {class: [bold]}
+      source: {default: 'dir: col-reverse — a vertical list, newest first'}
+    - type: tiles
+      attrs:
+        class: [--dir-list]
+        dir: col-reverse
+        wrap: nowrap
+      source: {slot: dir-list}
+
+    # ---- 3. row: items flow across, fields down each entry, header column on the left. Two layers
+    # become two header COLUMNS (group, then leaf), because a layer is a line along the field axis ----
+    - type: text
+      attrs: {class: [bold]}
+      source: {default: 'dir: row — items across, header column on the left'}
+    - type: tiles
+      attrs:
+        class: [--dir-wall]
+        dir: row
+        fields:
+        - {key: name, title: Name}
+        - {key: price/retail, title: Retail}
+        - {key: price/list, title: List}
+        header: {selector: --dir-wall-head, layers: 2}
+      source: {slot: dir-wall}
+
+    # ---- 4. row-reverse: the strip read right to left. `wrap-reverse` has no fields to move here, so
+    # it is a silent no-op (ADR 0035): the line axis is only visible when lines actually wrap ----
+    - type: text
+      attrs: {class: [bold]}
+      source: {default: 'dir: row-reverse — a horizontal strip, last item first'}
+    - type: tiles
+      attrs:
+        class: [--dir-strip]
+        dir: row-reverse
+        wrap: wrap-reverse
+      source: {slot: dir-strip}
+
+# ---- 1. two entries for the table; the selector names the field each child projects ----
+- action: append
+  slot: dir-table
+  data:
+    type: entry
+    id: row-a
+    children:
+    - type: text
+      attrs: {selector: name}
+      source: {default: apples}
+    - type: text
+      attrs: {selector: qty}
+      source: {default: '3'}
+- action: append
+  slot: dir-table
+  data:
+    type: entry
+    id: row-b
+    children:
+    - type: text
+      attrs: {selector: name}
+      source: {default: pears}
+    - type: text
+      attrs: {selector: qty}
+      source: {default: '12'}
+
+# ---- 2. a plain vertical list: no fields, no header, one node per item ----
+- action: append
+  slot: dir-list
+  data: {type: text, attrs: {class: [box]}, source: {default: '1 · oldest'}}
+- action: append
+  slot: dir-list
+  data: {type: text, attrs: {class: [box]}, source: {default: '2 · middle'}}
+- action: append
+  slot: dir-list
+  data: {type: text, attrs: {class: [box]}, source: {default: '3 · newest'}}
+
+# ---- 3. entries for the wall: one column of cells each ----
+- action: append
+  slot: dir-wall
+  data:
+    type: entry
+    id: col-a
+    children:
+    - type: text
+      attrs: {selector: name}
+      source: {default: apples}
+    - type: text
+      attrs: {selector: price/retail}
+      source: {default: 2.25}
+    - type: text
+      attrs: {selector: price/list}
+      source: {default: 3.10}
+- action: append
+  slot: dir-wall
+  data:
+    type: entry
+    id: col-b
+    children:
+    - type: text
+      attrs: {selector: name}
+      source: {default: pears}
+    - type: text
+      attrs: {selector: price/retail}
+      source: {default: 1.90}
+    - type: text
+      attrs: {selector: price/list}
+      source: {default: 2.40}
+- action: append
+  slot: dir-wall
+  data:
+    type: entry
+    id: col-c
+    children:
+    - type: text
+      attrs: {selector: name}
+      source: {default: plums}
+    - type: text
+      attrs: {selector: price/retail}
+      source: {default: 0.75}
+    - type: text
+      attrs: {selector: price/list}
+      source: {default: 1.20}
+
+# ---- 4. three blocks side by side, read right to left ----
+- action: append
+  slot: dir-strip
+  data: {type: text, attrs: {class: [box]}, source: {default: 'first'}}
+- action: append
+  slot: dir-strip
+  data: {type: text, attrs: {class: [box]}, source: {default: 'second'}}
+- action: append
+  slot: dir-strip
+  data: {type: text, attrs: {class: [box]}, source: {default: 'third'}}

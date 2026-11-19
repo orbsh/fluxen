@@ -163,7 +163,7 @@ pub fn impl_accrete_wrap_variant(ast: &DeriveInput) -> syn::Result<TokenStream2>
             };
             if let Some(ty) = ty {
                 r.push(quote! {
-                    impl Wrap for #ty {
+                    impl WrapOps for #ty {
                         type Target = #name;
                         fn wrap(self) -> Self::Target {
                             Self::Target::#v(self)

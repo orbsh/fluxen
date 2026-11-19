@@ -8,17 +8,17 @@
     id: s1
     attrs:
       class:
-      - f
+      - flex
       - col
       - gap
       - xxx
-      - md
+      - gap-md
     children:
     - type: text
       attrs:
         format: md
         class:
-        - clear
+        - tone-clear
       source:
         default: ""
 - action: patch

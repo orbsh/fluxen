@@ -115,7 +115,7 @@ fn on_key(
 pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let node_id = node_id(&accrete);
-    let mut css = vec!["input", "f", "shadow"];
+    let mut css = vec!["input", "flex", "is-shadow"];
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 

@@ -19,7 +19,7 @@
         class:
         - --tabs
         - nogrow
-        - shadow
+        - is-shadow
         horizontal: true
       children:
       - type: select

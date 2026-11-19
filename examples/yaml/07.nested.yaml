@@ -13,8 +13,8 @@
       - {key: item/lines, title: Lines}
       - {key: qty, title: Qty, width: 5rem, align: end}
       - {key: amount, title: Amount, width: 7rem, align: end}
-      # Two rows: `order/no` groups under `order`, `item/lines` under `item` - the key is the path.
-      header: {selector: --orders-head, rows: 2}
+      # Two layers: `order/no` groups under `order`, `item/lines` under `item` - the key is the path.
+      header: {selector: --orders-head, layers: 2}
     source: {slot: orders}
 # ---- one order per entry; its `item/lines` field holds the line entries ----
 - action: append

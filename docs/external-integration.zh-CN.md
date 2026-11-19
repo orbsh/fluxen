@@ -121,7 +121,7 @@ data: { type: text, bind: { value: { kind: default, default: "hello" } } }
   bind: { value: { kind: source, source: chat } }
   item:
   - type: frame
-    attrs: { class: [as-stretch, box, border, round] }
+    attrs: { class: [as-stretch, box, is-border, round] }
 ```
 此后每次 `append { slot: chat, data: { id: m42, ... } }` 加一行，按 `data.id` 认身份，所以追加
 不会重建它上面的行。

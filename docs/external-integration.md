@@ -138,7 +138,7 @@ data: { type: text, bind: { value: { kind: default, default: "hello" } } }
   bind: { value: { kind: source, source: chat } }
   item:
   - type: frame
-    attrs: { class: [as-stretch, box, border, round] }
+    attrs: { class: [as-stretch, box, is-border, round] }
 ```
 and each `append { slot: chat, data: { id: m42, ... } }` adds one row, keyed by `data.id`, so
 appending does not remount the rows above it.

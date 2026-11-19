@@ -30,7 +30,7 @@
         class:
         - --body
         - shrink
-        - border
+        - is-border
         - round
         horizontal: true
       children:

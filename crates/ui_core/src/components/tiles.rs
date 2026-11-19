@@ -14,7 +14,7 @@ use crate::Ctx;
 use crate::ctx::render_accrete;
 use crate::hooks::{self, use_common_css, use_source_id};
 use accrete::classify::Classify;
-use accrete::{Accrete, AccreteOps, Align, Bind, Field, Header, Scope, Step, Tiles};
+use accrete::{Accrete, AccreteOps, Align, Bind, Dir, Field, Header, Scope, Step, Tiles, Wrap};
 use leptos::html::*;
 use leptos::leptos_dom::helpers::set_interval_with_handle;
 use leptos::prelude::*;
@@ -247,18 +247,51 @@ fn entry_rows(
     rows
 }
 
-/// The header: one row of cells when `rows` is 1, a group row over a leaf row when it is 2. Every
-/// cell carries `header.selector` — that is the whole mechanism, since a header cell is not an
+/// The direction as classes (ADR 0035). `dir-*` names the way the ITEMS flow — `dir-col` is the
+/// default vertical list, `dir-row` a strip or card wall — and the `.tiles` block reads the same
+/// class for `flex-direction`, so the class IS the axis instead of one of two opinions about it.
+/// (`col` / `rev` from `.f` would be the second opinion, and `use_common_css` already leaves
+/// `tiles` alone so `dir` can be the only answer.) `wrap` / `wrap-reverse` are the line axis;
+/// `nowrap` is flex's own default, so it adds nothing.
+fn axis_classes(dir: Dir, wrap: Wrap) -> Vec<&'static str> {
+    let mut css = vec![match dir {
+        Dir::Row => "dir-row",
+        Dir::RowReverse => "dir-row-reverse",
+        Dir::Col => "dir-col",
+        Dir::ColReverse => "dir-col-reverse",
+    }];
+    match wrap {
+        Wrap::Wrap => css.push("wrap"),
+        Wrap::WrapReverse => css.push("wrap-reverse"),
+        Wrap::NoWrap => {}
+    }
+    css
+}
+
+/// The header: one layer of cells when `layers` is 1, a group layer over a leaf layer when it is 2.
+/// Every cell carries `header.selector` — that is the whole mechanism, since a header cell is not an
 /// element a frame can name (ADR 0031 §4).
-fn head_view(header: &Header, fields: &[Field]) -> AnyView {
+///
+/// A layer is a line along the FIELD axis, so the group layer's spans and the leaf layer's
+/// placement follow `dir` (ADR 0035): with `dir: row*` the items flow across the area, the fields
+/// run DOWN the grid's row axis, and the header's layers are columns; with `dir: col*` the items
+/// flow down, the fields run along the grid's column axis, and the layers are rows. The leaf layer
+/// is placed rather than auto-flowed so the groups cannot push it into an implicit track of its own.
+fn head_view(header: &Header, fields: &[Field], dir: Dir) -> AnyView {
+    // The fields sit on the grid's row axis when the items flow on the horizontal one.
+    let field_rows = matches!(dir, Dir::Row | Dir::RowReverse);
     let mut cells: Vec<AnyView> = Vec::new();
-    if header.rows >= 2 {
+    if header.layers >= 2 {
         for (group, span) in head_groups(fields) {
             // A group covering several fields is one cell that covers them: the grid placement is
             // the renderer expressing the hierarchy the keys already have, not a span the frame can
             // ask for.
             let style = if span > 1 {
-                format!("grid-column: span {span};")
+                if field_rows {
+                    format!("grid-row: span {span};")
+                } else {
+                    format!("grid-column: span {span};")
+                }
             } else {
                 String::new()
             };
@@ -275,9 +308,20 @@ fn head_view(header: &Header, fields: &[Field]) -> AnyView {
     for field in fields {
         let (_, leaf) = key_parts(&field.key);
         let title = field.title.clone().unwrap_or_else(|| leaf.to_string());
+        let style = if header.layers >= 2 {
+            if field_rows {
+                "grid-column: 2;"
+            } else {
+                "grid-row: 2;"
+            }
+            .to_string()
+        } else {
+            String::new()
+        };
         cells.push(
             div()
                 .class(format!("tiles-hcell leaf {}", header.selector))
+                .style(style)
                 .attr("data-key", field.key.clone())
                 .child(title)
                 .into_any(),
@@ -317,8 +361,21 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
         .and_then(|a| a.fields.clone())
         .filter(|f| !f.is_empty());
     let header = accrete.attrs.as_ref().and_then(|a| a.header.clone());
+    // The axis (ADR 0035): absent is `col` — a list of items is what an unlabelled `tiles` means,
+    // so every frame that never named a direction keeps the shape it had. Absent `wrap` is `wrap`,
+    // because a wall of cards has no other spelling.
+    let dir = accrete
+        .attrs
+        .as_ref()
+        .and_then(|a| a.dir)
+        .unwrap_or_default();
+    let wrap = accrete
+        .attrs
+        .as_ref()
+        .and_then(|a| a.wrap)
+        .unwrap_or_default();
 
-    let mut css = vec!["tiles", "f"];
+    let mut css = vec!["tiles", "flex"];
     if window.is_some() {
         // One class says the container is a stage, one custom property says how wide it is: a
         // size-N hook rather than a class per answer, because N is a number and CSS cannot count
@@ -332,11 +389,18 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
     if fields.is_some() {
         css.push("cols");
     }
+    // The four directions and the line axis, as classes (ADR 0035). `.tiles` used to lean on the
+    // generic `col` that `use_common_css` adds; that would be a second opinion about the axis, so
+    // tile names its own — `dir-col` *is* the vertical list here, and the stylesheet turns it into
+    // `flex-direction` — and the helper leaves `Tiles` alone.
+    let axis = axis_classes(dir, wrap);
+    css.extend(axis.iter().copied());
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
-    // Every row of a grid is its own track list, all read from one custom property: the header and
-    // the body cannot drift apart, and a frame still overrides any of it with CSS.
+    // Every entry of a grid is its own track list, all read from one custom property: the header and
+    // the body cannot drift apart, and a frame still overrides any of it with CSS. The property is
+    // named for FIELDS, not columns, because with `dir: row*` it is the row track list (ADR 0035).
     let mut decls: Vec<String> = Vec::new();
     if let Some(size) = window {
         decls.push(format!("--tile-window: {size};"));
@@ -346,7 +410,7 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
             .iter()
             .map(|c| c.width.clone().unwrap_or_else(|| "minmax(0, 1fr)".into()))
             .collect();
-        decls.push(format!("--tile-cols: {};", tracks.join(" ")));
+        decls.push(format!("--tile-fields: {};", tracks.join(" ")));
     }
     let style = if decls.is_empty() {
         None
@@ -692,12 +756,13 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
             });
         }
 
-        // The header sits above the rows and outside the keyed list: it is one row for the whole grid,
-        // not one per item, so it must not be rebuilt when an item arrives.
+        // The header sits at the start of the item flow and outside the keyed list: it is one line
+        // for the whole grid, not one per item, so it must not be rebuilt when an item arrives.
+        // `wrap-reverse` moves it to the other end (ADR 0035) — the line axis IS the fields axis.
         let head = header
             .as_ref()
             .zip(fields.as_ref())
-            .map(|(h, f)| head_view(h, f));
+            .map(|(h, f)| head_view(h, f, dir));
 
         div()
             .id(id.as_str())
@@ -854,6 +919,40 @@ mod tests {
         let rows = [row(Some("a")), row(Some("b"))];
         let mut born = HashMap::new();
         assert_eq!(tile_keys(&rows, &mut born), vec!["a", "b"]);
+    }
+
+    /// ADR 0035: the direction is the way the ITEMS flow — `dir-col` the default vertical list,
+    /// `dir-row` a strip — and `dir-*` carries it by itself, because the stylesheet reads that one
+    /// class for `flex-direction`. `wrap` / `wrap-reverse` are the line axis.
+    #[test]
+    fn the_four_directions_become_classes() {
+        assert_eq!(axis_classes(Dir::Row, Wrap::Wrap), vec!["dir-row", "wrap"]);
+        assert_eq!(
+            axis_classes(Dir::RowReverse, Wrap::NoWrap),
+            vec!["dir-row-reverse"],
+            "a strip read backwards is still a strip"
+        );
+        assert_eq!(
+            axis_classes(Dir::Col, Wrap::WrapReverse),
+            vec!["dir-col", "wrap-reverse"]
+        );
+        assert_eq!(
+            axis_classes(Dir::ColReverse, Wrap::Wrap),
+            vec!["dir-col-reverse", "wrap"]
+        );
+    }
+
+    /// The default is `col`, not flex's `row`: a `tiles` is a list of items, so a `tiles` that names
+    /// no direction is a vertical list. It is the one place this vocabulary deliberately differs
+    /// from flex, and it is pinned here so it cannot flip silently again.
+    #[test]
+    fn a_tiles_with_no_dir_is_a_vertical_list() {
+        assert_eq!(Dir::default(), Dir::Col);
+        assert_eq!(
+            axis_classes(Dir::default(), Wrap::default()),
+            vec!["dir-col", "wrap"],
+            "absent `dir` must render as the vertical list, not as a row"
+        );
     }
 
     /// The rule the whole file follows: an item without a key borrows the position it had when it

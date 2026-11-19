@@ -31,7 +31,7 @@ data:
         attrs:
           class:
           - box
-          - border
+          - is-border
           - round
         source: {default: 批量导出一万多条的时候，进度条就不动了}
     - type: frame
@@ -43,7 +43,7 @@ data:
         attrs:
           class:
           - box
-          - border
+          - is-border
           - round
         source: {default: 同一件事，另一家客户也报了}
   - type: frame

@@ -13,8 +13,8 @@ data:
       attrs:
         class:
         - box
-        - border
-        - shadow
+        - is-border
+        - is-shadow
       children:
       - type: text
         source: {default: child of box}
@@ -28,8 +28,8 @@ data:
       attrs:
         class:
         - box
-        - border
-        - shadow
+        - is-border
+        - is-shadow
   - type: frame
     children:
     - type: text

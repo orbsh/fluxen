@@ -26,7 +26,7 @@ pub fn layer_(accrete: Layer, ctx: &Ctx, id: String) -> AnyView {
         .as_ref()
         .and_then(|a| a.dismiss)
         .unwrap_or(false);
-    let mut css = vec!["layer", "f"];
+    let mut css = vec!["layer", "flex"];
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 

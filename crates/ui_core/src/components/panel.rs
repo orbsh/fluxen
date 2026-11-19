@@ -143,9 +143,9 @@ fn drawer_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
     let trigger_ctx = ctx.clone();
     let body_ctx = ctx.clone();
     view! {
-        <div id=id class="panel f col">
+        <div id=id class="panel flex col">
             <div
-                class="panel-trigger f"
+                class="panel-trigger flex"
                 on:click=move |ev: web_sys::MouseEvent| {
                     ev.stop_propagation();
                     show.update(|v| *v = !*v);
@@ -177,7 +177,7 @@ fn drawer_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
                     >
                         {mask}
                         <div
-                            class="panel-body f col"
+                            class="panel-body flex col"
                             style=format!(
                                 "position: relative; {body_style} background: var(--bg, Canvas); box-shadow: 0 0 2rem rgba(0,0,0,.25); overflow: auto;"
                             )
