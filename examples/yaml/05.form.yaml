@@ -7,7 +7,7 @@ data:
     submit: [enter, button]
     class:
     - gap
-    - md
+    - gap-md
   children:
   - type: text
     attrs:
@@ -20,7 +20,7 @@ data:
     attrs:
       class:
       - gap
-      - md
+      - gap-md
     children:
     - type: frame
       attrs:

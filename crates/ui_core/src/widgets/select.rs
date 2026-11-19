@@ -16,7 +16,7 @@ use serde_json::{Value, to_value};
 /// the select keeps its own exit, as before.
 pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
-    let mut css = vec!["select", "f"];
+    let mut css = vec!["select", "flex"];
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
@@ -48,7 +48,7 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
             // Rows are shared, and `add_class` mutates: copy this row, not the
             // whole list.
             let mut option = child.as_ref().clone();
-            option.add_class("f as-stretch");
+            option.add_class("flex as-stretch");
             if selected {
                 option.add_class("selected");
                 div().child(render_accrete(&ctx, &option)).into_any()

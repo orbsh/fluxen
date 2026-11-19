@@ -37,7 +37,7 @@ fn a_grid_round_trips_with_its_header_and_rows() {
                 {"key": "price/retail", "title": "Retail", "width": "6rem", "align": "end"},
                 {"key": "note", "selectors": ["muted", "wrap"]}
             ],
-            "header": {"selector": "--goods-head", "rows": 2}
+            "header": {"selector": "--goods-head", "layers": 2}
         },
         "source": {"slot": "goods"},
         "children": [
@@ -84,7 +84,7 @@ fn a_grid_round_trips_with_its_header_and_rows() {
 
     let header = attrs.header.as_ref().expect("header");
     assert_eq!(header.selector, "--goods-head");
-    assert_eq!(header.rows, 2);
+    assert_eq!(header.layers, 2);
 
     // The row is a node of its own, and its fields are its children — one selector per field.
     let rows = t.children.as_ref().expect("children");
@@ -96,31 +96,31 @@ fn a_grid_round_trips_with_its_header_and_rows() {
     assert_eq!(e.children.as_ref().map(|c| c.len()), Some(4));
 }
 
-/// `rows` is a closed set of two answers: a third would render as something nobody chose, so it is
-/// refused at decode rather than at paint.
+/// `layers` is a closed set of two answers: a third would render as something nobody chose, so it
+/// is refused at decode rather than at paint.
 #[test]
-fn a_header_of_three_rows_does_not_decode() {
+fn a_header_of_three_layers_does_not_decode() {
     let bad = json!({
         "type": "tiles",
         "attrs": {
             "fields": [{"key": "qty"}],
-            "header": {"selector": "head", "rows": 3}
+            "header": {"selector": "head", "layers": 3}
         },
         "source": {"slot": "goods"}
     });
-    let err = serde_json::from_value::<Accrete>(bad).expect_err("rows: 3 must not decode");
+    let err = serde_json::from_value::<Accrete>(bad).expect_err("layers: 3 must not decode");
     assert!(err.to_string().contains("1 or 2"), "{err}");
 
     // 1 is the default and stays off the wire; 2 is the one value worth writing.
     let one = roundtrip(json!({
         "type": "tiles",
-        "attrs": {"fields": [{"key": "qty"}], "header": {"selector": "head", "rows": 1}},
+        "attrs": {"fields": [{"key": "qty"}], "header": {"selector": "head", "layers": 1}},
         "source": {"slot": "goods"}
     }));
     let wire = serde_json::to_value(&one).expect("encode");
     assert!(
-        wire["attrs"]["header"].get("rows").is_none(),
-        "the default row count is not written: {wire}"
+        wire["attrs"]["header"].get("layers").is_none(),
+        "the default layer count is not written: {wire}"
     );
 }
 

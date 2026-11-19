@@ -13,7 +13,7 @@
     id: stream-chart
     attrs:
       class:
-      - f
+      - flex
     source:
       default:
         type: line

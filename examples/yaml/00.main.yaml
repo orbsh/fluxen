@@ -59,9 +59,9 @@
             - as-end
             - accent
             - box
-            - border
+            - is-border
             - round
-            - shadow
+            - is-shadow
             selector: ask
         - type: frame
           attrs:
@@ -69,9 +69,9 @@
             - nogrow
             - as-stretch
             - box
-            - border
+            - is-border
             - round
-            - shadow
+            - is-shadow
       - type: frame
         attrs:
           class:

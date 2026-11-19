@@ -36,7 +36,7 @@ pub fn button_(accrete: Button, ctx: &Ctx) -> AnyView {
         let ctx = ctx.clone();
         let bundle = bundle.clone();
         button()
-            .class("button shadow accent")
+            .class("button is-shadow accent")
             .child(t.clone())
             .on(click, move |_| submit(&ctx, &bundle))
             .into_any()

@@ -27,7 +27,7 @@
       children:
       - type: frame
         attrs:
-          class: [border, round, shadow]
+          class: [is-border, round, is-shadow]
           grid:
             width: 26rem
             flex: 0 0 auto
@@ -54,7 +54,7 @@
     type: frame
     id: login_demo
     attrs:
-      class: [f, col, gap]
+      class: [flex, col, gap]
     children:
     - type: input
       source:

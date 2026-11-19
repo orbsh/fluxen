@@ -16,7 +16,7 @@ data:
       source: {slot: login, default: chat with **AI**}
       attrs:
         class:
-        - shadow
+        - is-shadow
         - nogrow
         format: md
     - type: bundle
@@ -40,8 +40,8 @@ data:
       attrs:
         class:
         - box
-        - border
-        - shadow
+        - is-border
+        - is-shadow
         - nogrow
         - as-end
         - accent
@@ -50,8 +50,8 @@ data:
       attrs:
         class:
         - box
-        - border
-        - shadow
+        - is-border
+        - is-shadow
         - nogrow
         - as-start
   - type: frame

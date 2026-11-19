@@ -35,8 +35,11 @@ pub trait AccreteOps {
     fn get_id(&self) -> &Option<String>;
 }
 
+/// `wrap()` names the enum a variant payload becomes (the `AccreteOps` derive emits one impl per
+/// variant). `WrapOps`, not `Wrap`: `Wrap` is `tiles`' line axis (ADR 0035) and a trait and an enum
+/// cannot share the type namespace.
 #[cfg(feature = "ops")]
-pub trait Wrap {
+pub trait WrapOps {
     type Target;
     fn wrap(self) -> Self::Target;
 }
@@ -732,6 +735,39 @@ pub enum Step {
     Slot { slot: String },
 }
 
+/// The direction a `tiles`' ITEMS flow in (ADR 0035) — flex's meaning, not "the shape of an entry":
+/// `row` lays the items out left to right, `row-reverse` right to left, `col` top to bottom,
+/// `col-reverse` bottom to top.
+///
+/// The words are flex's because a frame author already knows them, down to the `-reverse` spellings
+/// that reverse the ORDER without changing the axis. The default is `col`, the one place this
+/// vocabulary deliberately differs from flex: flex lays out inline content and starts on a line,
+/// while `tiles` lays out a list of items — and an unlabelled list is vertical.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum Dir {
+    Row,
+    RowReverse,
+    #[default]
+    Col,
+    ColReverse,
+}
+
+/// What the items do when they no longer fit on one line (ADR 0035). `wrap` is absent: a wall of
+/// cards is the common shape, and `nowrap` is a strip that must stay one strip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum Wrap {
+    #[default]
+    Wrap,
+    WrapReverse,
+    /// `nowrap` is a word, not two: the CSS spelling, and one serde cannot derive from `NoWrap`.
+    #[serde(rename = "nowrap")]
+    NoWrap,
+}
+
 /// One container for a slot's items, cut into blocks (ADR 0031 §4): `rack` and `pages` were this
 /// node with different steppers. `children` is the layout a tile is drawn with — a selector picks
 /// one template, the rest of the list is the default (the mechanism `rack.item` used to carry).
@@ -758,6 +794,19 @@ pub struct TilesAttr {
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
+    /// Which way the ITEMS flow (ADR 0035), in flex's sense. `row` is a strip: items left to right,
+    /// and each entry's fields run down it, in the grid's ROW axis. `col` (default) is a list: items
+    /// top to bottom, each entry's fields across it, in the grid's COLUMN axis — the table every
+    /// frame already draws. `row-reverse` / `col-reverse` keep the shape and reverse the order the
+    /// items arrive in.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dir: Option<Dir>,
+    /// What happens when the items no longer fit on one line (ADR 0035). Default `wrap`, because
+    /// a card wall is the shape that has no other spelling. `wrap-reverse` also puts the FIELDS on
+    /// the other side of the item axis: the header row below the entries, or the header column on
+    /// the right — the fields axis is the line axis, so reversing the lines reverses where they land.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wrap: Option<Wrap>,
     /// Absent = every item is laid out and nothing steers; present = that many consecutive items
     /// are on stage at once, starting at the cursor (ADR 0031 §4).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -781,9 +830,9 @@ pub struct TilesAttr {
 /// (`price/retail` sits under `price`). Formatting has no spelling yet, so it is not implemented.
 ///
 /// A FIELD, not a column: `column` names where a thing sits, and where it sits is `dir`'s business.
-/// `tiles` is about to grow a second axis (`row | row-reverse | column | column-reverse`), and on
-/// that axis this list runs horizontally — at which point "column" would be a lie. `field` names the
-/// thing itself.
+/// `tiles` has a direction of its own (`row | row-reverse | col | col-reverse`, ADR 0035), and the
+/// fields run across it with `dir: col` and down it with `dir: row` — so a word that names one of
+/// the two would be a lie half the time. `field` names the thing itself.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Field {
@@ -814,41 +863,43 @@ pub enum Align {
     End,
 }
 
-/// The header of a grid (ADR 0031 §4): the cells carry `selector` — one hook for the whole header,
-/// since no header cell is a special element. `rows: 2` puts a group row over a leaf row, both read
-/// off the fields' keys; there is no second shape to say the same thing.
+/// The header of a grid (ADR 0031 §4, ADR 0035): the cells carry `selector` — one hook for the whole
+/// header, since no header cell is a special element. `layers: 2` puts a group layer over a leaf
+/// layer, both read off the fields' keys; there is no second shape to say the same thing.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Header {
     pub selector: String,
-    /// `1` (default) or `2`. Anything else is a frame error at load, not a layout surprise.
+    /// `1` (default) or `2`: how many LINES of header cells there are along the field axis. A
+    /// direction word (`rows`) named where the header sat, which stopped being true the moment
+    /// `dir: row` made the header a column; a layer is one line whatever axis it runs on.
     #[serde(
-        default = "rows_default",
-        skip_serializing_if = "rows_is_one",
-        deserialize_with = "rows_1_or_2"
+        default = "layers_default",
+        skip_serializing_if = "layers_is_one",
+        deserialize_with = "layers_1_or_2"
     )]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = 2)))]
-    pub rows: u8,
+    pub layers: u8,
 }
 
-/// Absent `rows` is one row, not zero: `default` alone would hand back `0` and the node would
-/// claim a header with no rows.
-fn rows_default() -> u8 {
+/// Absent `layers` is one layer, not zero: `default` alone would hand back `0` and the node would
+/// claim a header with no cells.
+fn layers_default() -> u8 {
     1
 }
 
-fn rows_is_one(rows: &u8) -> bool {
-    *rows <= 1
+fn layers_is_one(layers: &u8) -> bool {
+    *layers <= 1
 }
 
-/// `rows` is a closed set of two answers (ADR 0031 §4). A third value would otherwise render as
+/// `layers` is a closed set of two answers (ADR 0031 §4). A third value would otherwise render as
 /// something nobody chose, so it is refused where every other shape is checked: at decode.
-fn rows_1_or_2<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u8, D::Error> {
+fn layers_1_or_2<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u8, D::Error> {
     use serde::de::Error;
     match u8::deserialize(d)? {
         n @ (1 | 2) => Ok(n),
         other => Err(D::Error::custom(format!(
-            "header rows is 1 or 2; got {other}"
+            "header layers is 1 or 2; got {other}"
         ))),
     }
 }
@@ -966,10 +1017,10 @@ pub struct Select {
 /// as child rows under the row it belongs to. That is the whole of "hierarchy instead of spans": the
 /// data already says which row a row belongs to, so the markup does not merge cells to say it again.
 ///
-/// An ENTRY, not a record: `record` implies a row, and a row is a direction word. `tiles` is about to
-/// run along either axis (`dir: row | row-reverse | column | column-reverse`), and on the vertical
-/// one the items flow down a column — where "record" (a row) would name the wrong direction. `entry`
-/// names the thing itself: what a list holds.
+/// An ENTRY, not a record: `record` implies a row, and a row is a direction word. `tiles` runs its
+/// items along whichever axis `dir` names (`row | row-reverse | col | col-reverse`), and on the
+/// horizontal one the items flow across a row — where "record" (a row's worth) would name the
+/// container, not the thing. `entry` names the thing itself: what a list holds.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]

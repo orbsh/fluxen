@@ -62,7 +62,7 @@
       id: dept-trend
       attrs:
         class:
-        - f
+        - flex
       source: {slot: trend}
     - type: frame
       id: radar-row
@@ -77,21 +77,21 @@
         id: radar-rd
         attrs:
           class:
-          - f
+          - flex
         source: {slot: radar_rd}
       - type: canvas
         url: /assets/g2chart/index.js
         id: radar-mkt
         attrs:
           class:
-          - f
+          - flex
         source: {slot: radar_mkt}
       - type: canvas
         url: /assets/g2chart/index.js
         id: radar-ops
         attrs:
           class:
-          - f
+          - flex
         source: {slot: radar_ops}
 
     - type: text

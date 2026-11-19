@@ -16,10 +16,10 @@
       children:
       - type: text
         attrs:
-          class: [ai-center, box, border]
+          class: [ai-center, box, is-border]
       - type: frame
         attrs:
-          class: [gap, md]
+          class: [gap, gap-md]
         children:
         - type: tiles
           attrs:

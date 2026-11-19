@@ -29,7 +29,7 @@ use wasm_bindgen::JsCast;
 
 pub fn popup_(accrete: Popup, ctx: &Ctx, id: String) -> AnyView {
     let ctx = ctx.clone();
-    let mut css = vec!["popup", "f"];
+    let mut css = vec!["popup", "flex"];
     use_common_css(&mut css, &accrete);
     let base = css.join(" ");
     let style = accrete
@@ -91,7 +91,7 @@ pub fn popup_(accrete: Popup, ctx: &Ctx, id: String) -> AnyView {
                 Some(b) => {
                     let ctx = ctx.clone();
                     div()
-                        .class("f body")
+                        .class("flex body")
                         .child(render_accrete(&ctx, b))
                         .into_any()
                 }
@@ -114,7 +114,7 @@ pub fn popup_(accrete: Popup, ctx: &Ctx, id: String) -> AnyView {
         .node_ref(root)
         .child(
             div()
-                .class("f trigger")
+                .class("flex trigger")
                 .on(click, move |_| show.update(|s| *s = !*s))
                 .child(trigger_view),
         )

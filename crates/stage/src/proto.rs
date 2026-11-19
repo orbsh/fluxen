@@ -57,6 +57,9 @@ pub fn parse_yaml_to_frame(
         if let Some(msg) = retired_stage(&v) {
             return Err(crate::error::ParseError { msg });
         }
+        if let Some(msg) = retired_header_rows(&v) {
+            return Err(crate::error::ParseError { msg });
+        }
     }
     let content = match items {
         ContentItems::One(c) => vec![c],
@@ -215,10 +218,37 @@ fn retired_stage(v: &serde_yaml::Value) -> Option<String> {
     }
 }
 
+/// `attrs.header.rows` was where the header's layers lived before `dir` could make the header a
+/// column (ADR 0035). The attribute bag drops keys it does not know, so a frame that still says
+/// `rows: 2` would silently render one layer — refused at load, with the spelling that replaced it.
+fn retired_header_rows(v: &serde_yaml::Value) -> Option<String> {
+    match v {
+        serde_yaml::Value::Mapping(m) => {
+            let kind = m.get("type").and_then(|t| t.as_str());
+            let rows = m
+                .get("attrs")
+                .and_then(|a| a.get("header"))
+                .and_then(|h| h.get("rows"))
+                .is_some_and(|r| !r.is_null());
+            if kind == Some("tiles") && rows {
+                return Some(
+                    "node `tiles` has `attrs.header.rows`, which is gone — a header is not \
+                     necessarily a row now (`dir: row` makes it a column), so the count of header \
+                     layers is `attrs.header.layers: 1 | 2`"
+                        .into(),
+                );
+            }
+            m.iter().find_map(|(_, val)| retired_header_rows(val))
+        }
+        serde_yaml::Value::Sequence(s) => s.iter().find_map(retired_header_rows),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        dead_end_drop, header_without_fields, illegal_channel, retired_stage,
+        dead_end_drop, header_without_fields, illegal_channel, retired_header_rows, retired_stage,
         stepper_without_window,
     };
 
@@ -300,5 +330,15 @@ mod tests {
         // `stage` as a VALUE is not this key: only a tiles node's `attrs.stage` is the old count.
         let slot = y("type: tiles\nattrs: {}\nsource: {slot: stage}\n");
         assert!(retired_stage(&slot).is_none(), "`slot: stage` 是值，不是键");
+    }
+
+    #[test]
+    fn the_old_header_rows_key_is_refused_by_name() {
+        let bad = y("type: tiles\nattrs: {header: {selector: h, rows: 2}, fields: [{key: q}]}\n");
+        let msg = retired_header_rows(&bad).expect("header.rows 应当报错");
+        assert!(msg.contains("layers"), "错误要说新拼法：{msg}");
+
+        let ok = y("type: tiles\nattrs: {header: {selector: h, layers: 2}, fields: [{key: q}]}\n");
+        assert!(retired_header_rows(&ok).is_none(), "layers 是现在的拼法");
     }
 }

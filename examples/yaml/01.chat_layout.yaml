@@ -21,7 +21,7 @@ data:
       class:
       - --body
       - shrink
-      - border
+      - is-border
       - round
     children:
     - type: frame
@@ -72,9 +72,9 @@ data:
               - as-end
               - accent
               - box
-              - border
+              - is-border
               - round
-              - shadow
+              - is-shadow
               selector: ask
           - type: frame
             attrs:
@@ -82,16 +82,16 @@ data:
               - nogrow
               - as-stretch
               - box
-              - border
+              - is-border
               - round
-              - shadow
+              - is-shadow
         - type: panel
           attrs:
             place: viewport
             state: bound
             bottom: 0.2rem
             left: 1rem
-            class: [--cart, box, border, shadow, primary]
+            class: [--cart, box, is-border, is-shadow, primary]
           source: {slot: cart}
           children:
           - type: stamp

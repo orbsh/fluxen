@@ -9,7 +9,7 @@ use leptos::prelude::*;
 /// 折叠容器：`item[0]` 作头部，`show` 信号控制展开/收起。
 pub fn fold_(accrete: Fold, ctx: &Ctx, id: String) -> AnyView {
     let ctx = ctx.clone();
-    let mut css = vec!["g"];
+    let mut css = vec!["grid"];
     css.push(id.as_str());
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");

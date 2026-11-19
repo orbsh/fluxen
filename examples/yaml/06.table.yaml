@@ -1,8 +1,10 @@
 # 表格 = `tiles` + `fields`（ADR 0031 §4）：没有 `<table>`，也就没有 thead/tbody/tr/th/td。
 # 每条数据是一条 `entry`，字段用 `attrs.selector` 命名（ADR 0020 的规则：selector 在兄弟之间
 # 指认一个子节点），`fields` 的 `key` 把字段投影成单元格。
-# 表头不是元素，是一个钩子：`header: {selector, rows: 2}` 让每个表头单元格带上这个 selector；
+# 表头不是元素，是一个钩子：`header: {selector, layers: 2}` 让每个表头单元格带上这个 selector；
 # 两行表头由 key 自己长出来——`price/retail` 落在 `price` 组下，组单元格盖住它下面几列。
+# `layers` 而不是 `rows`：`dir: row` 的时候表头是一列，不是一行（ADR 0035）；这张表是默认的
+# `col`（元素自上而下流），所以表头仍然在上面那一行。
 # 合并单元格（colspan/rowspan）在模型里不存在：数据有层级就写成嵌套的 entry，渲染成子行。
 - action: append
   slot: chat
@@ -16,7 +18,7 @@
       source: {default: ''}
     - type: frame
       attrs:
-        class: [gap, md]
+        class: [gap, gap-md]
       children:
       - type: tiles
         attrs:
@@ -27,7 +29,7 @@
           - {key: price/retail, title: Retail, width: 6rem, align: end}
           - {key: price/list, title: List, width: 6rem, align: end}
           - {key: note, title: Note}
-          header: {selector: --table-head, rows: 2}
+          header: {selector: --table-head, layers: 2}
         source: {slot: table-rows}
     - type: button
       attrs:

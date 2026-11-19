@@ -93,7 +93,7 @@ fn collect(node: &Accrete, out: &mut Vec<Field>) {
 pub fn bundle_(accrete: Bundle, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let node_id = node_id(&accrete);
-    let mut css = vec!["case", "f"];
+    let mut css = vec!["case", "flex"];
     if let Some(id) = &accrete.id {
         css.push(id.as_str());
     }

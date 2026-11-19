@@ -7,7 +7,7 @@ data:
     attrs:
       class:
       - box
-      - border
-      - shadow
+      - is-border
+      - is-shadow
     source: {slot: test-data, default: 123}
 

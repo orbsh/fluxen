@@ -19,8 +19,8 @@
 //! 手势与飞行态来自 `Ctx.drag`：页面级会话，只有一份（源和落点隔着别的节点，本地
 //! 信号到不了对面）。每个 frame 各存一份就是这条设计的反面。
 //!
-//! `attrs.grid` 与 `attrs.class` 两条路都保留：grid 时只进 `g`、否则只进 `f`，
-//! 因为 `.f` 与 `.g` 在同一层里 `.f` 在后，同时存在会把 `display:grid` 压掉
+//! `attrs.grid` 与 `attrs.class` 两条路都保留：grid 时只进 `grid`、否则只进 `flex`，
+//! 因为 `.flex` 与 `.grid` 在同一个层里谁在后谁赢，同时存在会把 `display:grid` 压掉
 //! （`attrs.grid` 自出生起没生效过，没人用 grid 才没人踩到）。
 
 use crate::Ctx;
@@ -190,7 +190,7 @@ pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
     let mut use_grid = false;
     if let Some(g) = &attrs.grid {
         use_grid = true;
-        css.push("g");
+        css.push("grid");
         style = g
             .iter()
             .map(|(k, v)| format!("{}: {};", k, v.as_str().unwrap_or("")))
@@ -198,7 +198,7 @@ pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
             .join("\n");
     }
     if !use_grid {
-        css.push("f");
+        css.push("flex");
     }
     // `group` 的内联样式：原样写进 style，与 grid 的轨道声明并存（后者先写）。
     if let Some(s) = &attrs.style {
@@ -256,14 +256,14 @@ pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
         };
     };
 
-    // 数据区域：整个容器是槽的镜子。`fade-in-and-out` 是 main.css 里的一次性
+    // 数据区域：整个容器是槽的镜子。`is-fade-in-and-out` 是 main.css 里的一次性
     // 动画——元素随槽值重建，动画自己重播，不需要 JS 去加/删类。
     let inner_ctx = ctx.clone();
     move || -> AnyView {
         match inner_ctx.slot_for_data(&source).get() {
             Some(data) => {
                 let view = div()
-                    .attr("class", format!("{} fade-in-and-out", base))
+                    .attr("class", format!("{} is-fade-in-and-out", base))
                     .style(style.clone())
                     .add_any_attr(drag(&inner_ctx))
                     .child(render_accrete(&inner_ctx, &data));
