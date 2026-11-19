@@ -6,13 +6,13 @@ Steps (each waits for one Enter; --auto runs unattended, --delay paces the text)
   2  append the ONE message row (13 children, every child bound to a slot) and
                             seed the six text slots
   3  TYPE the analytics intro
-  4  drag the bubble's pin chip to the rail at the window's right edge — the
-                            stage console shows the `pin` frame (ADR 0019)
+  4  drag the bubble's pin tile to the rail at the window's right edge — the
+                            stage console shows the `pin` drop, `{id, tag}` (ADR 0034)
   5  send the chart data    the two charts draw into their bands (line chart +
                             the three radars — 00.radar.yaml's set frames)
   6  one patch per day      the line chart grows to 30 days
   7  TYPE the summary
-  8  append the review table + form into the row's rack -> the form appears
+  8  append the review table + form into the row's review slot -> the form appears
   9  TYPE the car paragraph, then set the splat payload
  10  TYPE the shoe paragraph, then set the shoe payload
  11  TYPE the code-review paragraph, then set the editor's {code, lang} payload
@@ -24,7 +24,7 @@ Steps (each waits for one Enter; --auto runs unattended, --delay paces the text)
 
 The box in child order (what the reader watches fill in):
 
-    intro text | pin chip | line chart | radar group | summary text | review form |
+    intro text | pin tile | line chart | radar band | summary text | review form |
     car text | splat canvas | shoe text | shoe canvas | patch text | code editor |
     graph text
 
@@ -40,13 +40,15 @@ Implementation choices worth naming:
   re-render the whole box and remount every module host inside it (docs/PLAN.md).
   An empty data area occupies NO space (ADR 0012), which is why the box opens
   holding nothing but the first paragraph and grows segment by segment.
-- The bubble carries ONE draggable unit (ADR 0019): a `grab` chip whose payload
-  is a POINTER to the paragraph's slot, not the paragraph itself — dragging costs
-  the same whether the text is ten characters or ten thousand. The landing zone
-  is a `dock` on the shell's right edge (`accept: [snippet]`, event `pin`), so
-  only snippet-kind cargo can land; anything else is refused silently, which is
-  the pairing rule working, not a failure. The source adds no style and no size
-  of its own — what you see is the `text` child.
+- The bubble carries ONE draggable unit (ADR 0034): a `frame` whose `attrs.draggable`
+  says the tag `snippet`, with a small chip as its only child. The cargo IS that
+  subtree, read from the node at dragstart — there is no second payload bag to keep
+  in step with the text, so dragging costs the same whether the paragraph is ten
+  characters or ten thousand. The landing zone is a `frame` with `accept: {tag:
+  snippet}` and `sink: {slot: pin}` on the shell's right edge, so only snippet-tagged
+  cargo can land; anything else is refused silently, which is the pairing rule
+  working, not a failure. The source adds no style and no size of its own — what you
+  see is the `text` child.
 - The charts are canvases pointed at the g2chart module (ADR 0025) and carry no
   size of their own, so the size comes from the container (ADR 0009): each one
   sits in a borderless band whose definite size comes from `attrs.grid`, the
@@ -59,8 +61,10 @@ Implementation choices worth naming:
   demo posts only its SET frames, because posting the whole file would open a
   SECOND box with the example's own row.
 - The review table + form is static layout, not a module host, so it cannot be
-  payload-gated: it rides in a rack (slot `review`) and is appended when its turn
-  comes — an empty rack renders nothing and takes no space.
+  payload-gated: it rides a `tiles` (slot `review`) and is appended when its turn
+  comes — an empty slot renders nothing and takes no space. The table inside it is
+  a `tiles` with `fields` (ADR 0031 §4), so a row is an `entry` in a row slot
+  (`review_rows`), not a `<tr>`: there is no table/theader/tr/td family any more.
 - Models land AFTER the paragraph above them; the trend keeps growing one day per
   frame (the walkthrough's original "chart grows" beat).
 - The code editor is a canvas pointed at the editor module (ADR 0025): it is in
@@ -102,7 +106,9 @@ import urllib.request
 TREND = "trend"                # data slot: the line chart's spec
 RADARS = ("radar_rd", "radar_mkt", "radar_ops")   # data slots: the three radars
 SUMMARY = "summary"            # data slot: the summary paragraph
-REVIEW = "review"              # data slot: the rack the review form is appended to
+REVIEW = "review_form"         # data slot: the tiles the review form is appended to
+REVIEW_ROWS = "review_rows"    # data slot: the review table's rows (entries)
+REVIEW_CHANNEL = "review"      # uplink target the bundle submits on (ADR 0023)
 ANALYTICS = "analytics_intro"  # data slot: the opening paragraph
 SAY_CAR = "say_car"            # data slot: the splat paragraph
 SAY_SHOE = "say_shoe"          # data slot: the shoe paragraph
@@ -113,8 +119,8 @@ CODE_SLOT = "patch_code"       # data slot: the editor's payload {code, lang}
 SAY_GRAPH = "say_graph"        # data slot: the relationship-graph paragraph
 GRAPH_SLOT = "graph"           # data slot: the force graph's {nodes, links, focus?}
 
-TREND_DATA = "/bind/value/default/data"     # pointer into the trend slot node
-TEXT_VALUE = "/bind/value/default"          # pointer into a text slot node
+TREND_DATA = "/source/default/data"     # pointer into the trend slot node
+TEXT_VALUE = "/source/default"          # pointer into a text slot node
 RADAR_FILE = "examples/yaml/00.radar.yaml"  # the single source of the chart data
 
 THREED_URL = "/assets/3dbrowser/index.js"
@@ -149,6 +155,12 @@ PATCH_CODE = """pub fn render(nodes: &[Node]) -> Frame {
 # they render, the modules that ride inside them, and the libraries underneath.
 # Small graphs all look like a blob, and a blob is exactly what this view must
 # not look like.
+#
+# These are node IDS (payload data: `{id, name, kind, weight}`), not wire
+# vocabulary: `stage` here is the crate, not the retired tile count.
+# component names still say `rack`/`pages`/`form`/`layer` because the diagram is
+# the diagram the narrative describes (33 points, 42 lines) — the demo's own
+# frames below use the current types (`tiles`, `bundle`, `panel`).
 _CRATES = [
     ("accrete", 9), ("ui_leptos", 8), ("stage", 6), ("content", 7),
     ("transport", 5), ("transport_ws", 4), ("forcegraph", 7), ("ui_assets", 4),
@@ -326,45 +338,45 @@ def text_node(slot):
     return {
         "type": "text",
         "attrs": {"format": "md"},
-        "bind": {"value": {"kind": "source", "source": slot}},
+        "source": {"slot": slot},
     }
 
 
-def pin_chip(slot, title):
-    """A draggable unit INSIDE the bubble (ADR 0019).
+def pin_tile(slot, title):
+    """A draggable unit INSIDE the bubble (ADR 0034).
 
-    `grab` wraps a small chip and carries the cargo; the chip itself is just a
-    `text` with classes — the source adds no style and no size of its own, so
-    what you see is the child. The payload is a POINTER (`slot` + `title`), not
-    the paragraph: the rail's handler can read the slot, and dragging stays
-    cheap no matter how long the text is. `kind: snippet` is what the rail's
-    `accept` in 00.main.yaml matches — nothing else can land there.
+    A `frame` carries its own cargo: `attrs.draggable` tags this box `snippet`, and
+    the cargo IS the subtree it owns — read from the node at dragstart, so there is
+    no payload bag to keep in step with anything. The chip is just a `text` child
+    with classes; the source adds no style and no size of its own, so what you see
+    is the child. The rail's `accept: {tag: snippet}` in 00.main.yaml is what
+    matches this tag — nothing else can land there, and the drop reports
+    `{id, tag}` (this frame's id plus the tag).
     """
     return {
-        "type": "grab",
+        "type": "frame",
         "id": f"pin-{slot}",
-        "kind": "snippet",
-        "payload": {"slot": slot, "title": title},
+        "attrs": {"class": ["nogrow"], "draggable": {"tag": "snippet"}},
         "children": [
             {
                 "type": "text",
-                "attrs": {"class": ["box", "border", "round", "nogrow"]},
-                "bind": {"value": {"kind": "default", "default": f"≡ 把「{title}」拖到右边"}},
+                "attrs": {"class": ["box", "is-border", "round", "nogrow"]},
+                "source": {"default": f"≡ 把「{title}」拖到右边"},
             }
         ],
     }
 
 
 def chart_node(node_id, slot):
-    """A canvas pointed at the g2chart module (ADR 0025). `f` mirrors
+    """A canvas pointed at the g2chart module (ADR 0025). `flex` mirrors
     00.radar.yaml: it is a grid item of the band container, and the container's
     track supplies the height."""
     return {
         "type": "canvas",
         "url": G2CHART_URL,
         "id": node_id,
-        "attrs": {"class": ["f"]},
-        "bind": {"value": {"kind": "source", "source": slot}},
+        "attrs": {"class": ["flex"]},
+        "source": {"slot": slot},
     }
 
 
@@ -381,7 +393,7 @@ def canvas_node(url, slot, width, height, options=None):
         "type": "canvas",
         "url": url,
         "attrs": {"width": width, "height": height},
-        "bind": {"value": {"kind": "source", "source": slot}},
+        "source": {"slot": slot},
     }
     # 模块私有配置走 Canvas.options（ADR 0017）：核心只搬字节，模块自己解释。
     if options is not None:
@@ -398,12 +410,12 @@ def editor_node(node_id, slot, width, height):
         "url": EDITOR_URL,
         "id": node_id,
         "attrs": {"width": width, "height": height},
-        "bind": {"value": {"kind": "source", "source": slot}},
+        "source": {"slot": slot},
     }
 
 
 def frame_message():
-    """The whole demo as ONE chat row: the nine children, in reading order."""
+    """The whole demo as ONE chat row: the children, in reading order."""
     return {
         "action": "append",
         "slot": "chat",
@@ -411,8 +423,8 @@ def frame_message():
             "type": "frame",
             "children": [
                 text_node(ANALYTICS),
-                # 气泡内部的一枚可拖单元（ADR 0019）：段落是内容，这一格是动作。
-                pin_chip(ANALYTICS, "分析引言"),
+                # 气泡内部的一枚可拖单元（ADR 0034）：段落是内容，这一格是动作。
+                pin_tile(ANALYTICS, "分析引言"),
                 chart_band([chart_node("dept-trend", TREND)], TREND_BAND),
                 chart_band(
                     [chart_node("radar-rd", RADARS[0]),
@@ -423,8 +435,8 @@ def frame_message():
                 ),
                 text_node(SUMMARY),
                 # the review form is static layout, not a module host: it rides a
-                # rack so it can be appended when its turn comes (empty rack = nothing)
-                {"type": "rack", "bind": {"value": {"kind": "source", "source": REVIEW}}},
+                # tiles so it can be appended when its turn comes (empty = nothing)
+                {"type": "tiles", "source": {"slot": REVIEW}},
                 text_node(SAY_CAR),
                 canvas_node(SPLAT_URL, CAR_SLOT, *SPLAT_SIZE),
                 text_node(SAY_SHOE),
@@ -445,15 +457,22 @@ def frame_seed_text(slot):
     return {
         "action": "set",
         "slot": slot,
-        "data": {"type": "text", "bind": {"value": {"kind": "default", "default": ""}}},
+        "data": {"type": "text", "source": {"default": ""}},
     }
 
 
 def frame_set_payload(slot, payload):
+    """Set a slot to a frame that carries the payload as its value (ADR 0027).
+
+    A `frame` is the one node that owns a subtree and a value at once, so the old
+    `group` wrapper (and the retired `bind.value.kind: default` bag) is this: a
+    frame whose `source.default` IS the payload. `20.forcegraph.yaml` and
+    `00.radar.yaml` write their set frames exactly this way.
+    """
     return {
         "action": "set",
         "slot": slot,
-        "data": {"type": "group", "bind": {"value": {"kind": "default", "default": payload}}},
+        "data": {"type": "frame", "source": {"default": payload}},
     }
 
 
@@ -463,71 +482,99 @@ def frame_patch(slot, path, value):
 
 
 def frame_review_form():
-    """The review table + form — 06.table.yaml's shape (a table whose first column
-    is editable, plus a submit button) with content that fits this demo. All three
-    input kinds appear (number / bool / text), and one field carries a `payload`
-    so the uplink is visibly more than the field value."""
+    """The review table + form — 06.table.yaml's shape: a `bundle` (what `form`
+    was) holding a text, a `tiles` grid and a submit button, with the rows appended
+    into their own slot as `entry` nodes. There is no table/thead/tbody/tr/th/td
+    family any more (ADR 0031 §4): a field is `{key, title, width, align}`, the
+    header is a hook (`{selector, layers}`) whose cells are derived from the keys,
+    and a row is an `entry` whose children carry `attrs.selector`.
 
-    def th(t):
-        return {"type": "th", "children": [
-            {"type": "text", "bind": {"value": {"kind": "default", "default": t}}}]}
+    All three input kinds appear (number / bool / text); each writes to a local
+    slot keyed by its row, and the bundle's submit carries the form up the `review`
+    channel.
+    """
 
-    def td(t):
-        return {"type": "td", "children": [
-            {"type": "text", "bind": {"value": {"kind": "default", "default": t}}}]}
+    fields = [
+        {"key": "score", "title": "复核项", "width": "8rem"},
+        {"key": "name", "title": "姓名"},
+        {"key": "dept", "title": "部门"},
+        {"key": "avg", "title": "日均分", "width": "6rem", "align": "end"},
+        {"key": "note", "title": "备注"},
+    ]
 
-    def row(field, kind, default, payload, name, dept, score, note):
-        bindval = {"kind": "field", "field": field, "type": kind, "default": default}
-        if payload is not None:
-            bindval["payload"] = payload
-        return {"type": "tr", "children": [
-            {"type": "td", "children": [{"type": "input", "bind": {"value": bindval}}]},
-            td(name), td(dept), td(score), td(note),
-        ]}
+    def cell(name, text):
+        return {"type": "text", "attrs": {"selector": name}, "source": {"default": text}}
 
-    return {
+    def row(key, kind, default, name, dept, avg, note):
+        return {
+            "action": "append",
+            "slot": REVIEW_ROWS,
+            "data": {
+                "type": "entry",
+                "id": key,
+                "children": [
+                    {
+                        "type": "input",
+                        "attrs": {"selector": "score"},
+                        "source": {"default": default, "type": kind},
+                        "sink": {"slot": key, "scope": "local"},
+                    },
+                    cell("name", name),
+                    cell("dept", dept),
+                    cell("avg", avg),
+                    cell("note", note),
+                ],
+            },
+        }
+
+    form = {
         "action": "append",
         "slot": REVIEW,
         "data": {
-            "type": "form",
+            "type": "bundle",
             "id": "review-form",
-            "bind": {"value": {"kind": "dest", "dest": "review"}},
+            "attrs": {"submit": ["enter", "button"]},
+            # The uplink name, NOT the list slot it is appended to: a value whose
+            # `sink` names its own slot would render itself, and the renderer's
+            # cycle guard drops such a row at the write (slots::note in ctx.rs).
+            "sink": {"slot": REVIEW_CHANNEL},
             "children": [
                 {
                     "type": "text",
                     "attrs": {"format": "md"},
-                    "bind": {"value": {"kind": "default", "default":
-                        "复核（第一列可改，三种字段各一；点提交后字段值随 `review` 事件上行，stage 控制台可见）"}},
+                    "source": {"default":
+                        "复核（第一列可改，三种字段各一；点提交后整张复核表随 `review` 上行，stage 控制台可见）"},
                 },
                 {
                     "type": "frame",
-                    "attrs": {"class": ["gap", "md"]},
+                    "attrs": {"class": ["gap", "gap-md"]},
                     "children": [
                         {
-                            "type": "table",
-                            "children": [
-                                {"type": "thead", "children": [{"type": "tr", "children": [
-                                    th("复核项"), th("姓名"), th("部门"), th("日均分"), th("备注")]}]},
-                                {"type": "tbody", "children": [
-                                    row("zw", "number", 4.13, None,
-                                        "张伟", "研发部", "4.13", "后半月走低"),
-                                    row("cj", "bool", False, {"dept": "市场部", "note": "波动最大"},
-                                        "陈静", "市场部", "4.24", "波动最大"),
-                                    row("sy", "text", "已复核", None,
-                                        "孙悦", "运营部", "4.28", "收在高位"),
-                                ]},
-                            ],
+                            "type": "tiles",
+                            "attrs": {
+                                "class": ["--review"],
+                                "fields": fields,
+                                "header": {"selector": "--review-head"},
+                            },
+                            "source": {"slot": REVIEW_ROWS},
                         }
                     ],
                 },
                 {
                     "type": "button",
                     "attrs": {"oneshot": False},
-                    "bind": {"value": {"kind": "submit", "default": "提交复核"}},
+                    "source": {"default": "提交复核"},
+                    "sink": {},
                 },
             ],
         },
     }
+    return [
+        form,
+        row("zw", "number", "4.13", "张伟", "研发部", "4.13", "后半月走低"),
+        row("cj", "bool", False, "陈静", "市场部", "4.24", "波动最大"),
+        row("sy", "text", "已复核", "孙悦", "运营部", "4.28", "收在高位"),
+    ]
 
 
 def chart_data():
@@ -635,8 +682,8 @@ def main():
 
     step.wait(
         "气泡里那枚「≡ 把「分析引言」拖到右边」是一个单元，不是装饰：按住它拖到窗口右边缘"
-        "那条窄轨（拖拽在飞时它自己展开），松手 → stage 控制台出现 `<- pin`，带落点 id、"
-        "{id, kind, payload}；同一件货往别处拖什么也不会发生（那条轨只收 snippet）"
+        "那条窄轨（拖拽在飞时它自己展开），松手 → stage 控制台出现 `<- pin`，带落点 id 和 "
+        "{id, tag}（货物是那个框自己的子树）；同一件货往别处拖什么也不会发生（那条轨只收 snippet）"
     )
 
     step.wait("两个图表入场（发 00.radar.yaml 的 set 帧：折线 spec + 三个雷达 spec）")
@@ -655,8 +702,8 @@ def main():
     step.wait("打字机：摘要")
     type_out(mirror, SUMMARY, SUMMARY_TEXT, delay, "摘要")
 
-    step.wait("复核表 + 表单入场（append 进这一行里的 rack 槽）")
-    print(f"    append form → {send_json(mirror, frame_review_form())}")
+    step.wait("复核表 + 表单入场（append 进这一行里的 review 槽；行是 review_rows 里的 entry）")
+    print(f"    append form + rows → {send_json(mirror, frame_review_form())}")
     grow("复核表与表单")
 
     step.wait("打字机：第一件商品（泼溅车）")

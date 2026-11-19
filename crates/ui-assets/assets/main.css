@@ -533,26 +533,23 @@
        across and reads them as the entry's ROW tracks: one column of cells per entry, the header
        beside it. One track list, one block: the axis is a value, not two copies of a grid. */
     .tiles.cols {
-        /* `--tile-fields` is the track list the frame wrote, one per field; the other three say
-           how it is read. `--tile-columns` / `--tile-rows` are the container's track lists, and
-           `--tile-flow` is the axis the CELLS flow on inside one entry — the CROSS axis of `dir`,
-           which is why its word is the opposite one.
+        /* `--tile-fields` is the track list the frame wrote, one per field; the fields sit ACROSS
+           the item flow (ADR 0035), so `dir: col*` reads it as the container's COLUMN tracks (the
+           table: header above, one row of cells per entry) and `dir: row*` as its ROW tracks (the
+           wall: header beside, one column of cells per entry). One list, read on whichever axis
+           the direction names — no alias per branch.
 
-           `--tile-fields` is a track LIST, not a typed value, so it is deliberately NOT
-           registered with `@property`: one type cannot hold `minmax(0, 1fr) 5rem auto`, and a
-           registration would make every real list invalid at computed-value time — the grid would
-           silently collapse to a single track instead of failing loudly. */
+           It is a track LIST, not a typed value, so it is deliberately NOT registered with
+           `@property`: one type cannot hold `minmax(0, 1fr) 5rem auto`, and a registration would
+           make every real list invalid at computed-value time — the grid would silently collapse to
+           a single track instead of failing loudly. */
         --tile-fields: minmax(0, 1fr);
-        --tile-flow: row;
-        --tile-columns: var(--tile-fields);
-        --tile-rows: none;
 
         /* The container is the grid the header and every entry read. Its gap on the TRACK axis is
            the field spacing an entry used to declare for itself; the flow axis keeps whatever gap
            the page asked for (`gap-*`), because there it is the space BETWEEN entries. */
         display: grid;
-        grid-template-columns: var(--tile-columns);
-        grid-template-rows: var(--tile-rows);
+        grid-template-columns: var(--tile-fields);
         grid-auto-flow: row;
         column-gap: 0.5em;
 
@@ -562,7 +559,6 @@
         & > .tiles-head,
         & > .tiles-row {
             display: grid;
-            grid-auto-flow: var(--tile-flow);
             grid-template-columns: subgrid;
             grid-column: 1 / -1;
             align-items: center;
@@ -579,9 +575,8 @@
            columns, so the same two lines swap axes. */
         &.dir-row,
         &.dir-row-reverse {
-            --tile-flow: column;
-            --tile-columns: none;
-            --tile-rows: var(--tile-fields);
+            grid-template-columns: none;
+            grid-template-rows: var(--tile-fields);
 
             /* Entries are the columns now: one implicit column each, sharing the width the way
                `flex: 1 1 0` made them, and the rows inside one are the container's field tracks. */
@@ -592,6 +587,7 @@
 
             & > .tiles-head,
             & > .tiles-row {
+                grid-auto-flow: column;
                 grid-template-columns: none;
                 grid-template-rows: subgrid;
                 grid-column: auto;

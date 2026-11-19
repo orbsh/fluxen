@@ -181,6 +181,9 @@ fn drag_attrs(
 pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
     let ctx = ctx.clone();
     let attrs = accrete.attrs.clone().unwrap_or_default();
+    // HTML5 只在元素自带 `draggable="true"` 时才启动拖拽；只挂 dragstart 处理器不够
+    // （事件永远不会来，页面上的拖动是浏览器的选择文本）。有 `attrs.draggable` 才写这个属性。
+    let drag_flag = attrs.draggable.is_some().then_some("true");
     let mut css = vec!["frame"];
     if let Some(id) = &accrete.id {
         css.push(id.as_str());
@@ -247,6 +250,7 @@ pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
     let Some(source) = source_of(&accrete) else {
         let view = div()
             .attr("class", class)
+            .attr("draggable", drag_flag)
             .style(style)
             .add_any_attr(drag(&ctx))
             .child(render_children(&ctx, &children));
@@ -264,6 +268,7 @@ pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
             Some(data) => {
                 let view = div()
                     .attr("class", format!("{} is-fade-in-and-out", base))
+                    .attr("draggable", drag_flag)
                     .style(style.clone())
                     .add_any_attr(drag(&inner_ctx))
                     .child(render_accrete(&inner_ctx, &data));
@@ -275,6 +280,7 @@ pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
             None => {
                 let view = div()
                     .attr("class", class.clone())
+                    .attr("draggable", drag_flag)
                     .style(style.clone())
                     .add_any_attr(drag(&inner_ctx))
                     .child(render_children(&inner_ctx, &children));
