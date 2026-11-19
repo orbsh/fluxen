@@ -1,5 +1,5 @@
-# 一张商品表（ADR 0031 §4）：`tiles` + `columns`，不再有 table/thead/tbody/tr/th/td。
-# 每行是一条 `record`，字段名 = 子节点的 `attrs.selector`；列只按 key 投影，不认位置。
+# 一张商品表（ADR 0031 §4）：`tiles` + `fields`，不再有 table/thead/tbody/tr/th/td。
+# 每一条数据是一条 `entry`，字段名 = 子节点的 `attrs.selector`；字段只按 key 投影，不认位置。
 # 行是 append 进 `goods` 槽的，所以增删一行是列表操作，不是改布局。
 - action: append
   slot: chat
@@ -23,7 +23,7 @@
         children:
         - type: tiles
           attrs:
-            columns:
+            fields:
             - {key: qty, title: '', width: 4rem}
             - {key: image, title: '', width: 3rem}
             - {key: name, title: Name}
@@ -39,7 +39,7 @@
 - action: append
   slot: goods
   data:
-    type: record
+    type: entry
     id: '853736'
     children:
     - type: input
@@ -62,7 +62,7 @@
 - action: append
   slot: goods
   data:
-    type: record
+    type: entry
     id: '56459'
     children:
     - type: input
@@ -85,7 +85,7 @@
 - action: append
   slot: goods
   data:
-    type: record
+    type: entry
     id: '934900'
     children:
     - type: input

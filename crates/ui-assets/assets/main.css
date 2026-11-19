@@ -419,7 +419,7 @@
         --leave-ms: 350ms;
     }
 
-    /* A grid: `columns` present means every item is a record and every column projects one field
+    /* A grid: `fields` present means every item is an entry and every field projects one value
        into a cell (ADR 0031 §4). Each row is its own grid reading ONE track list, so a row can be
        styled — bordered, hovered, indented — where `display: contents` would have eaten it. */
     .tiles.cols {

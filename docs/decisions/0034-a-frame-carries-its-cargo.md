@@ -54,7 +54,7 @@ form.
 
 ## The known gap
 
-A `record` row can be neither a drag source nor wrapped. `record` is not a `frame`, so `draggable`
+An `entry` row can be neither a drag source nor wrapped. `entry` is not a `frame`, so `draggable`
 has nowhere to live on it; wrapping it in a frame would put a box between the grid and its rows, and
 the row would stop being a row of that grid (the tracks are the container's, and every row is a
 direct child). Making a row draggable waits for a rule that says a grid may address a row through

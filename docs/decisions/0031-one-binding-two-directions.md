@@ -131,16 +131,19 @@ a table of equal rows are all the same node.
 type: tiles
 source: { slot: "notice" }
 attrs:
-  columns: [{ key: "name", title: "Name", width: "12rem" }]   # optional
+  fields: [{ key: "name", title: "Name", width: "12rem" }]    # optional
   stage: all | one                                            # optional; default all
   step: { timer: 4000 } | { slot: "page" }                    # optional
 ```
 
-Two data shapes, one node, decided by whether `columns` is there:
+Two data shapes, one node, decided by whether `fields` is there:
 
-- **no `columns`** — each item of the slot is a node, rendered as it is: one cell per item. What the
+- **no `fields`** — each item of the slot is a node, rendered as it is: one cell per item. What the
   blocks look like is CSS on the container; a column of them is a list, a row of them is a strip.
-- **`columns`** — each item is a record, and each column projects one field into a cell.
+- **`fields`** — each item is an entry, and each field projects one of its children into a cell.
+
+The attribute names the data, not the direction it lands in. `column` would be a lie as soon as
+`tiles` runs along the other axis (`dir`), where this list is a row.
 
 ### Every item has a key
 
@@ -190,7 +193,7 @@ already addresses things — by **selector**:
 
 - `header: { selector, rows: 1 | 2 }` — when headers are enabled, the header cells carry the given
   selector; `rows: 2` gives a two-dimensional header (a row of groups over a row of leaves).
-- `column.selectors` — the same mechanism per column, since a column is not an element.
+- `field.selectors` — the same mechanism per field, since a field is not an element.
 
 ### Spans are not a feature; hierarchy is
 
@@ -200,7 +203,7 @@ child rows, indented or grouped, and a two-row header expresses the grouping ins
 A frame that wants merging can style it; the model does not carry an escape hatch for a shape the data
 already has.
 
-This is the largest change here: `columns` (width, alignment, formatting) does not exist yet, and
+This is the largest change here: `fields` (width, alignment, formatting) does not exist yet, and
 sorting/paging follow it. Do it last.
 
 ---

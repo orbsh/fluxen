@@ -48,7 +48,7 @@ pub fn parse_yaml_to_frame(
         if let Some(msg) = dead_end_drop(&v) {
             return Err(crate::error::ParseError { msg });
         }
-        if let Some(msg) = header_without_columns(&v) {
+        if let Some(msg) = header_without_fields(&v) {
             return Err(crate::error::ParseError { msg });
         }
         if let Some(msg) = stepper_without_window(&v) {
@@ -130,10 +130,10 @@ fn dead_end_drop(v: &serde_yaml::Value) -> Option<String> {
     }
 }
 
-/// A header cell is derived from a column key (ADR 0031 §4): with no columns there is no key to
-/// derive one from, so `attrs.header` on a `tiles` without `attrs.columns` can never render. Same
+/// A header cell is derived from a field key (ADR 0031 §4): with no fields there is no key to
+/// derive one from, so `attrs.header` on a `tiles` without `attrs.fields` can never render. Same
 /// rule as `dead_end_drop` — refused at load, because serde would take the key and draw nothing.
-fn header_without_columns(v: &serde_yaml::Value) -> Option<String> {
+fn header_without_fields(v: &serde_yaml::Value) -> Option<String> {
     match v {
         serde_yaml::Value::Mapping(m) => {
             let kind = m.get("type").and_then(|t| t.as_str());
@@ -141,23 +141,23 @@ fn header_without_columns(v: &serde_yaml::Value) -> Option<String> {
             let headed = attrs
                 .and_then(|a| a.get("header"))
                 .is_some_and(|h| !h.is_null());
-            // An empty column list is the same as none: a grid with no columns has no cells, so
-            // the renderer treats `columns: []` as absent and so does this check.
-            let columned = attrs
-                .and_then(|a| a.get("columns"))
+            // An empty field list is the same as none: a grid with no fields has no cells, so
+            // the renderer treats `fields: []` as absent and so does this check.
+            let fielded = attrs
+                .and_then(|a| a.get("fields"))
                 .and_then(|c| c.as_sequence())
                 .is_some_and(|c| !c.is_empty());
-            if kind == Some("tiles") && headed && !columned {
+            if kind == Some("tiles") && headed && !fielded {
                 return Some(
-                    "node `tiles` has `attrs.header` but no `attrs.columns` — a header cell is \
-                     derived from a column key, so it can never render; add `attrs.columns: \
-                     [{key: <record field>}]`"
+                    "node `tiles` has `attrs.header` but no `attrs.fields` — a header cell is \
+                     derived from a field key, so it can never render; add `attrs.fields: \
+                     [{key: <entry field>}]`"
                         .into(),
                 );
             }
-            m.iter().find_map(|(_, val)| header_without_columns(val))
+            m.iter().find_map(|(_, val)| header_without_fields(val))
         }
-        serde_yaml::Value::Sequence(s) => s.iter().find_map(header_without_columns),
+        serde_yaml::Value::Sequence(s) => s.iter().find_map(header_without_fields),
         _ => None,
     }
 }
@@ -218,7 +218,7 @@ fn retired_stage(v: &serde_yaml::Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        dead_end_drop, header_without_columns, illegal_channel, retired_stage,
+        dead_end_drop, header_without_fields, illegal_channel, retired_stage,
         stepper_without_window,
     };
 
@@ -258,17 +258,20 @@ mod tests {
     }
 
     #[test]
-    fn a_header_needs_columns() {
+    fn a_header_needs_fields() {
         let bad = y("type: tiles\nattrs: {header: {selector: --head}}\n");
-        let msg = header_without_columns(&bad).expect("有 header 没有 columns 应当报错");
-        assert!(msg.contains("columns"), "错误要说该补什么：{msg}");
+        let msg = header_without_fields(&bad).expect("有 header 没有 fields 应当报错");
+        assert!(msg.contains("fields"), "错误要说该补什么：{msg}");
 
-        // An empty column list is no columns: nothing to derive a header cell from.
-        let empty = y("type: tiles\nattrs: {header: {selector: h}, columns: []}\n");
-        assert!(header_without_columns(&empty).is_some(), "空列表也算没有列");
+        // An empty field list is no fields: nothing to derive a header cell from.
+        let empty = y("type: tiles\nattrs: {header: {selector: h}, fields: []}\n");
+        assert!(
+            header_without_fields(&empty).is_some(),
+            "空列表也算没有字段"
+        );
 
-        let ok = y("type: tiles\nattrs: {header: {selector: h}, columns: [{key: qty}]}\n");
-        assert!(header_without_columns(&ok).is_none(), "有列才有表头");
+        let ok = y("type: tiles\nattrs: {header: {selector: h}, fields: [{key: qty}]}\n");
+        assert!(header_without_fields(&ok).is_none(), "有字段才有表头");
     }
 
     #[test]

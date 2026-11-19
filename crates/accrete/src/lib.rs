@@ -766,22 +766,27 @@ pub struct TilesAttr {
     /// a frame error at load, not a clock that ticks for nobody.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub step: Option<Step>,
-    /// Absent = each item is a node drawn as it is, one block per item. Present = each item is a
-    /// RECORD and each column projects one of its fields into a cell (ADR 0031 §4).
+    /// Absent = each item is a node drawn as it is, one block per item. Present = each item is an
+    /// ENTRY and each field projects one of its children into a cell (ADR 0031 §4).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub columns: Option<Vec<Column>>,
+    pub fields: Option<Vec<Field>>,
     /// Absent = no header row. The cells carry `selector`, so the frame styles its own header.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header: Option<Header>,
 }
 
-/// One column of a grid (ADR 0031 §4). `key` is the record field this column projects — the
-/// `attrs.selector` of one of the record's children — and it is also what a two-row header derives
+/// One field of a grid (ADR 0031 §4). `key` names the entry field this field projects — the
+/// `attrs.selector` of one of the entry's children — and it is also what a two-row header derives
 /// its group from: split on `/`, everything before the last one is the group and the rest is the leaf
 /// (`price/retail` sits under `price`). Formatting has no spelling yet, so it is not implemented.
+///
+/// A FIELD, not a column: `column` names where a thing sits, and where it sits is `dir`'s business.
+/// `tiles` is about to grow a second axis (`row | row-reverse | column | column-reverse`), and on
+/// that axis this list runs horizontally — at which point "column" would be a lie. `field` names the
+/// thing itself.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct Column {
+pub struct Field {
     pub key: String,
     /// The header text; absent falls back to the key's leaf.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -791,13 +796,13 @@ pub struct Column {
     pub width: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub align: Option<Align>,
-    /// Extra class tokens for this column's cells: a column is not an element, so it is addressed
+    /// Extra class tokens for this field's cells: a field is not an element, so it is addressed
     /// the way the rest of the renderer addresses things (ADR 0031 §4).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selectors: Option<Vec<String>>,
 }
 
-/// Where a cell's content sits along its column. `start` is what a text cell already does, so it is
+/// Where a cell's content sits inside its field. `start` is what a text cell already does, so it is
 /// the default and stays off the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -811,7 +816,7 @@ pub enum Align {
 
 /// The header of a grid (ADR 0031 §4): the cells carry `selector` — one hook for the whole header,
 /// since no header cell is a special element. `rows: 2` puts a group row over a leaf row, both read
-/// off the columns' keys; there is no second shape to say the same thing.
+/// off the fields' keys; there is no second shape to say the same thing.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct Header {
@@ -953,25 +958,31 @@ pub struct Select {
     pub children: Option<Vec<Accrete>>,
 }
 
-/// A record: named fields, each one a child node whose `attrs.selector` is the field's name
-/// (ADR 0031 §4 — a record is the item of a `tiles` that has `columns`).
+/// An entry: a group of named data fields, as one item of a list — each field a child node whose
+/// `attrs.selector` is the field's name (ADR 0031 §4 — an entry is the item of a `tiles` that has
+/// `fields`).
 ///
-/// A field whose direct children are themselves records holds a LIST of records, which a grid draws
+/// A field whose direct children are themselves entries holds a LIST of entries, which a grid draws
 /// as child rows under the row it belongs to. That is the whole of "hierarchy instead of spans": the
 /// data already says which row a row belongs to, so the markup does not merge cells to say it again.
+///
+/// An ENTRY, not a record: `record` implies a row, and a row is a direction word. `tiles` is about to
+/// run along either axis (`dir: row | row-reverse | column | column-reverse`), and on the vertical
+/// one the items flow down a column — where "record" (a row) would name the wrong direction. `entry`
+/// names the thing itself: what a list holds.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Record {
-    /// The item's key (ADR 0031 §4, "Every item has a key"): a record that names itself keeps that
+pub struct Entry {
+    /// The item's key (ADR 0031 §4, "Every item has a key"): an entry that names itself keeps that
     /// name across removals and re-sorts; one that does not is addressed by where it arrived.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
-    /// The fields. A child's `attrs.selector` is the field's name, so a column projects by that
-    /// key rather than by position — reordering fields cannot move a value to another column.
+    /// The fields. A child's `attrs.selector` is the field's name, so a field projects by that
+    /// key rather than by position — reordering fields cannot move a value to another field.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -1108,9 +1119,9 @@ pub enum Accrete {
     /// what advances it. `rack` and `pages` were the same node with different steppers.
     #[ui_acrete(has_id = "true")]
     tiles(Tiles),
-    /// A record — the item a `tiles` with `columns` projects (ADR 0031 §4). Rendered on its own it
+    /// An entry — the item a `tiles` with `fields` projects (ADR 0031 §4). Rendered on its own it
     /// is a block of its fields; the grid is what turns it into a row.
-    record(Record),
+    entry(Entry),
     button(Button),
     image(Image),
     input(Input),
