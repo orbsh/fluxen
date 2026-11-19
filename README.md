@@ -9,7 +9,7 @@ Design: [Fluxora 架构](https://github.com/orbsh/wiki/blob/main/projects/fluxor
 ## What moved in
 
 - **Accrete DSL** (`accrete` / `accrete_macro`): closed typed enum, `#[serde(tag = "type")]`, Bind system, JsonSchema validation for AI generation
-- **Operation protocol** (ADR 0005, replaced the original streaming merge): create/set/append/patch/remove actions; `patch` addresses any node by JSON Pointer into its wire shape; `tmpl` registers slot-substitution templates (ADR 0006)
+- **Operation protocol** (ADR 0005, replaced the original streaming merge): create/set/append/patch/remove actions; `patch` addresses any node by JSON Pointer into its wire shape; `tmpl` registers a stamp definition — a node tree whose `"$name"` values are filled in whole (ADR 0037)
 - **Codec** (`codec`): `ActiveCodec` enum dispatch (Json/CBOR), URL-param handshake pinning, `encode_ws()` helper
 
 ## Position

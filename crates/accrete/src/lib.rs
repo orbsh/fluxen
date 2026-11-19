@@ -211,18 +211,6 @@ pub enum Direction {
     R,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct DirectionAttr {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub class: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selector: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub direction: Option<Direction>,
-}
-
 /// 外部渲染模块的原位挂载容器（ADR 0007）。
 /// 核心不解释 `data`——载荷语义完全归模块；尺寸/样式走 `attrs`，
 /// 与数据流的联动走现有 bind 槽协议（`set`/`patch` 按 `data_event` 寻址）。
@@ -493,73 +481,6 @@ pub struct Panel {
     pub children: Option<Vec<Accrete>>,
 }
 
-/// 模态层（ADR 0014）：应用显式声明的全屏挂载点，portal 把内容传送进来。
-/// 显隐只有一条规则——所绑 `bind["value"]` 槽非空即显示（空即无，ADR 0012 复用）；
-/// `dismiss` 点层自身（模糊区）时清空该槽（清空即关）。几何内联在渲染侧，
-/// 遮罩走 custom.css。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Layer {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<LayerAttr>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct LayerAttr {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub class: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selector: Option<String>,
-    /// 位置：给了就贴在页面的那一角（原来的 `float`），没给就铺满视口居中。
-    #[serde(flatten, skip_serializing_if = "Option::is_none")]
-    pub pos: Option<PositionAttr>,
-    /// dismiss（ADR 0014）：点层自身（模糊区，而非模态内容）清空所绑槽。
-    /// 本页瞬时状态：只写 local/data 平面，不上线协议。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dismiss: Option<bool>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct FoldAttr {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub class: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selector: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub replace_header: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub float_body: Option<bool>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Fold {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<FoldAttr>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub item: Option<Vec<Accrete>>,
-}
-
 /// When a bundle sends (ADR 0032). The modes combine, so the attribute is a
 /// set: `[enter, button]` is a chat box, `[change]` packs as the user types.
 /// This is timing — a different axis from `scope`, which says where a value
@@ -645,21 +566,6 @@ pub struct Bundle {
     pub attrs: Option<BundleAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sink: Option<Bind>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Popup {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<DirectionAttr>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -1160,7 +1066,8 @@ pub enum Accrete {
     #[ui_acrete(has_id = "true")]
     forcegraph(ForceGraph),
     /// 内容区：`place` × `state` 两轴四格（ADR 0030）。`fold`/`popup`/`layer` 作为节点类型
-    /// 已删除 —— 它们的实现还在 ui_core 里给这里用，但帧里不再能写出来。
+    /// 已删除，连同它们在模型里的壳：四格的实现都在 ui_core 的 `components/panel.rs` 里，
+    /// 这条臂是他们共用的同一个名字。
     #[ui_acrete(has_id = "true")]
     panel(Panel),
     bundle(Bundle),

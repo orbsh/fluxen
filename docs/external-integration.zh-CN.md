@@ -79,7 +79,7 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
 
    | 动作 | 写入 | 细节 |
    |:--|:--|:--|
-   | `tmpl` | 模板表 | `{{key}}` 替换，在 `create`/`set`/`append` 时执行（ADR 0006） |
+   | `tmpl` | stamp 定义表 | `{name, params, data}`：`data` 就是节点树，`"$name"` 这种整值在 `create`/`set`/`append` 时被替换（ADR 0037） |
    | `create` | `ctx.layout` | 根文档；页面的响应式根重画 |
    | `set` | 数据槽 `slot` | 一个具名节点 |
    | `append` | 列表槽 `slot` | 行身份取自 `data.id`；重复 id 拒收；`position` 从尾往内数（0 = 末尾） |
