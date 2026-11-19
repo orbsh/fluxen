@@ -20,10 +20,10 @@ data:
         source: {default: child of box}
     - type: text
       source: {slot: test-data, default: 123}
-  - type: rack
+  - type: tiles
     attrs: {}
     source: {slot: chat}
-    item:
+    children:
     - type: frame
       attrs:
         class:

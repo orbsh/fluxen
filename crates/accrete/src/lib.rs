@@ -715,186 +715,68 @@ pub struct Path {
     pub source: Option<Bind>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+/// How much of the slot a `tiles` node puts on stage (ADR 0031 §4): every item, laid out the way
+/// the frame's CSS says; or one at a time, occupying the whole area — the marquee, and also the
+/// page. Nothing about the container changes between the two.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "lowercase")]
-pub enum PagesDisplay {
-    /// 只挂载命中行：切页省内存，子树状态（滚动/输入/GL）随卸载丢失。
+pub enum Stage {
     #[default]
-    Render,
-    /// 所有行常驻 DOM，未命中行容器加 class `hide`（display:none）：
-    /// 状态全保，代价是全部行的渲染与内存常驻（生产端自选）。
-    Dom,
+    All,
+    One,
 }
 
-/// id 字典页面容器（ADR 0010）：`bind["value"]`（source，list 平面）喂
-/// 页面行——行 = 任意 Accrete 节点，其 `id` 即字典键（行身份在数据里，
-/// 同 rack 纪律）；`bind["select"]`（local 或 source，可带 `path`）是
-/// 选中信号，tracked 读、按 path 提键（path 缺省 = 整值；提出来必须是
-/// 字符串，否则 warn + 不切换）。命中键显示对应行，未命中 = warn + 空白。
+/// Absent on the wire: `all` is what a frame that says nothing means.
+fn stage_is_all(s: &Stage) -> bool {
+    *s == Stage::All
+}
+
+/// What advances the stage (ADR 0031 §4). Exactly two answers, because there are exactly two ways
+/// an item gets there: a clock this node owns, or a slot the world writes. Omitted = no stepping.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(untagged)]
+pub enum Step {
+    /// `{timer: 4000}` — ms between turns. One clock per node, stopped when the node goes away:
+    /// rotation, dwell and "newest on top" are all this.
+    Timer { timer: u64 },
+    /// `{slot: "page"}` — the value of that slot says which item is on stage. What a `pages` node
+    /// was: a selection driven from outside (a nav click, a route, another component).
+    Slot { slot: String },
+}
+
+/// One container for a slot's items, cut into blocks (ADR 0031 §4): `rack` and `pages` were this
+/// node with different steppers. `children` is the layout a tile is drawn with — a selector picks
+/// one template, the rest of the list is the default (the mechanism `rack.item` used to carry).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Pages {
+pub struct Tiles {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<ClassAttr>,
+    pub attrs: Option<TilesAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Bind>,
-
-    /// Second value (ADR 0031 §2 named field): the selected key.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub select: Option<Bind>,
-    #[serde(default)]
-    pub display: PagesDisplay,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<Accrete>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct RackAttr {
-    /// The old boolean scroll switch: `true` means `view.scroll = "bar"`. It stays because frames
-    /// already say it, and what it meant now has a finer name.
-    #[serde(default)]
-    pub scroll: bool,
+pub struct TilesAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
-    /// How the same rows are laid down (ADR 0024). Omitted = exactly what a rack has always done.
+    #[serde(default, skip_serializing_if = "stage_is_all")]
+    pub stage: Stage,
+    /// Absent = nothing steps: every item stays where it is.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub view: Option<RackView>,
-    /// The container's own direction. `view.direction` is what a frame should say; this field is
-    /// where the renderer lands it (`use_common_css` already reads it — the same field `ClassAttr`
-    /// grew for the same reason).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub horizontal: Option<bool>,
-}
-
-/// How a list container presents its rows: where they sit, how they come and go, who plays them. It
-/// changes no data — the slot is still the truth, this only decides which rows are shown.
-///
-/// The six defaults together are the rack that already existed (adaptive flow, vertical, no enter
-/// effect, no scroll control, following the newest row, no pausing), so an old frame that says
-/// nothing about `view` behaves exactly as before.
-// Copy: every axis is a small enum, and the renderer clones the view into row closures that outlive
-// the pass that built them — a value type keeps that from turning into ownership puzzles.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct RackView {
-    #[serde(default)]
-    pub layout: RackLayout,
-    /// `fixed` 露出几行；其余布局不看这个数。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub count: Option<usize>,
-    #[serde(default)]
-    pub direction: RackDirection,
-    #[serde(default)]
-    pub enter: RackEnter,
-    #[serde(default)]
-    pub scroll: RackScroll,
-    #[serde(default)]
-    pub play: RackPlay,
-    /// How long `enter` and `leave` take, in ms. Absent = 350, the number the CSS was written
-    /// with; the renderer only ever writes them through the container's custom properties, so how
-    /// a row moves is still CSS's business (ADR 0024).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enter_ms: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub leave_ms: Option<u64>,
-    /// 一行在台上待多久（毫秒）：`rotate` 的一步（然后轮到下一行），`dwell` 的全部（到点就下台）。
-    /// 缺席 = 4000，渲染器另有下限 200。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub every: Option<u64>,
-    #[serde(default)]
-    pub pause: RackPause,
-}
-
-/// How many rows are on stage: adaptive (the flow, as before), a fixed N, or one at a time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum RackLayout {
-    #[default]
-    Adaptive,
-    Fixed,
-    Exclusive,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum RackDirection {
-    #[default]
-    Vertical,
-    Horizontal,
-}
-
-/// How a row enters. Leaving is the renderer's business and needs no word from the sender.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum RackEnter {
-    #[default]
-    None,
-    Fade,
-    Translate,
-}
-
-/// The shape of scrolling: a bar (the old `scroll: true`), indicators, arrows, or none.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum RackScroll {
-    #[default]
-    None,
-    Bar,
-    Indicator,
-    Arrow,
-}
-
-/// Who decides which row is current: the newest one (as before), or a rotation of the renderer's.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum RackPlay {
-    #[default]
-    Newest,
-    Rotate,
-    /// Every row lives `every` ms from the moment it went on stage, then leaves — all of them are
-    /// on stage at once, unlike `rotate`, which takes turns. The row stays in the slot; only the
-    /// stage changes, so an area that keeps its rows (a log, a management page) shows all of them.
-    Dwell,
-}
-
-/// What holds the rotation still.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum RackPause {
-    #[default]
-    Off,
-    Click,
-    Hover,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Rack {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<RackAttr>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub item: Option<Vec<Accrete>>,
+    pub step: Option<Step>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -1240,10 +1122,10 @@ pub enum Accrete {
     svg(Svg),
     group(Group),
     path(Path),
+    /// One container for a slot's items (ADR 0031 §4): `stage` says how many are on it, `step`
+    /// what advances it. `rack` and `pages` were the same node with different steppers.
     #[ui_acrete(has_id = "true")]
-    rack(Rack),
-    #[ui_acrete(has_id = "true")]
-    pages(Pages),
+    tiles(Tiles),
     button(Button),
     image(Image),
     input(Input),

@@ -22,10 +22,8 @@ pub use popup::popup_;
 pub mod panel;
 pub use panel::panel_;
 
-pub mod pages;
-pub use pages::pages_;
-pub mod rack;
-pub use rack::rack_;
+pub mod tiles;
+pub use tiles::tiles_;
 pub mod render;
 pub use render::template_;
 pub mod svg;

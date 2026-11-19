@@ -91,27 +91,6 @@ fn get_at_walks_wire_shape() {
 }
 
 #[test]
-fn pages_variant_decodes_with_display_default() {
-    // ADR 0010: wire tag `pages`; `display` absent = render (serde default).
-    let p: accrete::Pages = serde_json::from_value(json!({
-        "id": "pager",
-        "source": { "slot": "pages" },
-        "select": { "slot": "page", "scope": "local", "path": "/data" }
-    }))
-    .unwrap();
-    assert_eq!(p.display, accrete::PagesDisplay::Render);
-    // explicit dom mode
-    let p2: accrete::Pages =
-        serde_json::from_value(json!({ "display": "dom" })).unwrap();
-    assert_eq!(p2.display, accrete::PagesDisplay::Dom);
-    // enum tag on the Accrete level round-trips
-    let a: accrete::Accrete = serde_json::from_value(json!({ "type": "pages" })).unwrap();
-    // stringify! on the match path yields spaced tokens (proc-macro behavior)
-    assert!(a.get_type().contains("pages"));
-    assert!(matches!(a, accrete::Accrete::pages(_)));
-}
-
-#[test]
 fn a_module_url_is_the_only_way_to_name_a_renderer() {
     // ADR 0007 的形态是唯一形态：种类住在数据里，框架不替任何渲染器选实现。
     // 原来的 chart/editor 默认 url 已移除——那正是"种类内置"的痕迹。
