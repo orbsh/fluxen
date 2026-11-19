@@ -1,0 +1,24 @@
+action: append
+slot: chat
+data:
+  attrs:
+    class: [f, col, gap, xxx, md]
+  children:
+  - type: frame
+  - type: frame
+  # 折叠区（ADR 0030）：panel 的 inline 那一格 —— 头是 children[0]，点它开合，
+  # 身体是后面的子节点。旧的 fold 节点已删除。
+  - attrs:
+      class: [box, sm, border, round, warn, pointer, highlight, ease]
+      place: inline
+    children:
+    - attrs: {class: [txt, sm, hint]}
+      type: text
+      source: {default: PartStarting}
+    - attrs: {}
+      children:
+      - attrs: {class: [txt, sm, hint], format: md}
+        type: text
+        source: {default: test}
+    type: panel
+  type: frame

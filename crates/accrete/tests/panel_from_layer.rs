@@ -22,13 +22,13 @@ fn layer_roundtrip() {
     // 典型形状：local 槽控显隐 + dismiss + 模态内容
     roundtrip(
         r##"{"type":"panel","id":"login_layer","attrs":{"place":"viewport","state":"bound","dismiss":true},
-             "bind":{"value":{"kind":"local","slot":"login_modal"}},
-             "children":[{"type":"text","bind":{"value":{"kind":"default","default":"hi"}}}]}"##,
+             "source":{"slot":"login_modal","scope":"local"},
+             "children":[{"type":"text","source":{"default":"hi"}}]}"##,
     );
     // 无 attrs / 无 bind / 无 children：三项全可选，省略即空
     roundtrip(r#"{"type":"panel","id":"bare","attrs":{"place":"viewport","state":"bound"}}"#);
     // data 槽绑定也合法（渲染侧两支都读）
-    roundtrip(r#"{"type":"panel","id":"l2","attrs":{"place":"viewport","state":"bound"},"bind":{"value":{"kind":"source","source":"modal"}}}"#);
+    roundtrip(r#"{"type":"panel","id":"l2","attrs":{"place":"viewport","state":"bound"},"source":{"slot":"modal"}}"#);
 }
 
 #[test]
@@ -41,7 +41,7 @@ fn float_is_not_a_word_any_more() {
     // 同一个形状换成 panel：位置键被展平进 attrs，不需要额外一层
     let p = roundtrip(
         r#"{"type":"panel","attrs":{"place":"viewport","state":"bound","right":"1rem","top":"1rem"},
-            "bind":{"value":{"kind":"source","source":"notice"}},"children":[]}"#,
+            "source":{"slot":"notice"},"children":[]}"#,
     );
     let back = serde_json::to_value(&p).expect("to_value").to_string();
     assert!(back.contains("\"right\"") && back.contains("\"top\""), "{back}");

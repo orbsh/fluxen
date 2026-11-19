@@ -2,24 +2,15 @@
   slot: chat
   data:
     type: text
-    bind:
-      value:
-        kind: default
-        default: alex
+    source: {default: alex}
 - action: append
   slot: chat
   data:
     type: text
-    bind:
-      value:
-        kind: default
-        default: bill
+    source: {default: bill}
 - action: append
   slot: chat
   data:
     type: text
-    bind:
-      value:
-        kind: default
-        default: chris
+    source: {default: chris}
 

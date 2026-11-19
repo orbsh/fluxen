@@ -2,10 +2,7 @@ action: append
 slot: chat
 data:
   type: form
-  bind:
-    value:
-      kind: dest
-      dest: confirm
+  sink: {slot: confirm}
   attrs:
     class:
     - gap
@@ -15,15 +12,9 @@ data:
     attrs:
       class:
       - ai-center
-    bind:
-      value:
-        kind: default
-        default: confirm order
+    source: {default: confirm order}
   - type: text
-    bind:
-      value:
-        kind: dest
-        dest: test
+    sink: {slot: test}
   - type: frame
     attrs:
       class:
@@ -35,48 +26,28 @@ data:
         horizontal: true
       children:
       - type: input
-        bind:
-          value:
-            kind: field
-            default: name
-            field: name
+        sink: {slot: name, scope: local, default: name}
       - type: input
-        bind:
-          value:
-            kind: field
-            default: age
-            field: age
+        sink: {slot: age, scope: local, default: age}
     - type: frame
       attrs:
         horizontal: true
       children:
       - type: input
         name: gender
-        bind:
-          value:
-            kind: field
-            field: gender
+        sink: {slot: gender, scope: local}
       - type: input
         name: phone
-        bind:
-          value:
-            kind: field
-            field: phone
+        sink: {slot: phone, scope: local}
     - type: frame
       attrs:
         horizontal: true
       children:
       - type: input
         name: var
-        bind:
-          value:
-            kind: default
-            variable: test
   - type: button
     attrs:
       oneshot: false
-    bind:
-      value:
-        kind: submit
-        default: confirm
+    sink: {}
+    source: {default: confirm}
 

@@ -87,7 +87,7 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
             }
         }
 
-        // 主题通道（可选）：`bind.theme` 绑本地槽或 source，载荷直接是
+        // 主题通道（可选）：`theme` 绑本地槽或 source，载荷直接是
         // `true/false` 或 `"dark"/"light"`——事件的 data 本来就是裸 Value，
         // 布尔值不需要任何包装。这里只翻译成枚举并换表现：场景、相机、布局
         // 都不动，所以切主题不会拉着画面重排。
@@ -95,7 +95,7 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
         let accrete_theme = accrete_load.clone();
         let view_theme = Rc::clone(&view_load);
         Effect::new(move |_| {
-            let Some(value) = hooks::use_source(&ctx_theme, &accrete_theme, "theme") else {
+            let Some(value) = hooks::value_of(&ctx_theme, accrete_theme.theme.as_ref(), true) else {
                 return;
             };
             let theme = match &value {
@@ -123,7 +123,7 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
         let host_style = host_style.clone();
         let host_el = el.clone();
         Effect::new(move |_| {
-            let payload = hooks::use_source(&ctx2, &accrete2, "value");
+            let payload = hooks::use_source(&ctx2, &accrete2);
             let empty = payload
                 .as_ref()
                 .map(super::canvas::payload_is_empty)

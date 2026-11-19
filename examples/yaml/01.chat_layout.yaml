@@ -7,11 +7,9 @@ data:
   type: frame
   children:
   - type: text
-    bind:
-      value:
-        kind: source
-        default: "**chat**"
-        source: login
+    source:
+      slot: login
+      default: "**chat**"
     attrs:
       class:
       - --header
@@ -37,24 +35,18 @@ data:
           format: md
           class:
           - box
-        bind:
-          value:
-            kind: default
-            default: "**channel**"
+        source:
+          default: "**channel**"
       - type: select
         attrs:
           class:
           - --channel
           - ji-center
           - nogrow
-        bind:
-          value:
-            kind: dest
-            dest: channel::select
-            default: "2"
-          options:
-            kind: source
-            source: channel::list
+        sink:
+          slot: channel::select
+          default: "2"
+        options: {slot: channel::list}
     - type: frame
       attrs:
         class:
@@ -72,10 +64,7 @@ data:
             - gap
             - scrolly
             scroll: true
-          bind:
-            value:
-              kind: source
-              source: chat
+          source: {slot: chat}
           item:
           - type: frame
             attrs:
@@ -100,43 +89,23 @@ data:
         - type: panel
           attrs:
             place: viewport
+            state: bound
             bottom: 0.2rem
             left: 1rem
+            class: [--cart, box, border, shadow, primary]
+          source: {slot: cart}
           children:
-          - type: popup
-            attrs:
-              class:
-              - --cart
-              - box
-              - border
-              - shadow
-              - primary
-              direction: U
-            bind:
-              value:
-                kind: source
-                source: cart
+          - type: template
+            name: cart
+            data: {}
+          - type: frame
             children:
-            - type: template
-              name: cart
-              data: {}
-            - type: frame
-              children:
-              - type: text
-                bind:
-                  value:
-                    kind: default
-                    default: a
-              - type: text
-                bind:
-                  value:
-                    kind: default
-                    default: b
-              - type: text
-                bind:
-                  value:
-                    kind: default
-                    default: c
+            - type: text
+              source: {default: a}
+            - type: text
+              source: {default: b}
+            - type: text
+              source: {default: c}
       - type: frame
         attrs:
           class:
@@ -150,8 +119,5 @@ data:
             horizontal: true
           children:
           - type: input
-            bind:
-              value:
-                kind: dest
-                dest: message
+            sink: {slot: message}
 

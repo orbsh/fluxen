@@ -2,8 +2,6 @@ action: append
 slot: channel
 data:
   type: text
-  bind:
-    value:
-      kind: default
-      default: "***"
+  source:
+    default: "***"
 

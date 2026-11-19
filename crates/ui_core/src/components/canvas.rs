@@ -45,15 +45,14 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
 
 
 
-/// `bind["value"]` → (source 槽名, inline default)。
-fn bind_value(a: &impl AccreteOps) -> (Option<String>, Option<Value>) {
-    let b = a.get_bind().and_then(|b| b.get("value")).cloned();
-    match b {
-        Some(accrete::Bind {
-            variant: accrete::BindVariant::Source { source, .. },
-            ..
-        }) => (Some(source), None),
-        Some(accrete::Bind { default, .. }) => (None, default),
+/// `source` → (scope, 槽名, inline default). A literal keeps its default; a
+/// slot keeps its address, and the scope says which plane it is read from.
+fn bind_value(a: &impl AccreteOps) -> (Option<(accrete::Scope, String)>, Option<Value>) {
+    match a.get_source() {
+        Some(b) => match &b.slot {
+            Some(slot) => (Some((b.scope, slot.clone())), None),
+            None => (None, b.default.clone()),
+        },
         None => (None, None),
     }
 }
@@ -83,13 +82,13 @@ fn mount_module(
     url: &str,
     style: String,
     css: String,
-    source: Option<String>,
+    source: Option<(accrete::Scope, String)>,
     inline_default: Option<Value>,
     options: Option<Value>,
     ctx: &Ctx,
 ) -> AnyView {
-    // 载荷解析：inline default 直用；kind:source 读槽内节点（其
-    // bind.value.default 优先，否则整个节点 JSON）。
+    // 载荷解析：literal default 直用；有槽则读槽内节点（其 source.default
+    // 优先，否则整个节点 JSON），`scope: local` 先看本页的值平面。
     // 流式喂数据 = 对源槽 set/patch（ADR 0005 指针协议），零新机制。
     // 空槽/无载荷 = `{}`：模块的 spec 全字段有默认，空 map 是合法
     // "尚无数据"；喂 null 会让严格 decode 的模块 mount 即拒——而
@@ -101,12 +100,17 @@ fn mount_module(
         let ctx = ctx.clone();
         let empty = empty.clone();
         Rc::new(move || {
-            if let Some(src) = &source {
+            if let Some((scope, src)) = &source {
+                // A local assignment (ADR 0031 §1) is the payload as it stands.
+                if scope.local()
+                    && let Some(v) = ctx.slot_for_value(src).get_untracked()
+                {
+                    return v;
+                }
                 return match ctx.slot_for_data(src).get_untracked().map(|a| (*a).clone()) {
                     Some(node) => node
-                        .get_bind()
-                        .and_then(|b| b.get("value"))
-                        .and_then(|v| v.default.clone())
+                        .get_source()
+                        .and_then(|b| b.default.clone())
                         .unwrap_or_else(|| serde_json::to_value(&node).unwrap_or(empty.clone())),
                     None => empty.clone(),
                 };
@@ -184,8 +188,13 @@ fn mount_module(
         let style_w = style_w.clone();
         let options_w = options_json.clone();
         Effect::new(move |_| {
-            if let Some(src) = &source_w {
-                let _ = ctx_w.slot_for_data(src).get();
+            if let Some((scope, src)) = &source_w {
+                if scope.local() {
+                    let _ = ctx_w.slot_for_value(src).get();
+                }
+                if scope.remote() {
+                    let _ = ctx_w.slot_for_data(src).get();
+                }
             }
             let p = payload_w();
             // ADR 0012：占位随载荷生效——空载荷收起容器，非空写回节点尺寸。
@@ -320,8 +329,13 @@ fn mount_module(
                     let src = source0.clone();
                     let el_eff = el.clone();
                     Effect::new(move |_| {
-                        if let Some(src) = &src {
-                            let _ = ctx.slot_for_data(src).get();
+                        if let Some((scope, src)) = &src {
+                            if scope.local() {
+                                let _ = ctx.slot_for_value(src).get();
+                            }
+                            if scope.remote() {
+                                let _ = ctx.slot_for_data(src).get();
+                            }
                         }
                         let p = payload0();
                         // ADR 0012：占位随载荷生效——空载荷收起容器，非空写回节点

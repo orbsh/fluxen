@@ -24,66 +24,46 @@
       - type: select
         attrs:
           horizontal: true
-        bind:
-          value:
-            kind: local
-            slot: page
-          options:
-            kind: source
-            source: tabs
+        source: {slot: page, scope: local}
+        sink: {slot: page, scope: local}
+        options: {slot: tabs}
     - type: text
       attrs:
         class:
         - --page-title
         format: md
-      bind:
-        value:
-          kind: local
-          slot: page
-          path: /data
-          default: "**（未打开任何页）**"
+      source:
+        slot: page
+        scope: local
+        path: /data
+        default: "**（未打开任何页）**"
     - type: pages
       id: pager
       attrs:
         class:
         - --content
         - shrink
-      bind:
-        value:
-          kind: source
-          source: pages
-        select:
-          kind: local
-          slot: page
-          path: /data
+      source: {slot: pages}
+      select: {slot: page, scope: local, path: /data}
 # ---- 菜单行：短标签 + id（tab 栏的选项） ----
 - action: append
   slot: tabs
   data:
     type: text
     id: home
-    bind:
-      value:
-        kind: default
-        default: 首页
+    source: {default: 首页}
 - action: append
   slot: tabs
   data:
     type: text
     id: docs
-    bind:
-      value:
-        kind: default
-        default: 文档
+    source: {default: 文档}
 - action: append
   slot: tabs
   data:
     type: text
     id: about
-    bind:
-      value:
-        kind: default
-        default: 关于
+    source: {default: 关于}
 # ---- 页面行：id 与菜单同键、内容互异（Pages 的字典） ----
 - action: append
   slot: pages
@@ -92,10 +72,8 @@
     id: home
     attrs:
       format: md
-    bind:
-      value:
-        kind: default
-        default: "# 首页\n欢迎。切 tab 不换页则本页常驻（display 模式为 render）。"
+    source:
+      default: "# 首页\n欢迎。切 tab 不换页则本页常驻（display 模式为 render）。"
 - action: append
   slot: pages
   data:
@@ -105,31 +83,21 @@
     - type: text
       attrs:
         format: md
-      bind:
-        value:
-          kind: default
-          default: "## 文档页（表单）"
+      source:
+        default: "## 文档页（表单）"
     - type: form
       children:
       - type: input
-        bind:
-          value:
-            kind: field
-            field: doc_draft
-            default: 草稿写在切页后丢失（render 语义）
+        sink: {slot: doc_draft, scope: local, default: 草稿写在切页后丢失（render 语义）}
       - type: button
         attrs:
           oneshot: false
-        bind:
-          value:
-            kind: submit
-            default: 保存
+        sink: {}
+        source: {default: 保存}
 - action: append
   slot: pages
   data:
     type: textarea
     id: about
-    bind:
-      value:
-        kind: default
-        default: "关于页：改这里的内容后切走再切回——render 模式会丢，dom 模式保。"
+    source:
+      default: "关于页：改这里的内容后切走再切回——render 模式会丢，dom 模式保。"

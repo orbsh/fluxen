@@ -1,17 +1,17 @@
 use crate::Ctx;
 use crate::ctx::render_children;
 use crate::hooks::{FormState, node_id, use_common_css};
-use accrete::{Accrete, AccreteOps, Bind, BindVariant, Form, JsType};
+use accrete::{Accrete, AccreteOps, Form, JsType};
 use leptos::html::*;
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, to_value};
 use std::collections::HashMap;
 
+/// One field of the confirm frame: the name the field's `sink` gave it.
 #[derive(Debug, Deserialize, Serialize)]
 struct Message {
     pub data: Value,
-    pub payload: Option<Value>,
 }
 
 fn default_for(kind: &Option<JsType>, default: &Option<Value>) -> Value {
@@ -34,26 +34,22 @@ fn default_for(kind: &Option<JsType>, default: &Option<Value>) -> Value {
     }
 }
 
-fn collect_fields(
-    b: &Accrete,
-    fields: &mut HashMap<String, RwSignal<Value>>,
-    payloads: &mut HashMap<String, Option<Value>>,
-) {
-    if let Some(Bind {
-        default,
-        r#type: kind,
-        variant: BindVariant::Field { field, payload, .. },
-    }) = b.get_bind().and_then(|x| x.get("value"))
+/// A form field is a node whose `sink` is a page-local assignment (ADR 0031
+/// §2: the channel says the direction, the scope says it stays here). The
+/// sink's slot is the field name — the form owns the eventual address.
+fn collect_fields(b: &Accrete, fields: &mut HashMap<String, RwSignal<Value>>) {
+    if let Some(sink) = b.get_sink()
+        && sink.scope.local()
+        && let Some(name) = &sink.slot
     {
-        let v = default_for(kind, default);
+        let v = default_for(&sink.r#type, &sink.default);
         fields
-            .entry(field.clone())
+            .entry(name.clone())
             .or_insert_with(|| RwSignal::new(v));
-        payloads.insert(field.clone(), payload.clone());
     }
     if let Some(subs) = b.borrow_children() {
         for c in subs {
-            collect_fields(c, fields, payloads);
+            collect_fields(c, fields);
         }
     }
 }
@@ -71,18 +67,13 @@ pub fn form_(accrete: Form, ctx: &Ctx) -> AnyView {
 
     let confirm = RwSignal::new(Value::Bool(false));
     let mut fields: HashMap<String, RwSignal<Value>> = HashMap::new();
-    let mut payloads: HashMap<String, Option<Value>> = HashMap::new();
     if let Some(subs) = accrete.children.as_deref() {
         for c in subs {
-            collect_fields(c, &mut fields, &mut payloads);
+            collect_fields(c, &mut fields);
         }
     }
 
-    let event = accrete
-        .get_bind()
-        .and_then(|x| x.get("value"))
-        .map(|b| b.variant.clone())
-        .filter(|v| matches!(v, BindVariant::Dest { .. } | BindVariant::Local { .. }));
+    let event = accrete.get_sink().cloned();
 
     // 注入表单状态并克隆下传：子树内的 input_/button_ 拿到的 ctx 自带归属
     let ctx = Ctx {
@@ -106,13 +97,7 @@ pub fn form_(accrete: Form, ctx: &Ctx) -> AnyView {
                 let ctx = ctx.clone();
                 let content: HashMap<String, Message> = fields
                     .iter()
-                    .map(|(k, sig)| {
-                        let d = Message {
-                            data: sig.get(),
-                            payload: payloads.get(k).cloned().flatten(),
-                        };
-                        (k.clone(), d)
-                    })
+                    .map(|(k, sig)| (k.clone(), Message { data: sig.get() }))
                     .collect();
                 let val = to_value(content).unwrap_or(Value::Null);
                 // 落点统一路由（ADR 0008）：Event 上行、Local 整张表单

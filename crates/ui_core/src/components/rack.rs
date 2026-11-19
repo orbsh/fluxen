@@ -673,7 +673,7 @@ mod tests {
     fn row(id: Option<&str>) -> Accrete {
         let mut v = json!({
             "type": "text",
-            "bind": { "value": { "kind": "default", "default": "x" } }
+            "source": { "default": "x" }
         });
         if let Some(i) = id {
             v.as_object_mut().unwrap().insert("id".into(), i.into());

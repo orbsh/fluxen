@@ -6,7 +6,6 @@ use accrete::{AccreteOps, Bind, Layer};
 use leptos::ev::click;
 use leptos::html::*;
 use leptos::prelude::*;
-use wasm_bindgen::JsCast;
 use serde_json::Value;
 
 /// 模态层（ADR 0014）：应用在骨架里显式声明的全屏挂载点，portal 把内容传送进来。
@@ -31,7 +30,7 @@ pub fn layer_(accrete: Layer, ctx: &Ctx, id: String) -> AnyView {
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
-    let (local_slot, data_source, inline) = bind_slot(accrete.bind.as_ref());
+    let (local_slot, data_source, inline) = bind_slot(accrete.source.as_ref());
     // 位置：给了 `right`/`top` 之类就贴在页面那一角（原来的 `float` 就是这个），
     // 没给就铺满视口居中 —— 两种都是"层"，只是几何不同。
     let shown_style = accrete
@@ -119,40 +118,43 @@ pub fn layer_(accrete: Layer, ctx: &Ctx, id: String) -> AnyView {
 const LAYER_STYLE: &str = "position: fixed; inset: 0; height: 100vh; z-index: 100; \
                            display: flex; align-items: center; justify-content: center;";
 
-/// `bind["value"]` → (local 槽名, data 槽名, inline 默认值)，三者至多其一。
-fn bind_slot(
-    bind: Option<&std::collections::HashMap<String, Bind>>,
-) -> (Option<String>, Option<String>, Option<Value>) {
-    match bind.and_then(|b| b.get("value")) {
-        Some(Bind {
-            variant: accrete::BindVariant::Local { slot, .. },
-            ..
-        }) => (Some(slot.clone()), None, None),
-        Some(Bind {
-            variant: accrete::BindVariant::Source { source, .. },
-            ..
-        }) => (None, Some(source.clone()), None),
-        Some(Bind { default, .. }) => (None, None, default.clone()),
+/// `source` → (local 槽名, data 槽名, inline 默认值), decided by `scope`
+/// (ADR 0031 §1). `both` gives both addresses: the local assignment wins while
+/// it exists, the far side is the fallback.
+fn bind_slot(bind: Option<&Bind>) -> (Option<String>, Option<String>, Option<Value>) {
+    match bind {
+        Some(b) => match &b.slot {
+            Some(slot) if b.scope.local() => (
+                Some(slot.clone()),
+                b.scope.remote().then(|| slot.clone()),
+                None,
+            ),
+            Some(slot) => (None, Some(slot.clone()), None),
+            None => (None, None, b.default.clone()),
+        },
         None => (None, None, None),
     }
 }
 
-/// 当前载荷：local 槽裸值 / data 槽节点（其 `bind.value.default` 优先，否则整节点
-/// JSON）/ inline 默认值。槽没写过 = Null = 空（"空即无"的判据见 payload_is_empty）。
+/// 当前载荷：local 槽裸值 / data 槽节点（其 `source.default` 优先，否则整节点
+/// JSON）/ literal 默认值。槽没写过 = Null = 空（"空即无"的判据见 payload_is_empty）。
 fn read_payload(
     ctx: &Ctx,
     local: &Option<String>,
     source: &Option<String>,
     inline: &Option<Value>,
 ) -> Value {
-    if let Some(slot) = local {
-        return ctx.slot_for_value(slot).get().unwrap_or(Value::Null);
+    // `scope: both`: the local assignment is the draft, the remote slot the
+    // fallback — an empty local plane must not hide a value that did arrive.
+    if let Some(slot) = local
+        && let Some(v) = ctx.slot_for_value(slot).get()
+    {
+        return v;
     }
     if let Some(src) = source {
         return match ctx.slot_for_data(src).get().map(|a| (*a).clone()) {
             Some(node) => node
-                .get_bind()
-                .and_then(|b| b.get("value"))
+                .get_source()
                 .and_then(|v| v.default.clone())
                 .unwrap_or_else(|| serde_json::to_value(&node).unwrap_or(Value::Null)),
             None => Value::Null,

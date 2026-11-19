@@ -1,6 +1,6 @@
 //! 拖拽的落点（ADR 0019）。
 //!
-//! 落点同时是三件事的所有者：**事件名**（`bind["value"]` 上的 `event`）、
+//! 落点同时是三件事的所有者：**事件名**（`sink.slot`）、
 //! **落点身份**（帧的 `id` 就是它自己的 id）、以及**收什么**（`attrs.accept`
 //! 与 `grab.kind` 配对，缺席即全收）。上行在这一侧发射——drop 事件本来就落在
 //! 它的 DOM 上，不需要跨组件回调；「被拖来的是什么」跟着进 `data`。
@@ -12,7 +12,7 @@
 use crate::Ctx;
 use crate::ctx::render_children;
 use crate::hooks::use_common_css;
-use accrete::{BindVariant, Dock, DockExpand, Grab};
+use accrete::{Dock, DockExpand, Grab};
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::{Map, Value};
@@ -42,14 +42,10 @@ pub fn dock_(accrete: Dock, ctx: &Ctx, id: String) -> AnyView {
     let base = css.join(" ");
 
     let accept = accrete.attrs.as_ref().and_then(|a| a.accept.clone());
-    // 落点由两样东西唯一确定：事件名（`bind["value"].event`）与帧的 `id`（dock 自己
-    // 的 id）。不另带元数据——那就成了同一件事的第三种说法。
-    let event = accrete
-        .bind
-        .as_ref()
-        .and_then(|b| b.get("value"))
-        .map(|b| b.variant.clone())
-        .filter(|v| matches!(v, BindVariant::Dest { .. } | BindVariant::Local { .. }));
+    // 落点由两样东西唯一确定：事件名（`sink.slot`）与帧的 `id`（dock 自己
+    // 的 id）。不另带元数据——那就成了同一件事的第三种说法。drop 是值流出，
+    // 所以这条通道是 `sink`（ADR 0031 §2）。
+    let event = accrete.sink.clone();
 
     let over = RwSignal::new(false);
 

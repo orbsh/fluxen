@@ -20,10 +20,7 @@
     attrs:
       width: 600px
       height: 400px
-    bind:
-      value:
-        kind: source
-        source: splat_truck
+    source: {slot: splat_truck}
 - action: append
   slot: chat
   data:
@@ -32,35 +29,28 @@
     attrs:
       width: 600px
       height: 400px
-    bind:
-      value:
-        kind: source
-        source: splat_bonsai
+    source: {slot: splat_bonsai}
 - action: set
   slot: splat_truck
   data:
     type: group
-    bind:
-      value:
-        kind: default
-        default:
-          assets:
-            scene: /assets/splatviewer/truck.ksplat
-          camera:
-            up: [0, -1, -0.17]
-            position: [-5, -1, -1]
-            lookAt: [-1.72477, 0.05395, -0.00147]
+    source:
+      default:
+        assets:
+          scene: /assets/splatviewer/truck.ksplat
+        camera:
+          up: [0, -1, -0.17]
+          position: [-5, -1, -1]
+          lookAt: [-1.72477, 0.05395, -0.00147]
 - action: set
   slot: splat_bonsai
   data:
     type: group
-    bind:
-      value:
-        kind: default
-        default:
-          assets:
-            scene: /assets/splatviewer/bonsai.ksplat
-          camera:
-            up: [0.01933, -0.75830, -0.65161]
-            position: [1.54163, 2.68515, -6.37228]
-            lookAt: [0.45622, 1.95338, 1.51278]
+    source:
+      default:
+        assets:
+          scene: /assets/splatviewer/bonsai.ksplat
+        camera:
+          up: [0.01933, -0.75830, -0.65161]
+          position: [1.54163, 2.68515, -6.37228]
+          lookAt: [0.45622, 1.95338, 1.51278]

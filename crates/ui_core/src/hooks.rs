@@ -1,5 +1,5 @@
 use crate::Ctx;
-use accrete::{Accrete, AccreteOps, Bind, BindVariant, classify::Classify};
+use accrete::{Accrete, AccreteOps, Bind, classify::Classify};
 use leptos::prelude::*;
 use serde_json::Value;
 
@@ -24,172 +24,136 @@ where
     }
 }
 
-/// 取 `bind["value"].default`。
+/// The primary read channel (ADR 0031 §2: `source` is where a value comes from).
+pub fn source(accrete: &impl AccreteOps) -> Option<&Bind> {
+    accrete.get_source()
+}
+
+/// `source.default` — the literal, or the value to use while the slot is empty.
 pub fn use_default(accrete: &impl AccreteOps) -> Option<Value> {
-    accrete
-        .get_bind()
-        .and_then(|x| x.get("value"))
-        .and_then(|x| x.default.clone())
+    source(accrete).and_then(|b| b.default.clone())
 }
 
-/// 取 `bind["value"]` 的 Source 来源名。
+/// The slot name of the primary read channel; None = a literal.
 pub fn use_source_id(accrete: &impl AccreteOps) -> Option<&String> {
-    if let Bind {
-        variant: BindVariant::Source { source, .. },
-        ..
-    } = accrete.get_bind().and_then(|x| x.get("value"))?
-    {
-        Some(source)
-    } else {
-        None
-    }
+    source(accrete).and_then(|b| b.slot.as_ref())
 }
 
-/// 订阅 `ctx.list[source]` 的 per-key 槽（无 Source 绑定则 None）。
-/// 其他键的更新不会触发本槽订阅者。
+/// A source slot rendered as rows (`ctx.list`). No slot = no rows, not "one row":
+/// a list channel without an address has nothing to page through.
 pub fn use_source_list(
     ctx: &Ctx,
     accrete: &impl AccreteOps,
-    key: &str,
 ) -> Option<std::sync::Arc<Vec<std::sync::Arc<Accrete>>>> {
-    source_of(accrete, key).map(|src| ctx.slot_for_list(src).get())
+    bind_list(ctx, source(accrete))
 }
 
-/// `bind[key]` 为 Source 时取其 source 名（path 只经 source_of_path 消费，
-/// 避免 4 元组到处传递）。
-pub fn source_of<'a>(accrete: &'a impl AccreteOps, key: &str) -> Option<&'a String> {
-    if let Bind {
-        variant: BindVariant::Source { source, .. },
-        ..
-    } = accrete.get_bind().and_then(|x| x.get(key))?
-    {
-        Some(source)
-    } else {
-        None
+/// Same, for a named second channel (`select.options`, `pages.select`).
+pub fn bind_list(
+    ctx: &Ctx,
+    bind: Option<&Bind>,
+) -> Option<std::sync::Arc<Vec<std::sync::Arc<Accrete>>>> {
+    bind.and_then(|b| b.slot.as_ref())
+        .map(|slot| ctx.slot_for_list(slot).get())
+}
+
+/// One field out of a slot's value (ADR 0008): the JSON Pointer the bind names,
+/// or the value itself when there is none.
+fn extract(v: Value, path: Option<&String>) -> Option<Value> {
+    let Some(p) = path else { return Some(v) };
+    let mut cur = v;
+    for seg in p.split('/').skip(1) {
+        let seg = seg.replace("~1", "/").replace("~0", "~");
+        cur = match cur {
+            Value::Object(m) => m.get(seg.as_str())?.clone(),
+            Value::Array(a) => a.get(seg.parse::<usize>().ok()?)?.clone(),
+            _ => return None,
+        };
     }
+    Some(cur)
 }
 
-/// Source 绑定的可选提取路径（ADR 0008）。
-pub fn source_of_path<'a>(accrete: &'a impl AccreteOps, key: &str) -> Option<&'a String> {
-    if let Bind {
-        variant: BindVariant::Source { path: Some(p), .. },
-        ..
-    } = accrete.get_bind().and_then(|x| x.get(key))?
-    {
-        Some(p)
-    } else {
-        None
-    }
-}
-
-/// 取 `bind[key]` 对应的值：`Source` 从 `ctx.data[source]` 订阅
-/// （带 `path` 进槽内节点 WIRE SHAPE 提取），`Local` 从 `ctx.vals[slot]`
-/// 订阅裸值平面（带 `path` 进槽内 Value 的 JSON Pointer 提取——形状归
-/// 生产端），否则取 accrete 自身 `bind[key].default`。
-/// `tracked == false` 用于发射组件的初值显示：自己 emit 写回的槽若被
-/// tracked 读，会把发射方自己重建、刚发送的内容"还原"（e2e 抓到的回路）。
-fn resolve_bind(ctx: &Ctx, accrete: &impl AccreteOps, key: &str, tracked: bool) -> Option<Value> {
+/// Resolve one channel to a value (ADR 0031 §1: one resolution path).
+///
+/// No slot: the channel is a literal. With a slot: `local` reads the page's
+/// value plane, `remote` reads the slot's node, `both` prefers the local
+/// assignment (a draft) and falls back to the far side. An empty slot falls
+/// back to `default` — the value to show before anything was sent.
+///
+/// `tracked == false` is for the initial display of a component that also
+/// emits: subscribing to a slot it writes would rebuild it from its own send.
+pub fn value_of(ctx: &Ctx, bind: Option<&Bind>, tracked: bool) -> Option<Value> {
+    let b = bind?;
+    let Some(slot) = &b.slot else {
+        return b.default.clone();
+    };
     let read_data = |src: &str| -> Option<std::sync::Arc<Accrete>> {
-        if tracked { ctx.slot_for_data(src).get() } else { ctx.slot_for_data(src).get_untracked() }
-    };
-    let read_val = |slot: &str| -> Option<Value> {
-        if tracked { ctx.slot_for_value(slot).get() } else { ctx.slot_for_value(slot).get_untracked() }
-    };
-    let bind = accrete.get_bind().and_then(|b| b.get(key));
-    match bind.map(|b| &b.variant) {
-        Some(BindVariant::Source { source, path }) => {
-            let node = read_data(source);
-            match (node.as_deref(), path) {
-                (Some(n), Some(p)) => match n.get_at(p) {
-                    Ok(v) => Some(v),
-                    Err(e) => {
-                        tracing::warn!("source {source:?} path {p:?}: {e}");
-                        None
-                    }
-                },
-                // 同 key 直传惯例：取槽节点自己 bind[key].default；
-                // 槽空回退自身 default（原实现语义，渲染未喂先有值）。
-                (Some(n), None) => n
-                    .get_bind()
-                    .and_then(|b| b.get(key))
-                    .and_then(|b| b.default.clone())
-                    .or_else(|| accrete.get_bind().and_then(|b| b.get(key))?.default.clone()),
-                (None, _) => bind.and_then(|b| b.default.clone()),
-            }
+        if tracked {
+            ctx.slot_for_data(src).get()
+        } else {
+            ctx.slot_for_data(src).get_untracked()
         }
-        Some(BindVariant::Local { slot, path, .. }) => {
-            let v = read_val(slot);
-            match (v, path) {
-                (Some(v), Some(p)) => {
-                    let mut cur = v;
-                    for seg in p.split('/').skip(1) {
-                        let seg = seg.replace("~1", "/").replace("~0", "~");
-                        cur = match cur {
-                            Value::Object(m) => m.get(seg.as_str())?.clone(),
-                            Value::Array(a) => a.get(seg.parse::<usize>().ok()?)?.clone(),
-                            _ => return None,
-                        };
-                    }
-                    Some(cur)
-                }
-                (Some(v), None) => Some(v),
-                // 槽未写入：回退自身 default（emit 前的初始显示，与
-                // Source 槽空回退同语义）
-                (None, _) => bind.and_then(|b| b.default.clone()),
-            }
+    };
+    let read_val = |s: &str| -> Option<Value> {
+        if tracked {
+            ctx.slot_for_value(s).get()
+        } else {
+            ctx.slot_for_value(s).get_untracked()
         }
-        _ => bind?.default.clone(),
+    };
+    if b.scope.local()
+        && let Some(v) = read_val(slot)
+    {
+        return extract(v, b.path.as_ref());
     }
+    if b.scope.remote()
+        && let Some(node) = read_data(slot)
+    {
+        return match b.path.as_ref() {
+            Some(p) => match node.get_at(p) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    tracing::warn!("source {slot:?} path {p:?}: {e}");
+                    None
+                }
+            },
+            // Same-slot pass-through: the row's own value, else our default.
+            None => node
+                .get_source()
+                .and_then(|s| s.default.clone())
+                .or_else(|| b.default.clone()),
+        };
+    }
+    b.default.clone()
 }
 
-pub fn use_source(ctx: &Ctx, accrete: &impl AccreteOps, key: &str) -> Option<Value> {
-    resolve_bind(ctx, accrete, key, true)
+pub fn use_source(ctx: &Ctx, accrete: &impl AccreteOps) -> Option<Value> {
+    value_of(ctx, accrete.get_source(), true)
 }
 
-/// 非反应式变体：发射组件显示初值专用。
-pub fn use_source_untracked(ctx: &Ctx, accrete: &impl AccreteOps, key: &str) -> Option<Value> {
-    resolve_bind(ctx, accrete, key, false)
+/// Non-reactive variant: the initial value of a component that emits.
+pub fn use_source_untracked(ctx: &Ctx, accrete: &impl AccreteOps) -> Option<Value> {
+    value_of(ctx, accrete.get_source(), false)
 }
 
-/// `use_source(ctx, accrete, "value")`。
-pub fn use_source_value(ctx: &Ctx, accrete: &impl AccreteOps) -> Option<Value> {
-    use_source(ctx, accrete, "value")
-}
-
-/// `bind[key]` 为 Event/Local 时，返回一个 emit 闭包（ADR 0008：
-/// 落点由 Ctx::emit 统一路由——上行或本地槽）。
+/// The write channel (ADR 0031 §2: `sink` is where a value goes). None = the
+/// node does not write anywhere, so the caller keeps its local-only behaviour.
 pub fn use_target<'a>(
     ctx: Ctx,
-    accrete: &'a impl AccreteOps,
-    key: &'a str,
+    accrete: &impl AccreteOps,
 ) -> Option<impl Fn(Value)> {
-    let variant = accrete
-        .get_bind()
-        .and_then(|x| x.get(key))
-        .map(|b| b.variant.clone())?;
-    match variant {
-        BindVariant::Dest { .. } | BindVariant::Local { .. } => {
-            // 发射节点自身的 id 随事件走（ADR 0010 的 `id`）——闭包按值捕获，
-            // 故在这里算好。
-            let id = node_id(accrete);
-            Some(move |val| {
-                let ctx = ctx.clone();
-                ctx.emit(&variant, id.clone(), val);
-            })
-        }
-        _ => None,
-    }
+    let sink = accrete.get_sink().cloned()?;
+    let id = node_id(accrete);
+    Some(move |val| {
+        let ctx = ctx.clone();
+        ctx.emit(&sink, id.clone(), val);
+    })
 }
 
 /// 发射节点自身的 id（ADR 0010：包装对象的 `id` = 发射节点 id）。
 /// 空串按无身份处理——与行身份同一约定（`''` 不构成 id）。
 pub(crate) fn node_id(accrete: &impl AccreteOps) -> Option<String> {
     accrete.get_id().clone().filter(|s| !s.is_empty())
-}
-
-/// `use_target(ctx, accrete, "value")`。
-pub fn use_target_value(ctx: Ctx, accrete: &impl AccreteOps) -> Option<impl Fn(Value)> {
-    use_target(ctx, accrete, "value")
 }
 
 /// 表单信号共享：`form_` 构建本结构后注入 `Ctx.form` 并克隆下传，

@@ -5,20 +5,18 @@ slot: chat
 data:
   type: canvas
   url: /assets/g2chart/index.js
-  bind:
-    value:
-      kind: default
-      default:
-        type: interval
-        data:
-        - {g: Apple, y: 44}
-        - {g: Mango, y: 55}
-        - {g: Orange, y: 13}
-        - {g: Watermelon, y: 33}
-        coordinate:
-          type: theta
-        encode:
-          y: y
-          color: g
-        interaction:
-          tooltip: {}
+  source:
+    default:
+      type: interval
+      data:
+      - {g: Apple, y: 44}
+      - {g: Mango, y: 55}
+      - {g: Orange, y: 13}
+      - {g: Watermelon, y: 33}
+      coordinate:
+        type: theta
+      encode:
+        y: y
+        color: g
+      interaction:
+        tooltip: {}

@@ -22,10 +22,7 @@
     attrs:
       width: 300px
       height: 260px
-    bind:
-      value:
-        kind: source
-        source: m3d_shoe
+    source: {slot: m3d_shoe}
 - action: append
   slot: chat
   data:
@@ -34,27 +31,20 @@
     attrs:
       width: 300px
       height: 260px
-    bind:
-      value:
-        kind: source
-        source: m3d_car
+    source: {slot: m3d_car}
 - action: set
   slot: m3d_shoe
   data:
     type: group
-    bind:
-      value:
-        kind: default
-        default:
-          assets:
-            shoe: /assets/3dbrowser/MaterialsVariantsShoe.glb
+    source:
+      default:
+        assets:
+          shoe: /assets/3dbrowser/MaterialsVariantsShoe.glb
 - action: set
   slot: m3d_car
   data:
     type: group
-    bind:
-      value:
-        kind: default
-        default:
-          assets:
-            car: /assets/3dbrowser/ToyCar.glb
+    source:
+      default:
+        assets:
+          car: /assets/3dbrowser/ToyCar.glb

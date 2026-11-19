@@ -1,5 +1,5 @@
 use crate::Ctx;
-use crate::hooks::{use_common_css, use_source_value};
+use crate::hooks::{use_common_css, use_source};
 use accrete::{Text, TextAttr};
 use leptos::html::*;
 use leptos::prelude::*;
@@ -13,7 +13,7 @@ static MDFMT: LazyLock<Vec<String>> = LazyLock::new(|| {
         .collect()
 });
 
-/// 文本：`bind["value"].default` 取值；`TextAttr.format` 为 markdown/md 时渲染 HTML。
+/// 文本：取 `source`（槽值或字面量）；`TextAttr.format` 为 markdown/md 时渲染 HTML。
 pub fn text_(accrete: Text, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["txt"];
@@ -33,7 +33,7 @@ pub fn text_(accrete: Text, ctx: &Ctx) -> AnyView {
     let base_css = css.join(" ");
 
     move || -> AnyView {
-        let text_content = match use_source_value(&ctx, &accrete) {
+        let text_content = match use_source(&ctx, &accrete) {
             Some(j) => match j.as_str() {
                 Some(s) => s.to_owned(),
                 None => j.to_string(),

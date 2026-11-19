@@ -20,10 +20,7 @@ slot: chat
 data:
   type: text
   id: m1
-  bind:
-    value:
-      kind: default
-      default: hi
+  source: {default: hi}
 "#;
     // the file's single item is one element of the list — the list is the wire
     let frame = wire(src);

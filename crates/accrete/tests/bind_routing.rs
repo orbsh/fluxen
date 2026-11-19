@@ -1,69 +1,74 @@
-//! ADR 0008 wire shapes: `local` kind (slot = 槽名), optional `path`
-//! on both source/local, `Target` retired (unknown kinds must fail),
-//! and the read-side pointer `get_at` on the WIRE shape.
+//! ADR 0031 wire shape of one value: an address (`slot`), a closed `scope`
+//! (`remote` | `local` | `both`), an optional `path` and `default`. `source`
+//! and `sink` are the two directions of that same struct, and the retired
+//! `kind` vocabulary must not decode.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
-use accrete::{Accrete, AccreteOps, BindVariant};
+use accrete::{Accrete, AccreteOps, Scope};
 use serde_json::json;
 
-fn bind(js: serde_json::Value) -> BindVariant {
-    serde_json::from_value::<accrete::Bind>(js).unwrap().variant
+fn bind(js: serde_json::Value) -> accrete::Bind {
+    serde_json::from_value::<accrete::Bind>(js).unwrap()
 }
 
 #[test]
-fn local_kind_carries_slot_and_optional_path() {
-    match bind(json!({"kind": "local", "slot": "page"})) {
-        BindVariant::Local { slot, path, name, .. } => {
-            assert_eq!(slot, "page");
-            assert_eq!(path, None);
-            assert_eq!(name, None);
-        }
-        other => panic!("expected Local, got {other:?}"),
-    }
-    match bind(json!({"kind": "local", "slot": "chan", "path": "/id"})) {
-        BindVariant::Local { slot, path, name, .. } => {
-            assert_eq!(slot, "chan");
-            assert_eq!(path.as_deref(), Some("/id"));
-            assert_eq!(name, None);
-        }
-        other => panic!("expected Local, got {other:?}"),
-    }
+fn a_slot_carries_its_scope_and_optional_path() {
+    let b = bind(json!({"slot": "page", "scope": "local"}));
+    assert_eq!(b.slot.as_deref(), Some("page"));
+    assert_eq!(b.scope, Scope::Local);
+    assert_eq!(b.path, None);
+
+    let b = bind(json!({"slot": "chan", "scope": "local", "path": "/id"}));
+    assert_eq!(b.slot.as_deref(), Some("chan"));
+    assert_eq!(b.path.as_deref(), Some("/id"));
 }
 
 #[test]
-fn local_kind_gains_an_optional_name() {
-    // ADR 0010: emitter-side channel name; absent = slot name.
-    match bind(json!({"kind": "local", "slot": "page", "name": "channel::select"})) {
-        BindVariant::Local { slot, name, .. } => {
-            assert_eq!(slot, "page");
-            assert_eq!(name.as_deref(), Some("channel::select"));
-        }
-        other => panic!("expected Local, got {other:?}"),
-    }
-    // roundtrip: explicit name serializes back; absent stays absent
-    let v = json!({"kind": "local", "slot": "p", "name": "e"});
-    let b = bind(v.clone());
-    assert_eq!(serde_json::to_value(&b).unwrap(), v);
+fn an_absent_scope_is_remote() {
+    // The default is the side that owns the session: a frame that says nothing
+    // means "an ordinary slot", not "a page-local one".
+    let b = bind(json!({"slot": "notice"}));
+    assert_eq!(b.scope, Scope::Remote);
+    assert!(b.scope.remote() && !b.scope.local());
 }
 
 #[test]
-fn source_kind_gains_optional_path() {
-    match bind(json!({"kind": "source", "source": "chan"})) {
-        BindVariant::Source { source, path } => {
-            assert_eq!(source, "chan");
-            assert_eq!(path, None);
-        }
-        other => panic!("expected Source, got {other:?}"),
-    }
-}
-
-#[test]
-fn target_variant_is_retired() {
-    // ADR 0008: the vague `Target` kind is deleted, not revived.
-    assert!(serde_json::from_value::<accrete::Bind>(json!(
-        {"kind": "target", "target": "x"}
-    ))
+fn scope_is_a_closed_enum() {
+    assert!(serde_json::from_value::<accrete::Bind>(json!({
+        "slot": "x", "scope": "nearby"
+    }))
     .is_err());
+}
+
+#[test]
+fn the_retired_kinds_do_not_decode() {
+    // ADR 0031: the address and the mode are one field each; `kind` is gone
+    // and an unknown key is an error, not a silently different value.
+    assert!(serde_json::from_value::<accrete::Bind>(json!({
+        "kind": "local", "slot": "page"
+    }))
+    .is_err());
+    assert!(serde_json::from_value::<accrete::Bind>(json!({
+        "kind": "default", "default": "hi"
+    }))
+    .is_err());
+    assert!(serde_json::from_value::<accrete::Bind>(json!({
+        "source": "chan"
+    }))
+    .is_err());
+}
+
+#[test]
+fn no_slot_means_the_default_is_the_value() {
+    // A constant is not a third channel: with no address, `default` *is* the value.
+    let b = bind(json!({"default": "untitled"}));
+    assert_eq!(b.slot, None);
+    assert_eq!(b.default, Some(json!("untitled")));
+
+    // With an address it is the fallback while the slot is still empty.
+    let b = bind(json!({"slot": "draft", "default": "untitled"}));
+    assert_eq!(b.slot.as_deref(), Some("draft"));
+    assert_eq!(b.default, Some(json!("untitled")));
 }
 
 #[test]
@@ -71,17 +76,17 @@ fn get_at_walks_wire_shape() {
     let a: Accrete = serde_json::from_value(json!({
         "type": "frame",
         "children": [
-            {"type": "text", "bind": {"value": {"kind": "default", "default": "hello"}}}
+            {"type": "text", "source": {"default": "hello"}}
         ]
     }))
     .unwrap();
     assert_eq!(
-        a.get_at("/children/0/bind/value/default").unwrap(),
+        a.get_at("/children/0/source/default").unwrap(),
         json!("hello")
     );
     // miss on a key skipped by skip_serializing_if is an error, not a panic
     assert!(a.get_at("/id").is_err());
-    assert!(a.get_at("/children/9/bind").is_err());
+    assert!(a.get_at("/children/9/source").is_err());
     assert!(a.get_at("nope").is_err());
 }
 
@@ -90,10 +95,8 @@ fn pages_variant_decodes_with_display_default() {
     // ADR 0010: wire tag `pages`; `display` absent = render (serde default).
     let p: accrete::Pages = serde_json::from_value(json!({
         "id": "pager",
-        "bind": {
-            "value": { "kind": "source", "source": "pages" },
-            "select": { "kind": "local", "slot": "page", "path": "/data" }
-        }
+        "source": { "slot": "pages" },
+        "select": { "slot": "page", "scope": "local", "path": "/data" }
     }))
     .unwrap();
     assert_eq!(p.display, accrete::PagesDisplay::Render);
@@ -115,7 +118,7 @@ fn a_module_url_is_the_only_way_to_name_a_renderer() {
     let c: Accrete = serde_json::from_value(json!({
         "type": "canvas",
         "url": "/assets/g2chart/index.js",
-        "bind": {"value": {"kind": "default", "default": {"type": "line"}}}
+        "source": {"default": {"type": "line"}}
     }))
     .unwrap();
     assert!(matches!(c, Accrete::canvas(_)));
@@ -129,52 +132,52 @@ fn a_module_url_is_the_only_way_to_name_a_renderer() {
     assert!(serde_json::from_value::<Accrete>(json!({"type": "editor"})).is_err());
     assert!(serde_json::from_value::<Accrete>(json!({"type": "diagram"})).is_err());
 }
+
 #[test]
-fn local_roundtrips_through_serde() {
+fn a_select_says_read_write_and_options() {
+    // Three channels on one node: the value in (`source`), the choice out
+    // (`sink`), and the option rows (a named second channel).
     let a: Accrete = serde_json::from_value(json!({
         "type": "select",
-        "bind": {
-            "value": {"kind": "local", "slot": "page"},
-            "options": {"kind": "source", "source": "menu"}
-        }
+        "source": {"slot": "page", "scope": "local"},
+        "sink": {"slot": "page", "scope": "local"},
+        "options": {"slot": "menu"}
     }))
     .unwrap();
+    let Accrete::select(s) = &a else {
+        panic!("expected select")
+    };
+    assert_eq!(s.get_source().unwrap().scope, Scope::Local);
+    assert_eq!(s.get_sink().unwrap().slot.as_deref(), Some("page"));
+    assert_eq!(s.options.as_ref().unwrap().slot.as_deref(), Some("menu"));
+
     let back = serde_json::to_value(&a).unwrap();
-    assert_eq!(back["bind"]["value"]["kind"], json!("local"));
-    assert_eq!(back["bind"]["value"]["slot"], json!("page"));
     // skip_serializing_if: absent path stays absent on the wire
-    assert!(back["bind"]["value"].get("path").is_none());
+    assert!(back["source"].get("path").is_none());
+    assert_eq!(back, json!({
+        "type": "select",
+        "source": {"slot": "page", "scope": "local"},
+        "sink": {"slot": "page", "scope": "local"},
+        "options": {"slot": "menu"}
+    }));
 }
 
 #[test]
-fn a_local_binding_can_report_the_same_click_to_the_venue() {
-    // ADR 0028: a navigation click is BOTH "the page's selected value changed" (a local slot) and
-    // "this person walked to an island" (a fact only the venue can remember across devices). The
-    // frame names the report event; the framework knows no island vocabulary.
+fn a_value_can_be_local_now_and_mirrored_up() {
+    // ADR 0031 §2: `both` is what the retired `report` said — assign in the
+    // page and let the far side hear about it, without a third channel.
     let a: Accrete = serde_json::from_value(json!({
         "type": "select",
-        "bind": {
-            "value": {"kind": "local", "slot": "page", "report": "island", "default": "talk"},
-            "options": {"kind": "source", "source": "nav"}
-        }
+        "source": {"slot": "page", "default": "talk"},
+        "options": {"slot": "nav"},
+        "sink": {"slot": "island", "scope": "both"}
     }))
     .unwrap();
-    match &a.get_bind().unwrap().get("value").unwrap().variant {
-        BindVariant::Local { slot, report, .. } => {
-            assert_eq!(slot, "page");
-            assert_eq!(report.as_deref(), Some("island"));
-        }
-        other => panic!("expected a local binding, got {other:?}"),
-    }
-    // absent report stays absent on the wire (skip_serializing_if)
-    let back = serde_json::to_value(&a).unwrap();
-    let plain: Accrete = serde_json::from_value(json!({
-        "type": "select",
-        "bind": {"value": {"kind": "local", "slot": "page"}}
-    }))
-    .unwrap();
-    assert_eq!(back["bind"]["value"]["report"], json!("island"));
-    assert!(serde_json::to_value(&plain).unwrap()["bind"]["value"]
-        .get("report")
-        .is_none());
+    let Accrete::select(s) = &a else {
+        panic!("expected select")
+    };
+    let sink = s.get_sink().unwrap();
+    assert_eq!(sink.slot.as_deref(), Some("island"));
+    assert!(sink.scope.local() && sink.scope.remote());
+    assert_eq!(s.source.as_ref().unwrap().default, Some(json!("talk")));
 }

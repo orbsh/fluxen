@@ -58,7 +58,7 @@ fn as_fold(p: &Panel, a: &PanelAttr) -> Fold {
             float_body: Some(false),
         }),
         item: None,
-        bind: p.bind.clone(),
+        source: p.source.clone(),
         children: p.children.clone(),
     }
 }
@@ -71,7 +71,7 @@ fn as_popup(p: &Panel, a: &PanelAttr) -> Popup {
             selector: a.selector.clone(),
             direction: a.direction.clone(),
         }),
-        bind: p.bind.clone(),
+        source: p.source.clone(),
         children: p.children.clone(),
     }
 }
@@ -85,7 +85,7 @@ fn as_layer(p: &Panel, a: &PanelAttr) -> Layer {
             pos: a.pos.clone(),
             dismiss: a.dismiss,
         }),
-        bind: p.bind.clone(),
+        source: p.source.clone(),
         children: p.children.clone(),
     }
 }

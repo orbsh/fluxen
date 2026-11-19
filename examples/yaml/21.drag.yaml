@@ -21,10 +21,7 @@ data:
       attrs:
         class:
         - bold
-      bind:
-        value:
-          kind: default
-          default: 信息流
+      source: {default: 信息流}
     - type: grab
       id: m42
       kind: message
@@ -37,10 +34,7 @@ data:
           - box
           - border
           - round
-        bind:
-          value:
-            kind: default
-            default: 批量导出一万多条的时候，进度条就不动了
+        source: {default: 批量导出一万多条的时候，进度条就不动了}
     - type: grab
       id: m43
       kind: message
@@ -53,10 +47,7 @@ data:
           - box
           - border
           - round
-        bind:
-          value:
-            kind: default
-            default: 同一件事，另一家客户也报了
+        source: {default: 同一件事，另一家客户也报了}
   - type: dock
     id: rail
     attrs:
@@ -64,10 +55,7 @@ data:
       - box
       accept:
       - message
-    bind:
-      value:
-        kind: dest
-        dest: pin
+    sink: {slot: pin}
   - type: dock
     id: trash
     attrs:
@@ -76,7 +64,4 @@ data:
       - box
       accept:
       - note
-    bind:
-      value:
-        kind: dest
-        dest: archive
+    sink: {slot: archive}

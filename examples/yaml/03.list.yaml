@@ -4,8 +4,5 @@ data:
   type: frame
   children:
   - type: text
-    bind:
-      value:
-        kind: default
-        default: (case)who are you?
+    source: {default: (case)who are you?}
 

@@ -6,10 +6,6 @@ data:
     - md
   children:
   - type: text
-    bind:
-      value:
-        kind: default
-        default: confirm order
   - attrs:
       class:
       - gap
@@ -26,175 +22,95 @@ data:
               attrs:
                 desc: ccacc
                 height: 1em
-              bind:
-                value:
-                  kind: default
-                  default: >-
-                    https://github.com/luser/keep-calm-and-call-clone/blob/master/keep-calm-and-call-clone.png?raw=true
           - type: th
             children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: b
           - type: th
             children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: c
           - type: th
             children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: d
           - type: th
             children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: e
       - type: tbody
         children:
         - children:
           - children:
-            - bind:
-                value:
-                  kind: field
-                  default: "853736"
-                  field: s
-                  type: text
-                  payload:
-                    a: 1
-                    b:
-                      c: 2
+            - source: {default: "853736", type: text}
+              sink: {slot: s, scope: local}
               type: input
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: a1
+              source: {default: a1}
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: 2.25
+              source: {default: 2.25}
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: a2
+              source: {default: a2}
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: a3
+              source: {default: a3}
             type: td
           type: tr
         - children:
           - children:
-            - bind:
-                value:
-                  kind: field
-                  default: false
-                  field: b
-                  type: bool
+            - source: {default: false, type: bool}
+              sink: {slot: b, scope: local}
               type: input
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: b1
+              source: {default: b1}
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: 0.31
+              source: {default: 0.31}
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: b2
+              source: {default: b2}
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: b3
+              source: {default: b3}
             type: td
           type: tr
         - children:
           - children:
-            - bind:
-                value:
-                  kind: field
-                  default: 9
-                  field: n
-                  type: number
+            - source: {default: 9, type: number}
+              sink: {slot: n, scope: local}
               type: input
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: c1
+              source: {default: c1}
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: 33.83
+              source: {default: 33.83}
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: c2
+              source: {default: c2}
             type: td
           - children:
             - type: text
-              bind:
-                value:
-                  kind: default
-                  default: c3
+              source: {default: c3}
             type: td
           type: tr
       type: table
     type: frame
   - attrs:
       oneshot: false
-    bind:
-      value:
-        kind: submit
-        default: confirm
+    sink: {}
     type: button
-  bind:
-    value:
-      kind: dest
-      dest: confirm
   id: table-form
   type: form
 slot: chat
