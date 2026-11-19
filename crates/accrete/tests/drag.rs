@@ -1,146 +1,113 @@
-//! ADR 0019 wire shapes: `grab` (the source) and `dock` (the landing side).
-//! Both are ordinary internal-tagged nodes. The source is a plain wrapper that
-//! carries a `kind` tag and one `payload`; the landing side owns the event name
-//! and which kinds it accepts.
+//! ADR 0034: cargo lives on the frame. `attrs.draggable` is the source, `attrs.accept`
+//! plus `sink` the landing, and the cargo itself is the frame's own subtree — no
+//! `kind`/`payload` bag to keep in step with the children.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
-use accrete::{Accrete, AccreteOps, DockExpand};
+use accrete::{Accrete, AccreteOps};
 use serde_json::json;
 
-#[test]
-fn grab_carries_a_kind_tag_and_one_payload() {
-    let wire = json!({
-        "type": "grab",
-        "kind": "message",
-        "payload": { "item": "m42" }
-    });
-    let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
-    match &node {
-        Accrete::grab(g) => {
-            assert_eq!(g.kind.as_deref(), Some("message"));
-            assert_eq!(g.payload, Some(json!({ "item": "m42" })));
-            // 源上没有 id、没有绑定、没有 attrs：货物与标签都是字面值，
-            // 身份在 payload 里，落点在对面。
-            assert_eq!(g.children, None);
-        }
-        other => panic!("expected grab, got {other:?}"),
+fn frame(node: Accrete) -> accrete::Frame {
+    match node {
+        Accrete::frame(f) => f,
+        other => panic!("expected frame, got {other:?}"),
     }
-    // 往返：形状不漂移（Attr/Bind 加字段后的既定门槛，新增类型同样适用）。
-    assert_eq!(serde_json::to_value(&node).unwrap(), wire);
 }
 
 #[test]
-fn grab_may_be_a_bare_wrapper() {
-    // 只有 children 的极小形状也必须解析得出来（没有 kind、没有 payload）。
+fn a_draggable_frame_owns_its_cargo() {
     let wire = json!({
-        "type": "grab",
+        "type": "frame",
+        "id": "m42",
+        "attrs": { "draggable": { "tag": "message" } },
         "children": [{ "type": "text", "source": { "default": "卡片" } }]
     });
     let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
-    match &node {
-        Accrete::grab(g) => {
-            assert_eq!(g.children.as_ref().map(Vec::len), Some(1));
-            assert_eq!(g.kind, None);
-            assert_eq!(g.payload, None);
-        }
-        other => panic!("expected grab, got {other:?}"),
-    }
+    let f = frame(node.clone());
+    assert_eq!(f.id.as_deref(), Some("m42"));
+    assert_eq!(
+        f.attrs.as_ref().and_then(|a| a.draggable.as_ref()).and_then(|d| d.tag.as_deref()),
+        Some("message")
+    );
+    // 货物就是这棵子树本身：没有第二份 payload。
+    assert_eq!(f.children.as_ref().map(Vec::len), Some(1));
+    // 往返：形状不漂移。
     assert_eq!(serde_json::to_value(&node).unwrap(), wire);
 }
 
 #[test]
-fn dock_owns_the_dest_and_the_landing_id() {
+fn a_draggable_frame_may_be_untagged() {
+    // 没有 tag 的货：不限定的落点照收，写了 tag 的落点不收。
     let wire = json!({
-        "type": "dock",
-        "id": "rail",
-        "sink": { "slot": "pin" }
+        "type": "frame",
+        "attrs": { "draggable": {} },
+        "children": [{ "type": "text", "source": { "default": "卡片" } }]
     });
     let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
-    match &node {
-        Accrete::dock(d) => {
-            assert_eq!(d.id.as_deref(), Some("rail"));
-            // 落点由上行槽名 + 帧的 id（dock 自己）确定；不另带元数据。
-            // drop 是值流出，所以这条通道是 `sink`（ADR 0031 §2）。
-            let sink = d.get_sink().unwrap();
-            assert_eq!(sink.slot.as_deref(), Some("pin"));
-        }
-        other => panic!("expected dock, got {other:?}"),
-    }
+    let f = frame(node.clone());
+    assert_eq!(f.attrs.as_ref().and_then(|a| a.draggable.as_ref()).and_then(|d| d.tag.clone()), None);
     assert_eq!(serde_json::to_value(&node).unwrap(), wire);
 }
 
 #[test]
-fn dock_expand_defaults_to_reveal() {
-    // 缺省 = reveal（常态细条，拖拽在飞时展开）；显式 reserved 才是提前占位。
-    let bare: Accrete = serde_json::from_value(json!({
-        "type": "dock",
-        "attrs": {}
-    }))
-    .unwrap();
-    match &bare {
-        Accrete::dock(d) => {
-            assert_eq!(d.attrs.as_ref().unwrap().expand, DockExpand::Reveal);
-        }
-        other => panic!("expected dock, got {other:?}"),
-    }
-
-    let reserved: Accrete = serde_json::from_value(json!({
-        "type": "dock",
-        "attrs": { "expand": "reserved", "class": ["rail"] }
-    }))
-    .unwrap();
-    match &reserved {
-        Accrete::dock(d) => {
-            let attrs = d.attrs.as_ref().unwrap();
-            assert_eq!(attrs.expand, DockExpand::Reserved);
-            assert_eq!(attrs.class.as_ref().map(Vec::len), Some(1));
-        }
-        other => panic!("expected dock, got {other:?}"),
-    }
-    // 枚举是闭的：域外取值必须解不出来，而不是静默落回默认。
+fn the_old_payload_bag_is_refused() {
+    // `kind`/`payload` 是 `grab` 的死键：货物是子树，不是第二个袋子，所以它们现在
+    // 是解码错误（而不是被静默丢掉后留下一个空盒子）。
     assert!(
         serde_json::from_value::<Accrete>(json!({
-            "type": "dock",
-            "attrs": { "expand": "sometimes" }
+            "type": "frame",
+            "attrs": { "draggable": { "kind": "message", "payload": { "item": "m42" } } }
         }))
         .is_err()
     );
 }
 
 #[test]
-fn dock_accepts_a_closed_set_of_kinds_or_all_of_them() {
-    // 缺席 = 全收（只有一个落点时不必写）；写了就是闭集合比对。
-    let open: Accrete = serde_json::from_value(json!({ "type": "dock" })).unwrap();
-    match &open {
-        Accrete::dock(d) => assert_eq!(d.attrs.as_ref().and_then(|a| a.accept.as_ref()), None),
-        other => panic!("expected dock, got {other:?}"),
-    }
-
+fn the_landing_owns_the_dest_and_its_own_id() {
     let wire = json!({
-        "type": "dock",
-        "attrs": { "accept": ["message", "patch"] }
+        "type": "frame",
+        "id": "rail",
+        "attrs": { "accept": { "tag": "message" } },
+        "sink": { "slot": "pin" }
     });
-    let narrow: Accrete = serde_json::from_value(wire.clone()).unwrap();
-    match &narrow {
-        Accrete::dock(d) => assert_eq!(
-            d.attrs.as_ref().unwrap().accept.as_ref().map(Vec::len),
-            Some(2)
-        ),
-        other => panic!("expected dock, got {other:?}"),
-    }
-    assert_eq!(serde_json::to_value(&narrow).unwrap(), wire);
+    let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
+    let f = frame(node.clone());
+    assert_eq!(
+        f.attrs.as_ref().and_then(|a| a.accept.as_ref()).and_then(|a| a.tag.as_deref()),
+        Some("message")
+    );
+    // 落点由上行槽名 + 帧的 id 确定；不另带元数据。drop 是值流出，所以这条通道是
+    // `sink`（ADR 0031 §2）。
+    assert_eq!(f.get_sink().and_then(|b| b.slot.as_deref()), Some("pin"));
+    assert_eq!(serde_json::to_value(&node).unwrap(), wire);
 }
 
 #[test]
-fn dock_children_are_what_was_dropped() {
+fn accept_without_a_tag_takes_any_cargo() {
+    // 缺席 = 全收（只有一个落点时不必写）；写了就是闭集合比对。
+    let wire = json!({ "type": "frame", "attrs": { "accept": {} }, "sink": { "slot": "pin" } });
+    let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
+    let f = frame(node.clone());
+    assert_eq!(
+        f.attrs.as_ref().and_then(|a| a.accept.as_ref()).and_then(|a| a.tag.clone()),
+        None
+    );
+    assert_eq!(serde_json::to_value(&node).unwrap(), wire);
+}
+
+#[test]
+fn a_frame_is_both_ends_and_reads_a_slot() {
+    // 同一个节点三条通道并存：读（source）、发（sink）、被拖（draggable）。
     let wire = json!({
-        "type": "dock",
-        "children": [{ "type": "text", "source": { "default": "已钉住" } }]
+        "type": "frame",
+        "id": "slot1",
+        "attrs": { "draggable": { "tag": "snippet" }, "accept": {}, "class": ["box"] },
+        "source": { "slot": "inbox" },
+        "sink": { "slot": "pin" },
+        "children": []
     });
     let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
-    match &node {
-        Accrete::dock(d) => assert_eq!(d.children.as_ref().map(Vec::len), Some(1)),
-        other => panic!("expected dock, got {other:?}"),
-    }
+    let f = frame(node.clone());
+    assert_eq!(f.get_source().and_then(|b| b.slot.as_deref()), Some("inbox"));
+    assert_eq!(f.get_sink().and_then(|b| b.slot.as_deref()), Some("pin"));
     assert_eq!(serde_json::to_value(&node).unwrap(), wire);
 }

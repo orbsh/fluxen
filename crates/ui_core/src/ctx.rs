@@ -1,6 +1,6 @@
 use crate::hooks::BundleState;
 use crate::render::dispatch;
-use accrete::{Accrete, AccreteOps, Grab};
+use accrete::{Accrete, AccreteOps};
 use content::codec::ActiveCodec;
 use content::{Content, PatchKind};
 use leptos::prelude::*;
@@ -42,12 +42,12 @@ pub struct Ctx {
     pub list: RwSignal<HashMap<String, ListSlot>>,
     /// local 平面：`kind: local` 事件落点与订阅共用的具名 Value 槽。
     pub vals: RwSignal<HashMap<String, ValueSlot>>,
-    /// 拖拽会话（ADR 0019）：`Some` 即「有拖拽在飞」，里面放的就是那个 `grab` 节点
-    /// 本身——不再复制一份平行的结构，复制体和原体迟早对不上。这是渲染器里唯一一份
-    /// 跨组件的瞬态态：源和落点隔着别的节点，本地信号到不了对面。它不进任何槽、
-    /// 不上线：「谁在飞、悬在谁上面」是浏览器的事实，不是生产者的树。只能有这一份，
-    /// 组件各自维护一份就是这条设计的反面。
-    pub drag: RwSignal<Option<Grab>>,
+    /// 拖拽会话（ADR 0034）：`Some` 即「有拖拽在飞」，里面放的就是那个源框节点
+    /// 本身——货物是它自己的子树，所以不再有第二份平行的结构（复制体和原体迟早
+    /// 对不上）。这是渲染器里唯一一份跨组件的瞬态态：源和落点隔着别的节点，本地信号
+    /// 到不了对面。它不进任何槽、不上线：「谁在飞、悬在谁上面」是浏览器的事实，不是
+    /// 生产者的树。只能有这一份，组件各自维护一份就是这条设计的反面。
+    pub drag: RwSignal<Option<Accrete>>,
     /// 槽位的永久 owner：Ctx::new 时捕获的 app 根作用域。
     /// 槽若建在消费帧的 Effect 作用域里，Effect 重跑会 dispose 其存储，
     /// 外层 map 里留下的就是死句柄（panic: already disposed）。

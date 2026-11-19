@@ -110,6 +110,13 @@ empty container already follows.
 
 ## 4. `rack` and `pages` are one node: `tiles`
 
+> **Superseded in part** (2026-11-19). The count of items on stage is no longer `attrs.stage: all |
+> one` but `attrs.window: {size: N}`: absent lays every item out (the old `all`), `{size: 1}` is the
+> old `one`, and `{size: N}` is the fixed window a paged table needs (what `rack.view.count` was).
+> A `step` now requires a `window`, so the old "all of them, each retiring after its stay" (dwell)
+> is gone rather than renamed. The reasoning below still holds — only the spelling of the count, and
+> the endpoints of a drag, changed. `grab`/`dock`/`group` are folded into `frame`: ADR 0034.
+
 The six-node table family (`table`/`thead`/`tbody`/`tr`/`th`/`td`) mirrors an element tree, so a frame
 spells the data twice: once as rows, once as the grid holding them. Same disease as
 `fold`/`popup`/`layer` — classification by what the output looks like.

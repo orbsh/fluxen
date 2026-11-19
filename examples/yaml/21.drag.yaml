@@ -1,7 +1,7 @@
-# ADR 0019: 拖拽的两端。
-# 左边两行可拖（grab 当行根，id 就是行的身份，payload 是货物），右边两个落点：
-# rail 只收 kind=message、发 pin；trash 只收 kind=note——这次拖的
-# 两个都配不上它，落上去等于没落。同页多落点靠事件名分开，不用额外寻址。
+# ADR 0034: 拖拽的两端都在 frame 上。左边两行可拖（源框的 id 就是行的身份，
+# 货物就是它自己的子树），右边两个落点：rail 只收 tag=message、发 pin；
+# trash 只收 tag=note——这次拖的两个都配不上它，落上去等于没落。
+# 同页多落点靠事件名分开，不用额外寻址。
 action: create
 slot: ""
 data:
@@ -22,11 +22,10 @@ data:
         class:
         - bold
       source: {default: 信息流}
-    - type: grab
+    - type: frame
       id: m42
-      kind: message
-      payload:
-        item: m42
+      attrs:
+        draggable: {tag: message}
       children:
       - type: text
         attrs:
@@ -35,11 +34,10 @@ data:
           - border
           - round
         source: {default: 批量导出一万多条的时候，进度条就不动了}
-    - type: grab
+    - type: frame
       id: m43
-      kind: message
-      payload:
-        item: m43
+      attrs:
+        draggable: {tag: message}
       children:
       - type: text
         attrs:
@@ -48,20 +46,17 @@ data:
           - border
           - round
         source: {default: 同一件事，另一家客户也报了}
-  - type: dock
+  - type: frame
     id: rail
     attrs:
       class:
       - box
-      accept:
-      - message
+      accept: {tag: message}
     sink: {slot: pin}
-  - type: dock
+  - type: frame
     id: trash
     attrs:
-      expand: reserved
       class:
       - box
-      accept:
-      - note
+      accept: {tag: note}
     sink: {slot: archive}

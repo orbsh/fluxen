@@ -35,7 +35,7 @@
 - action: set
   slot: m3d_shoe
   data:
-    type: group
+    type: frame
     source:
       default:
         assets:
@@ -43,7 +43,7 @@
 - action: set
   slot: m3d_car
   data:
-    type: group
+    type: frame
     source:
       default:
         assets:

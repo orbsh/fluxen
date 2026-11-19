@@ -12,7 +12,7 @@ data:
     direction: U
   source: {slot: cart}
   children:
-  - type: template
+  - type: stamp
     name: cart
     data: {}
   - type: frame

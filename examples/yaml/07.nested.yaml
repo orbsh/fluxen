@@ -26,7 +26,7 @@
     - type: text
       attrs: {selector: order/no}
       source: {default: A-1001}
-    - type: group
+    - type: frame
       attrs: {selector: item/lines}
       children:
       - type: record
@@ -56,7 +56,7 @@
     - type: text
       attrs: {selector: order/no}
       source: {default: A-1002}
-    - type: group
+    - type: frame
       attrs: {selector: item/lines}
       children:
       - type: record

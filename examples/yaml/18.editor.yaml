@@ -41,7 +41,7 @@
 - action: set
   slot: staged_code
   data:
-    type: group
+    type: frame
     source:
       default:
         code: |

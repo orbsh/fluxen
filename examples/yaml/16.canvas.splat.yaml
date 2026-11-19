@@ -33,7 +33,7 @@
 - action: set
   slot: splat_truck
   data:
-    type: group
+    type: frame
     source:
       default:
         assets:
@@ -45,7 +45,7 @@
 - action: set
   slot: splat_bonsai
   data:
-    type: group
+    type: frame
     source:
       default:
         assets:

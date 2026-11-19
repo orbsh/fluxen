@@ -30,7 +30,7 @@ fn expand_replaces_template_with_substituted_accrete() {
     );
 
     let mut b = accrete(json!({
-        "type": "template",
+        "type": "stamp",
         "name": "greet",
         "data": { "name": "ada" }
     }));
@@ -44,12 +44,12 @@ fn expand_replaces_template_with_substituted_accrete() {
 fn unregistered_name_warns_and_keeps_node() {
     let env = Templates::new();
     let mut b = accrete(json!({
-        "type": "template", "name": "ghost", "data": {}
+        "type": "stamp", "name": "ghost", "data": {}
     }));
     let warns = b.expand(&env);
     assert_eq!(warns.len(), 1);
     assert!(warns[0].contains("not registered"));
-    assert_eq!(b.get_type(), "Accrete :: template");
+    assert_eq!(b.get_type(), "Accrete :: stamp");
 }
 
 #[test]
@@ -60,12 +60,12 @@ fn invalid_result_warns_and_keeps_node() {
     env.insert("broken".into(), "{\"type\": \"text\", \"children\": {{ xs }}".into());
 
     let mut b = accrete(json!({
-        "type": "template", "name": "broken", "data": { "xs": "not-json-here" }
+        "type": "stamp", "name": "broken", "data": { "xs": "not-json-here" }
     }));
     let warns = b.expand(&env);
     assert_eq!(warns.len(), 1);
     assert!(warns[0].contains("invalid"));
-    assert_eq!(b.get_type(), "Accrete :: template");
+    assert_eq!(b.get_type(), "Accrete :: stamp");
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn slot_carries_json_fragment_from_producer() {
     );
 
     let mut b = accrete(json!({
-        "type": "template",
+        "type": "stamp",
         "name": "wrap",
         "data": {
             "kids": [{"type": "text"}, {"type": "text"}],
@@ -109,8 +109,8 @@ fn expand_recurses_into_children() {
     let mut b = accrete(json!({
         "type": "frame",
         "children": [
-            { "type": "template", "name": "lbl", "data": { "t": "one" } },
-            { "type": "template", "name": "lbl", "data": { "t": "two" } }
+            { "type": "stamp", "name": "lbl", "data": { "t": "one" } },
+            { "type": "stamp", "name": "lbl", "data": { "t": "two" } }
         ]
     }));
     assert!(b.expand(&env).is_empty());

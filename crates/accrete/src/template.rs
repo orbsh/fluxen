@@ -40,7 +40,7 @@ impl Accrete {
     }
 
     fn expand_into(&mut self, env: &Templates, warns: &mut Vec<String>) {
-        if let Accrete::template(r) = self {
+        if let Accrete::stamp(r) = self {
             match env.get(&r.name) {
                 Some(body) => match subst(body, &r.data) {
                     Ok(x) => *self = x,
