@@ -9,7 +9,7 @@ where
     T: Classify + AccreteOps,
 {
     let t = accrete.get_type();
-    let mut v = ["Box", "Frame", "Tiles", "Text", "Tab", "Select"].contains(&t);
+    let mut v = ["Box", "Frame", "Tiles", "Record", "Text", "Tab", "Select"].contains(&t);
     if let Some(a) = accrete.borrow_attrs() {
         if a.is_horizontal() {
             v = false;

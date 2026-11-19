@@ -777,6 +777,86 @@ pub struct TilesAttr {
     /// Absent = nothing steps: every item stays where it is.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub step: Option<Step>,
+    /// Absent = each item is a node drawn as it is, one block per item. Present = each item is a
+    /// RECORD and each column projects one of its fields into a cell (ADR 0031 §4).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub columns: Option<Vec<Column>>,
+    /// Absent = no header row. The cells carry `selector`, so the frame styles its own header.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header: Option<Header>,
+}
+
+/// One column of a grid (ADR 0031 §4). `key` is the record field this column projects — the
+/// `attrs.selector` of one of the record's children — and it is also what a two-row header derives
+/// its group from: split on `/`, everything before the last one is the group and the rest is the leaf
+/// (`price/retail` sits under `price`). Formatting has no spelling yet, so it is not implemented.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct Column {
+    pub key: String,
+    /// The header text; absent falls back to the key's leaf.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// A CSS track size (`12rem`, `minmax(0, 2fr)`); absent is `minmax(0, 1fr)`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub align: Option<Align>,
+    /// Extra class tokens for this column's cells: a column is not an element, so it is addressed
+    /// the way the rest of the renderer addresses things (ADR 0031 §4).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selectors: Option<Vec<String>>,
+}
+
+/// Where a cell's content sits along its column. `start` is what a text cell already does, so it is
+/// the default and stays off the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum Align {
+    #[default]
+    Start,
+    Center,
+    End,
+}
+
+/// The header of a grid (ADR 0031 §4): the cells carry `selector` — one hook for the whole header,
+/// since no header cell is a special element. `rows: 2` puts a group row over a leaf row, both read
+/// off the columns' keys; there is no second shape to say the same thing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct Header {
+    pub selector: String,
+    /// `1` (default) or `2`. Anything else is a frame error at load, not a layout surprise.
+    #[serde(
+        default = "rows_default",
+        skip_serializing_if = "rows_is_one",
+        deserialize_with = "rows_1_or_2"
+    )]
+    #[cfg_attr(feature = "schema", schemars(range(min = 1, max = 2)))]
+    pub rows: u8,
+}
+
+/// Absent `rows` is one row, not zero: `default` alone would hand back `0` and the node would
+/// claim a header with no rows.
+fn rows_default() -> u8 {
+    1
+}
+
+fn rows_is_one(rows: &u8) -> bool {
+    *rows <= 1
+}
+
+/// `rows` is a closed set of two answers (ADR 0031 §4). A third value would otherwise render as
+/// something nobody chose, so it is refused where every other shape is checked: at decode.
+fn rows_1_or_2<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u8, D::Error> {
+    use serde::de::Error;
+    match u8::deserialize(d)? {
+        n @ (1 | 2) => Ok(n),
+        other => Err(D::Error::custom(format!(
+            "header rows is 1 or 2; got {other}"
+        ))),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -884,68 +964,25 @@ pub struct Select {
     pub children: Option<Vec<Accrete>>,
 }
 
+/// A record: named fields, each one a child node whose `attrs.selector` is the field's name
+/// (ADR 0031 §4 — a record is the item of a `tiles` that has `columns`).
+///
+/// A field whose direct children are themselves records holds a LIST of records, which a grid draws
+/// as child rows under the row it belongs to. That is the whole of "hierarchy instead of spans": the
+/// data already says which row a row belongs to, so the markup does not merge cells to say it again.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Table {
+pub struct Record {
+    /// The item's key (ADR 0031 §4, "Every item has a key"): a record that names itself keeps that
+    /// name across removals and re-sorts; one that does not is addressed by where it arrived.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Thead {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Tbody {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Tr {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Th {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub children: Option<Vec<Accrete>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Td {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    pub attrs: Option<ClassAttr>,
+    /// The fields. A child's `attrs.selector` is the field's name, so a column projects by that
+    /// key rather than by position — reordering fields cannot move a value to another column.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -1126,16 +1163,13 @@ pub enum Accrete {
     /// what advances it. `rack` and `pages` were the same node with different steppers.
     #[ui_acrete(has_id = "true")]
     tiles(Tiles),
+    /// A record — the item a `tiles` with `columns` projects (ADR 0031 §4). Rendered on its own it
+    /// is a block of its fields; the grid is what turns it into a row.
+    record(Record),
     button(Button),
     image(Image),
     input(Input),
     select(Select),
-    table(Table),
-    thead(Thead),
-    tbody(Tbody),
-    tr(Tr),
-    th(Th),
-    td(Td),
     text(Text),
     template(Template),
     /// 拖拽的两端（ADR 0019）：手势、飞行态与落点高亮都在渲染器里，两端各一个
@@ -1294,18 +1328,6 @@ impl Accrete {
 }
 
 /*
-#[allow(non_camel_case_types)]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(tag = "type")]
-pub enum JsonTableAccrete {
-    thead,
-    tbody,
-    tr,
-    th,
-    td,
-}
-
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]

@@ -1,164 +1,107 @@
-action: append
-data:
-  children:
-  - type: frame
-  - type: frame
-  - attrs:
-      submit:
-      - enter
-      - button
-    children:
-    - attrs:
-        class:
-        - ai-center
-        - box
-        - border
-      type: text
-    - attrs:
-        class:
-        - gap
-        - md
-      children:
-      - children:
-        - children:
-          - children:
-            - children:
-              - type: text
-                source:
-                  default: ''
-              type: th
-            - children:
-              - type: text
-                source:
-                  default: ''
-              type: th
-            - children:
-              - type: text
-                source:
-                  default: Name
-              type: th
-            - children:
-              - type: text
-                source:
-                  default: Price
-              type: th
-            - children:
-              - type: text
-                source:
-                  default: Description
-              type: th
-            type: tr
-          type: thead
-        - children:
-          - children:
-            - children:
-              - source:
-                  default: 1
-                  type: number
-                sink:
-                  slot: '853736'
-                  scope: local
-                type: input
-              type: td
-            - children:
-              - attrs:
-                  desc: '853736'
-                  height: 2em
-                type: image
-                source:
-                  default: https://i.xinminghui.com/goods/202302/source_img/202302270408590.JPG
-              type: td
-            - children:
-              - type: text
-                source:
-                  default: Honeywell 901 Mask Headband Color Box
-              type: td
-            - children:
-              - type: text
-                source:
-                  default: 2.25
-              type: td
-            - children:
-              - type: text
-                source:
-                  default: Efficient filtration, headband design, comfortable to wear
-              type: td
-            type: tr
-          - children:
-            - children:
-              - source:
-                  default: 1
-                  type: number
-                sink:
-                  slot: '56459'
-                  scope: local
-                type: input
-              type: td
-            - children:
-              - attrs:
-                  desc: '56459'
-                  height: 2em
-                type: image
-                source:
-                  default: https://i.xinminghui.com/goods/202103/source_img/20210318040905696.jpg
-              type: td
-            - children:
-              - type: text
-                source:
-                  default: TECHGONG Medical Disposable Mask
-              type: td
-            - children:
-              - type: text
-                source:
-                  default: 0.31
-              type: td
-            - children:
-              - type: text
-                source:
-                  default: Medical grade protection, disposable use, convenient and hygienic
-              type: td
-            type: tr
-          - children:
-            - children:
-              - source:
-                  default: 1
-                  type: number
-                tag: '934900'
-                type: input
-              type: td
-            - children:
-              - attrs:
-                  desc: '934900'
-                  height: 2em
-                type: image
-                source:
-                  default: https://i.xinminghui.com/goods/202501/source_img/202501150324492.png
-              type: td
-            - children:
-              - type: text
-                source:
-                  default: Simei Jia Disposable Activated Carbon Mask
-              type: td
-            - children:
-              - type: text
-                source:
-                  default: 33.83
-              type: td
-            - children:
-              - type: text
-                source:
-                  default: Activated carbon filtration, odor absorption, suitable for sensitive individuals
-              type: td
-            type: tr
-          type: tbody
-        type: table
-      type: frame
-    - attrs:
-        oneshot: true
-      sink: {}
-      type: button
+# 一张商品表（ADR 0031 §4）：`tiles` + `columns`，不再有 table/thead/tbody/tr/th/td。
+# 每行是一条 `record`，字段名 = 子节点的 `attrs.selector`；列只按 key 投影，不认位置。
+# 行是 append 进 `goods` 槽的，所以增删一行是列表操作，不是改布局。
+- action: append
+  slot: chat
+  data:
+    type: frame
     id: QQucja82kxbHPGLozJWdbk
-    type: bundle
-  id: QQucja82kxbHPGLozJWdbk
-  type: frame
-slot: chat
+    children:
+    - type: frame
+    - type: frame
+    - type: bundle
+      id: QQucja82kxbHPGLozJWdbk
+      attrs:
+        submit: [enter, button]
+      children:
+      - type: text
+        attrs:
+          class: [ai-center, box, border]
+      - type: frame
+        attrs:
+          class: [gap, md]
+        children:
+        - type: tiles
+          attrs:
+            columns:
+            - {key: qty, title: '', width: 4rem}
+            - {key: image, title: '', width: 3rem}
+            - {key: name, title: Name}
+            - {key: price, title: Price, width: 6rem, align: end}
+            - {key: description, title: Description}
+            header: {selector: --goods-head}
+          source: {slot: goods}
+      - type: button
+        attrs:
+          oneshot: true
+        sink: {}
+# ---- 三行商品：id 就是行的键（同一套键给 stage/step/remove 用） ----
+- action: append
+  slot: goods
+  data:
+    type: record
+    id: '853736'
+    children:
+    - type: input
+      attrs: {selector: qty}
+      source: {default: 1, type: number}
+      sink: {slot: '853736', scope: local}
+    - type: image
+      attrs: {selector: image, desc: '853736', height: 2em}
+      source:
+        default: https://i.xinminghui.com/goods/202302/source_img/202302270408590.JPG
+    - type: text
+      attrs: {selector: name}
+      source: {default: Honeywell 901 Mask Headband Color Box}
+    - type: text
+      attrs: {selector: price}
+      source: {default: 2.25}
+    - type: text
+      attrs: {selector: description}
+      source: {default: 'Efficient filtration, headband design, comfortable to wear'}
+- action: append
+  slot: goods
+  data:
+    type: record
+    id: '56459'
+    children:
+    - type: input
+      attrs: {selector: qty}
+      source: {default: 1, type: number}
+      sink: {slot: '56459', scope: local}
+    - type: image
+      attrs: {selector: image, desc: '56459', height: 2em}
+      source:
+        default: https://i.xinminghui.com/goods/202103/source_img/20210318040905696.jpg
+    - type: text
+      attrs: {selector: name}
+      source: {default: TECHGONG Medical Disposable Mask}
+    - type: text
+      attrs: {selector: price}
+      source: {default: 0.31}
+    - type: text
+      attrs: {selector: description}
+      source: {default: 'Medical grade protection, disposable use, convenient and hygienic'}
+- action: append
+  slot: goods
+  data:
+    type: record
+    id: '934900'
+    children:
+    - type: input
+      attrs: {selector: qty}
+      source: {default: 1, type: number}
+      sink: {slot: '934900', scope: local}
+    - type: image
+      attrs: {selector: image, desc: '934900', height: 2em}
+      source:
+        default: https://i.xinminghui.com/goods/202501/source_img/202501150324492.png
+    - type: text
+      attrs: {selector: name}
+      source: {default: Simei Jia Disposable Activated Carbon Mask}
+    - type: text
+      attrs: {selector: price}
+      source: {default: 33.83}
+    - type: text
+      attrs: {selector: description}
+      source: {default: 'Activated carbon filtration, odor absorption, suitable for sensitive individuals'}
