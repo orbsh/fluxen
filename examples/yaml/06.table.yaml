@@ -1,9 +1,9 @@
 action: append
 data:
   attrs:
-    class:
-    - gap
-    - md
+    submit:
+    - enter
+    - button
   children:
   - type: text
   - attrs:
@@ -38,71 +38,95 @@ data:
         children:
         - children:
           - children:
-            - source: {default: "853736", type: text}
-              sink: {slot: s, scope: local}
+            - source:
+                default: '853736'
+                type: text
+              sink:
+                slot: s
+                scope: local
               type: input
             type: td
           - children:
             - type: text
-              source: {default: a1}
+              source:
+                default: a1
             type: td
           - children:
             - type: text
-              source: {default: 2.25}
+              source:
+                default: 2.25
             type: td
           - children:
             - type: text
-              source: {default: a2}
+              source:
+                default: a2
             type: td
           - children:
             - type: text
-              source: {default: a3}
+              source:
+                default: a3
             type: td
           type: tr
         - children:
           - children:
-            - source: {default: false, type: bool}
-              sink: {slot: b, scope: local}
+            - source:
+                default: false
+                type: bool
+              sink:
+                slot: b
+                scope: local
               type: input
             type: td
           - children:
             - type: text
-              source: {default: b1}
+              source:
+                default: b1
             type: td
           - children:
             - type: text
-              source: {default: 0.31}
+              source:
+                default: 0.31
             type: td
           - children:
             - type: text
-              source: {default: b2}
+              source:
+                default: b2
             type: td
           - children:
             - type: text
-              source: {default: b3}
+              source:
+                default: b3
             type: td
           type: tr
         - children:
           - children:
-            - source: {default: 9, type: number}
-              sink: {slot: n, scope: local}
+            - source:
+                default: 9
+                type: number
+              sink:
+                slot: n
+                scope: local
               type: input
             type: td
           - children:
             - type: text
-              source: {default: c1}
+              source:
+                default: c1
             type: td
           - children:
             - type: text
-              source: {default: 33.83}
+              source:
+                default: 33.83
             type: td
           - children:
             - type: text
-              source: {default: c2}
+              source:
+                default: c2
             type: td
           - children:
             - type: text
-              source: {default: c3}
+              source:
+                default: c3
             type: td
           type: tr
       type: table
@@ -112,6 +136,5 @@ data:
     sink: {}
     type: button
   id: table-form
-  type: form
+  type: bundle
 slot: chat
-

@@ -16,6 +16,7 @@ data:
       type: text
       source: {default: PartStarting}
     - attrs: {}
+      type: frame
       children:
       - attrs: {class: [txt, sm, hint], format: md}
         type: text

@@ -42,6 +42,9 @@ pub fn parse_yaml_to_frame(
                 msg: "retired fluxora key `sub:` found — migrate to `children:`".into(),
             });
         }
+        if let Some(msg) = illegal_channel(&v) {
+            return Err(crate::error::ParseError { msg });
+        }
     }
     let content = match items {
         ContentItems::One(c) => vec![c],
@@ -63,5 +66,53 @@ fn has_retired_key(v: &serde_yaml::Value) -> bool {
             .any(|(k, val)| k.as_str() == Some("sub") || has_retired_key(val)),
         serde_yaml::Value::Sequence(s) => s.iter().any(has_retired_key),
         _ => false,
+    }
+}
+
+/// 只读的节点带了 `sink:` —— serde 会静默丢掉这个键（`Bind` 之外的节点不收未知字段，
+/// 但没有 `deny_unknown_fields`，因为内部标记的枚举臂一旦收紧，schemars 就把每个臂
+/// 内联展开，`$defs` 的具名类型随之消失，SDK 生成器只能按顺序编号）。所以"接了不支持的
+/// 通道"这条错误在这里响亮地报，而不是在 serde 里。
+fn illegal_channel(v: &serde_yaml::Value) -> Option<String> {
+    const WRITERS: &[&str] = &["input", "select", "button", "bundle", "dock"];
+    match v {
+        serde_yaml::Value::Mapping(m) => {
+            let kind = m.get("type").and_then(|t| t.as_str());
+            if let Some(kind) = kind {
+                if m.contains_key("sink") && !WRITERS.contains(&kind) {
+                    return Some(format!(
+                        "node `{kind}` has no `sink` channel — it only reads; \
+                         move the value into `source:` or use a node that writes"
+                    ));
+                }
+            }
+            m.iter().find_map(|(_, val)| illegal_channel(val))
+        }
+        serde_yaml::Value::Sequence(s) => s.iter().find_map(illegal_channel),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::illegal_channel;
+
+    fn y(src: &str) -> serde_yaml::Value {
+        serde_yaml::from_str(src).expect("yaml")
+    }
+
+    #[test]
+    fn a_read_only_node_may_not_write() {
+        let bad = y("type: text\nsink: {slot: x}\nsource: {default: hi}\n");
+        assert!(illegal_channel(&bad).is_some(), "text 收了 sink 应当报错");
+
+        let ok = y("type: input\nsink: {slot: x}\n");
+        assert!(illegal_channel(&ok).is_none(), "input 可以写");
+    }
+
+    #[test]
+    fn the_check_reaches_into_children() {
+        let nested = y("type: frame\nchildren:\n- type: text\n  sink: {slot: y}\n");
+        assert!(illegal_channel(&nested).is_some(), "子节点也要查");
     }
 }

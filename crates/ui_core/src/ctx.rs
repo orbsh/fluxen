@@ -1,4 +1,4 @@
-use crate::hooks::FormState;
+use crate::hooks::BundleState;
 use crate::render::dispatch;
 use accrete::{Accrete, AccreteOps, Grab};
 use content::codec::ActiveCodec;
@@ -16,9 +16,10 @@ static TMPL: LazyLock<RwLock<accrete::template::Templates>> =
 
 /// 全局共享状态容器：掌管布局、数据、列表与传输收发。
 ///
-/// `form` 是渲染期动态环境：`form_` 注入自己的 `FormState` 后克隆本结构
-/// 渲染子树，归属沿克隆链传播；兄弟分支各持自己的克隆，互不污染。
-/// 嵌套表单靠遮蔽生效（内层覆盖外层）。
+/// `bundle` is the render-time environment: `bundle_` injects its own
+/// `BundleState` and clones `Ctx` for the subtree, so ownership follows the
+/// clone chain; sibling branches each keep their own clone and cannot pollute
+/// each other. Nested bundles shadow the outer one.
 /// per-key 信号槽：外层 map 只存句柄（键集变化时才写外层），
 /// 值经内层信号发布——某个键的更新不通知其他键的订阅者。
 /// 列表槽：一个共享的、不可变快照。
@@ -51,7 +52,7 @@ pub struct Ctx {
     /// 槽若建在消费帧的 Effect 作用域里，Effect 重跑会 dispose 其存储，
     /// 外层 map 里留下的就是死句柄（panic: already disposed）。
     pub(crate) owner: Owner,
-    pub form: Option<Arc<FormState>>,
+    pub bundle: Option<Arc<BundleState>>,
 }
 
 /// UI 侧持有传输 + 下行帧信号。wasm 单线程，Rc 共享。
@@ -108,7 +109,7 @@ impl Ctx {
             vals,
             drag,
             owner: Owner::current().expect("Ctx::new requires a reactive owner"),
-            form: None,
+            bundle: None,
         };
 
         // 消费下行帧并分发

@@ -1,16 +1,19 @@
 use crate::Ctx;
 use crate::ctx::render_accrete;
-use crate::hooks::{use_common_css, use_source_list, use_source_untracked, use_target};
+use crate::hooks::{
+    field_changed, use_common_css, use_source_list, use_source_untracked, use_target,
+};
 use accrete::{AccreteOps, Select, classify::Classify};
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::{Value, to_value};
 
-/// 下拉选择（ADR 0031 §2）：选项走 `options`（list 平面），当前值走 `source`，
-/// 选择走 `sink`。
+/// A select (ADR 0031 §2): options come from `options` (the list plane), the
+/// current value from `source`, the choice goes out through `sink`.
 ///
-/// 表单字段是 `sink` 的一种：`scope: local` 且外层表单认领了这个槽名（槽名即
-/// 字段名），就写表单信号而不是发射——与 `input_` 同一条判据。
+/// A `tag` makes it a field of the enclosing bundle (ADR 0032): the choice lands
+/// in the bundle's signal and the bundle owns the exit and the timing. No tag =
+/// the select keeps its own exit, as before.
 pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["select", "f"];
@@ -18,13 +21,13 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     let css = css.join(" ");
 
     let field = accrete
-        .get_sink()
-        .filter(|s| s.scope.local())
-        .and_then(|s| s.slot.as_ref())
-        .and_then(|k| ctx.form.as_ref().and_then(|fs| fs.fields.get(k).copied()));
+        .tag
+        .as_ref()
+        .filter(|t| !t.is_empty())
+        .and_then(|tag| ctx.bundle.as_ref().and_then(|b| b.field(tag)));
 
-    // 发射组件初值 untracked 读（同 textarea_：避免父渲染闭包订阅到自己
-    // emit 写的槽，emit 即重建子树还原选择）
+    // Initial value read untracked (same reason as `input_`: a component that
+    // emits must not subscribe to the slot its own send writes).
     let initial = match field {
         Some(sig) => sig.get_untracked(),
         None => use_source_untracked(&ctx, &accrete)
@@ -42,7 +45,8 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
         let children = option.iter().enumerate().map(|(idx, child)| {
             let key = child.get_id().clone().unwrap_or(idx.to_string());
             let selected = current.get() == key;
-            // 行是共享的，而 `add_class` 要改它：拷这一行（不是整张表）。
+            // Rows are shared, and `add_class` mutates: copy this row, not the
+            // whole list.
             let mut option = child.as_ref().clone();
             option.add_class("f as-stretch");
             if selected {
@@ -56,7 +60,10 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
                 div()
                     .on(leptos::ev::click, move |_| {
                         match field {
-                            Some(sig) => sig.set(v.clone()),
+                            Some(sig) => {
+                                sig.set(v.clone());
+                                field_changed(&click_ctx, click_ctx.bundle.as_ref());
+                            }
                             None => {
                                 if let Some(emit) = use_target(click_ctx.clone(), &b) {
                                     emit(v.clone());

@@ -239,7 +239,6 @@ pub struct StyleAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Canvas {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -282,7 +281,6 @@ pub struct Canvas {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct ForceGraph {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -460,7 +458,7 @@ pub struct PanelAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub direction: Option<Direction>,
     /// Closes on a click outside the body — the mask for `viewport`, "anywhere else" for the rest.
-    /// A panel without it can only be closed by its trigger (a form that must not lose its work).
+    /// A panel without it can only be closed by its trigger (a bundle that must not lose its work).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dismiss: Option<bool>,
     /// `inline` only: the first child is the header and toggles the body (the old `fold` shape).
@@ -493,7 +491,6 @@ fn is_default_state(s: &PanelState) -> bool {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Panel {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -513,7 +510,6 @@ pub struct Panel {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Layer {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -560,7 +556,6 @@ pub struct FoldAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Fold {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -574,28 +569,89 @@ pub struct Fold {
     pub item: Option<Vec<Accrete>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+/// When a bundle sends (ADR 0032). The modes combine, so the attribute is a
+/// set: `[enter, button]` is a chat box, `[change]` packs as the user types.
+/// This is timing — a different axis from `scope`, which says where a value
+/// lands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct FormAttr {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub class: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selector: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub instant: Option<bool>,
+#[serde(rename_all = "lowercase")]
+pub enum SubmitMode {
+    #[default]
+    Enter,
+    Button,
+    Change,
+}
+
+/// A bare string or a list on the wire: `submit: enter` and `submit: [enter]`
+/// say the same thing, so the one-mode case (nearly every frame) does not have
+/// to remember the list syntax.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(untagged)]
+pub enum SubmitSet {
+    One(SubmitMode),
+    Many(Vec<SubmitMode>),
+}
+
+impl Default for SubmitSet {
+    /// `[enter]` — the shape a bundle has when it says nothing.
+    fn default() -> Self {
+        Self::Many(vec![SubmitMode::Enter])
+    }
+}
+
+impl SubmitSet {
+    pub fn modes(&self) -> &[SubmitMode] {
+        match self {
+            Self::One(m) => std::slice::from_ref(m),
+            Self::Many(v) => v,
+        }
+    }
+
+    pub fn has(&self, mode: SubmitMode) -> bool {
+        self.modes().contains(&mode)
+    }
+}
+
+fn submit_is_default(s: &SubmitSet) -> bool {
+    s.modes() == [SubmitMode::Enter]
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
+pub struct BundleAttr {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    /// When to send. Absent = `[enter]`.
+    #[serde(default, skip_serializing_if = "submit_is_default")]
+    pub submit: SubmitSet,
+}
+
+/// A bundle packs a group of fields into one object and sends it (ADR 0032).
+/// It owns the exit for its fields (`sink`) and when they leave (`attrs.submit`)
+/// — nothing else. `id` marks this submission (the instance), not the fields:
+/// fields are named by their own `tag`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
-pub struct Form {
+pub struct Bundle {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    /// The key this bundle contributes to its parent's packed object. Only read
+    /// when the bundle sits inside another bundle; falls back to `id`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<FormAttr>,
+    pub tag: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<BundleAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sink: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -606,7 +662,6 @@ pub struct Form {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Popup {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -622,7 +677,6 @@ pub struct Popup {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Svg {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -638,7 +692,6 @@ pub struct Svg {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Group {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -653,7 +706,6 @@ pub struct Group {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Path {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -684,7 +736,6 @@ pub enum PagesDisplay {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Pages {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -833,7 +884,6 @@ pub enum RackPause {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Rack {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -863,7 +913,6 @@ pub struct ButtonAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Button {
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -895,7 +944,6 @@ pub struct ImageAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Image {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -905,28 +953,42 @@ pub struct Image {
     pub source: Option<Bind>,
 }
 
+/// A field: one value, one line (or many, with `multiline`) (ADR 0032).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Input {
     pub id: Option<String>,
+    /// The field's name inside an enclosing bundle: the bundle packs this tag
+    /// as the key, so the sink's address no longer names the field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Bind>,
     pub sink: Option<Bind>,
+
+    /// Multi-line is a layout of the field, not a different node.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub multiline: bool,
+    /// Second value: the placeholder text (literal or slot) — the channel
+    /// `textarea` used to carry on its own type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<Bind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Select {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    /// The field's name inside an enclosing bundle (same rule as `input`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1022,7 +1084,6 @@ pub struct TextAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Text {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -1030,25 +1091,6 @@ pub struct Text {
     pub attrs: Option<TextAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Bind>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "ops", derive(AccreteOps))]
-#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
-pub struct TextArea {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<ClassAttr>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
-    pub sink: Option<Bind>,
-
-    /// Second value: the placeholder text.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub placeholder: Option<Bind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -1070,7 +1112,6 @@ pub struct FrameAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Frame {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -1165,7 +1206,6 @@ pub struct DockAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-#[serde(deny_unknown_fields)]
 pub struct Dock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -1196,7 +1236,7 @@ pub enum Accrete {
     /// 已删除 —— 它们的实现还在 ui_core 里给这里用，但帧里不再能写出来。
     #[ui_acrete(has_id = "true")]
     panel(Panel),
-    form(Form),
+    bundle(Bundle),
     svg(Svg),
     group(Group),
     path(Path),
@@ -1215,7 +1255,6 @@ pub enum Accrete {
     th(Th),
     td(Td),
     text(Text),
-    textarea(TextArea),
     template(Template),
     /// 拖拽的两端（ADR 0019）：手势、飞行态与落点高亮都在渲染器里，两端各一个
     /// 角色——源可以被提起，落点接受释放并发射那一帧。源不领兜底 id：身份只有

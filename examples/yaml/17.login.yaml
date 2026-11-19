@@ -20,8 +20,10 @@
       dismiss: true
     source: {slot: login_modal, scope: local}
     children:
-    - type: form
+    - type: bundle
       sink: {slot: login}
+      attrs:
+        submit: [enter, button]
       children:
       - type: frame
         attrs:
@@ -36,17 +38,11 @@
           source:
             default: "**登录（示例）**\n\n任意账号密码即可：回车或点按钮把字段上行到 stage 控制台；点卡片外的模糊区关闭（清空槽），再回车重开。"
         - type: input
-          sink:
-            slot: user
-            scope: local
-            default: ""
-            type: text
+          tag: user
+          source: {default: ""}
         - type: input
-          sink:
-            slot: pass
-            scope: local
-            default: ""
-            type: password
+          tag: pass
+          source: {default: "", type: password}
         - type: button
           attrs:
             oneshot: false

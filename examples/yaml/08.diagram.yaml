@@ -6,7 +6,7 @@ data:
   - type: canvas
     url: /assets/diagram/index.js
     source:
-      default:
+      default: |
         sequenceDiagram
             participant UI as UI (Frontend)
             participant GW as Gateway
@@ -44,7 +44,7 @@ data:
   - type: canvas
     url: /assets/diagram/index.js
     source:
-      default:
+      default: |
         graph TD
             subgraph UI
                 A[User Input Field] --> B{Sends a message};
@@ -83,7 +83,7 @@ data:
             end
   - type: text
     source:
-      default:
+      default: |
         ## Flow Description:
         - User Input: A user types a message into the input field on the UI.
         - Bind to 'chat' event: The UI binds the message to a 'chat' event on the WebSocket (WS).
