@@ -1,9 +1,10 @@
 action: append
 slot: chat
 data:
-  type: form
+  type: bundle
   sink: {slot: confirm}
   attrs:
+    submit: [enter, button]
     class:
     - gap
     - md
@@ -14,7 +15,7 @@ data:
       - ai-center
     source: {default: confirm order}
   - type: text
-    sink: {slot: test}
+    source: {default: test}
   - type: frame
     attrs:
       class:
@@ -26,25 +27,25 @@ data:
         horizontal: true
       children:
       - type: input
-        sink: {slot: name, scope: local, default: name}
+        tag: name
+        source: {default: name}
       - type: input
-        sink: {slot: age, scope: local, default: age}
+        tag: age
+        source: {default: age}
     - type: frame
       attrs:
         horizontal: true
       children:
       - type: input
-        name: gender
-        sink: {slot: gender, scope: local}
+        tag: gender
       - type: input
-        name: phone
-        sink: {slot: phone, scope: local}
+        tag: phone
     - type: frame
       attrs:
         horizontal: true
       children:
       - type: input
-        name: var
+        tag: var
   - type: button
     attrs:
       oneshot: false

@@ -19,12 +19,14 @@ data:
         - shadow
         - nogrow
         format: md
-    - type: form
+    - type: bundle
       sink: {slot: login}
+      attrs:
+        submit: [enter, button]
       children:
       - type: button
         source: {default: LOGIN}
-        submit: true
+        sink: {}
   - type: rack
     attrs:
       class:

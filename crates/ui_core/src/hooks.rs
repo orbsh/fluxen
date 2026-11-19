@@ -156,13 +156,108 @@ pub(crate) fn node_id(accrete: &impl AccreteOps) -> Option<String> {
     accrete.get_id().clone().filter(|s| !s.is_empty())
 }
 
-/// 表单信号共享：`form_` 构建本结构后注入 `Ctx.form` 并克隆下传，
-/// `input_`/`button_` 从自己拿到的 ctx 读取——归属沿克隆链传播，
-/// 不依赖渲染时序。
-#[derive(Clone)]
-pub struct FormState {
-    pub fields: std::collections::HashMap<String, RwSignal<Value>>,
-    pub confirm: RwSignal<Value>,
+/// One packed field: the `tag` the bundle keys it by, and the signal holding it.
+pub struct Field {
+    pub name: String,
+    pub sig: RwSignal<Value>,
+}
+
+/// What a bundle hands down to its fields (ADR 0032): the keys it packs, when
+/// it sends (`modes`), and where the packed object goes (`sink`). Built by
+/// `bundle_` and injected into `Ctx.bundle`; fields and nested bundles read it
+/// from the ctx clone they were rendered with, so ownership follows the clone
+/// chain, not render order.
+pub struct BundleState {
+    /// Keys in walk order, so a pack is deterministic.
+    pub fields: Vec<Field>,
+    pub modes: accrete::SubmitSet,
+    pub sink: Option<Bind>,
+    /// This submission's instance id — not a field name.
+    pub id: Option<String>,
+    /// Enclosing bundle, for `enter`/`button` bubbling.
+    pub parent: Option<std::sync::Arc<BundleState>>,
+    /// The parent's signal this bundle's own packed object lands in (keyed by
+    /// its `tag`, or its `id`). None for a top-level bundle.
+    pub mirror: Option<RwSignal<Value>>,
+}
+
+impl BundleState {
+    pub fn field(&self, tag: &str) -> Option<RwSignal<Value>> {
+        self.fields.iter().find(|f| f.name == tag).map(|f| f.sig)
+    }
+
+    /// The packed object: `{tag: value, …}` in walk order (untracked — a send
+    /// reads a snapshot and must not make the reader a subscriber).
+    pub fn pack(&self) -> Value {
+        let mut m = serde_json::Map::new();
+        for f in &self.fields {
+            m.insert(f.name.clone(), f.sig.get_untracked());
+        }
+        Value::Object(m)
+    }
+}
+
+/// The key a bundle contributes to its parent's object: its `tag`, or its `id`
+/// when there is no tag. Neither = an unnamed group, which packs nothing into
+/// the parent. Empty strings are absent, same rule as `node_id`.
+pub fn bundle_key(tag: &Option<String>, id: &Option<String>) -> Option<String> {
+    tag.clone()
+        .filter(|s| !s.is_empty())
+        .or_else(|| id.clone().filter(|s| !s.is_empty()))
+}
+
+/// Write this bundle's packed object into its parent's slot, then do the same
+/// up the chain: an outer pack reads the inner one, so the inner lands first.
+pub fn refresh(b: &std::sync::Arc<BundleState>) {
+    if let Some(m) = &b.mirror {
+        m.set(b.pack());
+    }
+    if let Some(p) = &b.parent {
+        refresh(p);
+    }
+}
+
+/// Send the bundle's packed object to its own sink — the only exit for the
+/// fields it claimed (ADR 0032). Refresh first so enclosing objects are current
+/// even when the outer bundle never sends.
+pub fn submit(ctx: &Ctx, b: &std::sync::Arc<BundleState>) {
+    refresh(b);
+    if let Some(sink) = &b.sink {
+        ctx.emit(sink, b.id.clone(), b.pack());
+    }
+}
+
+/// The nearest enclosing bundle that declares `mode`. Nearest wins so one
+/// interaction is one send: a nested bundle cannot make its parent send again.
+pub fn nearest(
+    b: Option<&std::sync::Arc<BundleState>>,
+    mode: accrete::SubmitMode,
+) -> Option<std::sync::Arc<BundleState>> {
+    let mut cur = b.cloned();
+    while let Some(b) = cur {
+        if b.modes.has(mode) {
+            return Some(b);
+        }
+        cur = b.parent.clone();
+    }
+    None
+}
+
+/// A field's value changed: keep enclosing objects current, then send from the
+/// bundle that owns `change` timing (if any declares it).
+pub fn field_changed(ctx: &Ctx, b: Option<&std::sync::Arc<BundleState>>) {
+    let Some(b) = b else { return };
+    refresh(b);
+    if let Some(owner) = nearest(Some(b), accrete::SubmitMode::Change) {
+        submit(ctx, &owner);
+    }
+}
+
+/// Enter was pressed in a field: the nearest bundle declaring `enter` sends.
+pub fn enter_pressed(ctx: &Ctx, b: Option<&std::sync::Arc<BundleState>>) {
+    if let Some(owner) = nearest(b, accrete::SubmitMode::Enter) {
+        submit(ctx, &owner);
+    }
 }
 
 #[cfg(test)]

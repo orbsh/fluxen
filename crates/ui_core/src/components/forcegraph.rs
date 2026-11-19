@@ -73,7 +73,8 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
             let ctx = emit_ctx.clone();
             let id = emit_id.clone();
             let event = event.to_string();
-            // 与 Form 的 submit 同一条上行腿：事件名 + 载荷，宿主不解释。
+            // Same uplink leg as a bundle's submit: a name plus a payload, the
+            // host does not interpret it.
             leptos::task::spawn_local(async move {
                 ctx.send(event, Some(id), data).await;
             });

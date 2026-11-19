@@ -85,10 +85,13 @@
         format: md
       source:
         default: "## 文档页（表单）"
-    - type: form
+    - type: bundle
+      attrs:
+        submit: [enter, button]
       children:
       - type: input
-        sink: {slot: doc_draft, scope: local, default: 草稿写在切页后丢失（render 语义）}
+        tag: doc_draft
+        source: {default: 草稿写在切页后丢失（render 语义）}
       - type: button
         attrs:
           oneshot: false
@@ -97,7 +100,8 @@
 - action: append
   slot: pages
   data:
-    type: textarea
+    type: input
     id: about
+    multiline: true
     source:
       default: "关于页：改这里的内容后切走再切回——render 模式会丢，dom 模式保。"
