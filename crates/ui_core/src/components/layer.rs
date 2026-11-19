@@ -32,25 +32,34 @@ pub fn layer_(accrete: Layer, ctx: &Ctx, id: String) -> AnyView {
     let css = css.join(" ");
 
     let (local_slot, data_source, inline) = bind_slot(accrete.bind.as_ref());
+    // 位置：给了 `right`/`top` 之类就贴在页面那一角（原来的 `float` 就是这个），
+    // 没给就铺满视口居中 —— 两种都是"层"，只是几何不同。
+    let shown_style = accrete
+        .attrs
+        .as_ref()
+        .and_then(|a| a.pos.as_ref())
+        .map(|p| format!("position: fixed; {} z-index: 100; display: flex;", p.into_style()))
+        .unwrap_or_else(|| LAYER_STYLE.to_string());
     // 构建那一刻的值（首次 Effect 前）：与 canvas 宿主同款，交给下面的 Effect 同步
     let style_now = if payload_is_empty(&read_payload(ctx, &local_slot, &data_source, &inline)) {
         HIDDEN_STYLE.to_string()
     } else {
-        LAYER_STYLE.to_string()
+        shown_style.clone()
     };
 
     let nr = NodeRef::<Div>::new();
     {
         let ctx = ctx.clone();
         let (l, s, i) = (local_slot.clone(), data_source.clone(), inline.clone());
+        let shown = shown_style.clone();
         Effect::new(move |_| {
             let want = if payload_is_empty(&read_payload(&ctx, &l, &s, &i)) {
-                HIDDEN_STYLE
+                HIDDEN_STYLE.to_string()
             } else {
-                LAYER_STYLE
+                shown.clone()
             };
             if let Some(el) = nr.get() {
-                el.set_attribute("style", want).ok();
+                el.set_attribute("style", &want).ok();
             }
         });
     }
