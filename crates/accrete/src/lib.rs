@@ -448,9 +448,10 @@ pub enum PanelState {
     /// about it reaches the sender.
     #[default]
     Toggle,
-    /// The panel mirrors its bound slot: non-empty means on screen (ADR 0012's "empty is absent"),
-    /// and dismissing clears that slot — one state, not two.
-    Source,
+    /// The panel follows its binding: non-empty means on screen (ADR 0012's "empty is absent"),
+    /// and dismissing clears that slot — one state, not two. Named `bound`, not `source`: the
+    /// channel `source` says where a VALUE comes from, this says who decides the panel is there.
+    Bound,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -495,7 +496,7 @@ fn is_default_state(s: &PanelState) -> bool {
 /// `attrs.state` 说谁决定它出现（本地切换 / 跟着所绑槽）。这两条轴上的四格就是原来的
 /// `fold`、`popup`、`layer`，以及它们没覆盖的一格 —— 贴视口 + 本地切换（抽屉）。
 ///
-/// `children[0]` 是触发器，`children[1]` 是浮层内容（`state: source` 时触发器可以省：面板
+/// `children[0]` 是触发器，`children[1]` 是浮层内容（`state: bound` 时触发器可以省：面板
 /// 的出现由槽决定，不需要人点）。缺内容就什么都不画 —— 少写一个子节点是帧的错误。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]

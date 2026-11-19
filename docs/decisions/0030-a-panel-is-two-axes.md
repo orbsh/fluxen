@@ -14,7 +14,7 @@ cannot hear the button that should open it.
 - **Place** — `inline` (opening it pushes the page down), `anchor` (over the trigger, the page
   does not move), `viewport` (over everything, at a named edge, with a mask).
 - **State** — `toggle` (a local switch: the trigger opens, a click outside / Esc closes) or
-  `source` (the panel mirrors a bound slot: non-empty means on screen, ADR-0012's "empty is
+  `bound` (the panel follows a slot: non-empty means on screen, ADR-0012's "empty is
   absent", and dismissing clears that slot).
 
 Those are four cells. Three existed; the fourth — `viewport` + `toggle` — is the drawer, and it is
@@ -43,4 +43,5 @@ binds the notice slot, not because anything travelled. The only thing portal sti
 subtree drawn twice — is two components binding the same path.
 
 That leaves ONE binding mechanism to keep honest: a path with an owner (see the follow-up on
-unifying `source` and `local`). Content does not move; it is read from where it already lives.
+unifying the old `source`/`local` kinds into one addressed slot, ADR 0031). Content does not move; it
+is read from where it already lives.

@@ -4,7 +4,7 @@
 //!
 //!   fold    inline 展开，撑开布局          → place: inline   + state: toggle
 //!   popup   覆盖在触发器旁，不动布局        → place: anchor   + state: toggle
-//!   layer   全屏遮罩挂载点，显隐＝所绑槽非空 → place: viewport + state: source
+//!   layer   全屏遮罩挂载点，显隐＝所绑槽非空 → place: viewport + state: bound
 //!
 //! 两条轴上一共有四格，原来只填了三格 —— 贴视口 + 本地切换（抽屉）没有写法，
 //! 于是"右边滑出一个边栏"要么硬拗 popup 的位置，要么借 layer 的壳却拿不到触发器状态。
@@ -29,7 +29,7 @@ pub fn panel_(accrete: Panel, ctx: &Ctx, id: String) -> AnyView {
     let attrs = accrete.attrs.clone().unwrap_or_default();
     match (attrs.place, attrs.state) {
         (PanelPlace::Inline, state) => {
-            if state == PanelState::Source {
+            if state == PanelState::Bound {
                 tracing::warn!(
                     "panel {id}: inline + source 没有意义 —— 撑开布局的容器没有\"空即无\"这条规则，按 toggle 画"
                 );
@@ -38,12 +38,12 @@ pub fn panel_(accrete: Panel, ctx: &Ctx, id: String) -> AnyView {
         }
         // 贴触发器的浮层：显隐本来就是本地状态，source 这一格没有对应实现。
         (PanelPlace::Anchor, state) => {
-            if state == PanelState::Source {
+            if state == PanelState::Bound {
                 tracing::warn!("panel {id}: anchor + source 按 toggle 画（浮层只认本地开关）");
             }
             popup_(as_popup(&accrete, &attrs), ctx, id)
         }
-        (PanelPlace::Viewport, PanelState::Source) => layer_(as_layer(&accrete, &attrs), ctx, id),
+        (PanelPlace::Viewport, PanelState::Bound) => layer_(as_layer(&accrete, &attrs), ctx, id),
         (PanelPlace::Viewport, PanelState::Toggle) => drawer_(accrete, ctx, id, attrs),
     }
 }
