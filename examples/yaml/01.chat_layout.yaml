@@ -55,7 +55,7 @@ data:
       children:
       - type: frame
         children:
-        - type: rack
+        - type: tiles
           attrs:
             class:
             - --message
@@ -63,9 +63,8 @@ data:
             - ac-start
             - gap
             - scrolly
-            scroll: true
           source: {slot: chat}
-          item:
+          children:
           - type: frame
             attrs:
               class:

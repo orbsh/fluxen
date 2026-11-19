@@ -42,7 +42,7 @@
         - main
         - shrink
       children:
-      - type: rack
+      - type: tiles
         attrs:
           class:
           - --message
@@ -50,9 +50,8 @@
           - ac-start
           - gap
           - scrolly
-          scroll: true
         source: {slot: chat}
-        item:
+        children:
         - type: frame
           attrs:
             class:

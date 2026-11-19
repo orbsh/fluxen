@@ -27,16 +27,15 @@ data:
       - type: button
         source: {default: LOGIN}
         sink: {}
-  - type: rack
+  - type: tiles
     attrs:
       class:
       - box
       - ac-start
       - gap
       - scrolly
-      scroll: true
     source: {slot: chat}
-    item:
+    children:
     - type: frame
       attrs:
         class:
