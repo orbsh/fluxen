@@ -10,6 +10,11 @@
 //! - forces are cooled by an `alpha` that decays toward a small floor. Running
 //!   at full strength forever is what "the graph never stops shaking" looks
 //!   like; data changes and node drags reheat it instead;
+//! - the frame loop is demand-driven. A settled, unfocused canvas with the
+//!   pointer elsewhere and the tab in front has nothing to draw, so it draws
+//!   nothing: the last frame stays on screen and the loop is asleep until an
+//!   event wakes it. A 60 Hz callback that repaints an unchanged scene is a
+//!   laptop fan with a graph next to it;
 //! - physics runs in fixed 1/60 s substeps while `dt` itself is clamped, so a
 //!   background tab's catch-up frame cannot fling nodes across the scene;
 //! - an append never re-frames the camera: only the first non-empty snapshot
@@ -30,7 +35,7 @@ use crate::math::Vec3;
 use crate::pick;
 use crate::render::Renderer;
 use crate::scene::{Scene, Snapshot};
-use crate::frame::LinkShape;
+use crate::frame::{Frame, LinkShape};
 use crate::style::{Style, Theme};
 
 /// Pointer travel (CSS px) below which press-and-release counts as a click.
@@ -52,6 +57,11 @@ const FIT_MS: f64 = 320.0;
 const FOCUS_PADDING_PX: f32 = 80.0;
 /// Fixed physics step; the accumulator feeds it whole steps only.
 const STEP: f32 = 1.0 / 60.0;
+/// Cooling factor below which the layout is considered at rest. The floor is
+/// `force::ALPHA_FLOOR`; the small headroom above it lets the last couple of
+/// collision passes heal an overlap that the springs had already given up on
+/// before the loop goes quiet.
+const IDLE_ALPHA: f32 = force::ALPHA_FLOOR * 1.6;
 /// Simulated steps run before a brand-new graph is first painted. Cooling is
 /// frame-based, so skipping this leaves the layout half-relaxed when it freezes.
 const RELAX_STEPS: usize = 200;
@@ -83,6 +93,64 @@ struct Flight {
     duration_ms: f64,
 }
 
+/// The loop's handle: who is scheduled, whether the page is visible, and the
+/// callback to schedule. Cloned into every event handler so any of them can
+/// start the loop again — that is the whole contract of an idle loop. Miss a
+/// wake and the canvas freezes on a stale frame; wake too eagerly and the
+/// saving is gone, so the list is exactly "things that can change the picture".
+#[derive(Clone)]
+struct Ticker {
+    /// Frame id of the scheduled callback, 0 when none is scheduled.
+    raf: Rc<Cell<i32>>,
+    /// True while a frame is pending or being executed. `wake` is a no-op then.
+    running: Rc<Cell<bool>>,
+    /// The rAF callback, kept alive for the lifetime of the view.
+    tick: Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>,
+    /// `document.hidden`, mirrored on every `visibilitychange`.
+    hidden: Rc<Cell<bool>>,
+}
+
+impl Ticker {
+    fn new(tick: Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>, hidden: bool) -> Self {
+        Self {
+            raf: Rc::new(Cell::new(0)),
+            running: Rc::new(Cell::new(false)),
+            tick,
+            hidden: Rc::new(Cell::new(hidden)),
+        }
+    }
+
+    /// Schedule a frame unless one is already on its way. Never starts a loop
+    /// in a hidden tab: the next `visibilitychange` does that instead.
+    fn wake(&self) {
+        if self.running.get() || self.hidden.get() {
+            return;
+        }
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let slot = self.tick.borrow();
+        let Some(cb) = slot.as_ref() else {
+            return;
+        };
+        if let Ok(id) = window.request_animation_frame(cb.as_ref().unchecked_ref()) {
+            self.raf.set(id);
+            self.running.set(true);
+        }
+    }
+
+    /// Drop any scheduled frame and go quiet (tab hidden, view disposed).
+    fn halt(&self) {
+        if let Some(window) = web_sys::window() {
+            let id = self.raf.replace(0);
+            if id != 0 {
+                window.cancel_animation_frame(id).ok();
+            }
+        }
+        self.running.set(false);
+    }
+}
+
 struct State {
     camera: Camera,
     scene: Scene,
@@ -108,6 +176,15 @@ struct State {
     /// Whether the pivot has been moved to the settled cloud's centre since the
     /// last time the node set changed.
     pivot_settled: bool,
+    /// Whether the pointer is inside the canvas. The halo's breath is the only
+    /// animation that outlives a settled layout, and it runs only while someone
+    /// is actually looking at the graph — there is no CSS overlay to hand it to
+    /// instead, because the haloes are per-node billboards inside the GL scene,
+    /// not boxes on the label layer.
+    pointer_inside: bool,
+    /// The `data-fg` value last written. Comparing before writing keeps a frame
+    /// that changes nothing from invalidating style for the whole panel.
+    attr: String,
 }
 
 impl State {
@@ -224,9 +301,15 @@ pub struct View {
     state: Rc<RefCell<State>>,
     overlay: Rc<RefCell<Overlay>>,
     emit: Rc<dyn Fn(&str, serde_json::Value)>,
-    tick: Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>,
-    raf: Rc<Cell<i32>>,
+    /// The frame loop: demand-driven, woken by anything that changes the picture.
+    ticker: Ticker,
     listeners: Vec<(&'static str, js_sys::Function)>,
+    /// `visibilitychange` on the document and `resize` on the window.
+    page_listeners: Vec<(&'static str, js_sys::Function)>,
+    /// Watches the canvas itself: the panel can change size without the window
+    /// doing so (a rack reflow, a sidebar collapsing), and a stale drawing
+    /// buffer is a stretched graph.
+    observer: Option<web_sys::ResizeObserver>,
 }
 
 impl View {
@@ -301,6 +384,8 @@ impl View {
             camera_touched: false,
             collide_world: 0.0,
             pivot_settled: false,
+            pointer_inside: false,
+            attr: String::new(),
         }));
         let overlay = Rc::new(RefCell::new(Overlay {
             layer,
@@ -309,6 +394,9 @@ impl View {
             card_box: None,
             card_text: String::new(),
         }));
+        // The loop's handle exists before any handler: every switch and pointer
+        // listener below is a reason to run a frame.
+        let ticker = Ticker::new(Rc::new(RefCell::new(None)), document.hidden());
 
         // The theme switch lives inside the panel: it repaints the surface, the
         // labels and the palette, so the same graph can be read on a light or a
@@ -390,6 +478,7 @@ impl View {
         {
             let state_btn = Rc::clone(&state);
             let caption_btn = labels_button.clone();
+            let ticker_btn = ticker.clone();
             let cb = Closure::<dyn FnMut()>::new(move || {
                 let labels = {
                     let mut state = state_btn.borrow_mut();
@@ -397,6 +486,9 @@ impl View {
                     state.style.labels
                 };
                 caption_btn.set_text_content(Some(label_caption(labels)));
+                // The label set is decided per frame, and the loop is asleep:
+                // flipping the switch has to ask for the frame that draws it.
+                ticker_btn.wake();
             });
             labels_button
                 .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
@@ -410,6 +502,7 @@ impl View {
         {
             let state_btn = Rc::clone(&state);
             let label_btn = shape_button.clone();
+            let ticker_btn = ticker.clone();
             let cb = Closure::<dyn FnMut()>::new(move || {
                 let next = {
                     let mut state = state_btn.borrow_mut();
@@ -421,6 +514,7 @@ impl View {
                     state.style.link_shape
                 };
                 label_btn.set_text_content(Some(shape_label(next)));
+                ticker_btn.wake();
             });
             shape_button
                 .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
@@ -431,11 +525,15 @@ impl View {
         {
             let state_btn = Rc::clone(&state);
             let overlay_btn = Rc::clone(&overlay);
+            let ticker_btn = ticker.clone();
             let (host_btn, canvas_btn, button_btn) = (host.clone(), canvas.clone(), button.clone());
             let cb = Closure::<dyn FnMut()>::new(move || {
                 state_btn.borrow_mut().style.toggle_theme();
                 let style = state_btn.borrow().style.clone();
                 apply_theme(&style, &host_btn, &canvas_btn, &overlay_btn.borrow(), &button_btn);
+                // The palette is read by `frame::build`: the spheres have to be
+                // redrawn, and nothing else would ask for that frame.
+                ticker_btn.wake();
             });
             button
                 .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
@@ -451,11 +549,13 @@ impl View {
             state,
             overlay,
             emit: Rc::new(emit),
-            tick: Rc::new(RefCell::new(None)),
-            raf: Rc::new(Cell::new(0)),
+            ticker,
             listeners: Vec::new(),
+            page_listeners: Vec::new(),
+            observer: None,
         };
         view.install_input();
+        view.install_lifecycle();
         view.start_loop();
         Some(view)
     }
@@ -473,6 +573,8 @@ impl View {
         }
         let style = self.state.borrow().style.clone();
         apply_theme(&style, &self.host, &self.canvas, &self.overlay.borrow(), &self.button);
+        // Presentation only, but the palette is the frame's input: redraw once.
+        self.ticker.wake();
     }
 
     pub fn theme(&self) -> Theme {
@@ -566,6 +668,11 @@ impl View {
                 });
             }
         }
+        drop(guard);
+        // New data is exactly the case the loop must not sleep through: nodes
+        // may be reheated, a flight may have been started, labels may have
+        // changed. One wake covers all of it.
+        self.ticker.wake();
     }
 
     fn viewport(&self) -> (f32, f32) {
@@ -575,16 +682,26 @@ impl View {
         )
     }
 
-    fn start_loop(&self) {
+    /// Start the frame loop. It is *demand-driven*: a frame decides whether
+    /// anything can still change and stops rescheduling when nothing can, so a
+    /// settled graph in a visible tab costs one frame, not sixty a second.
+    /// Whatever changes the picture calls `Ticker::wake`.
+    fn start_loop(&mut self) {
+        let ticker = self.ticker.clone();
         let state = Rc::clone(&self.state);
         let renderer = Rc::clone(&self.renderer);
         let overlay = Rc::clone(&self.overlay);
         let canvas = self.canvas.clone();
-        let tick_slot: Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>> = Rc::clone(&self.tick);
-        let raf = Rc::clone(&self.raf);
+        let next = ticker.clone();
 
-        let reschedule = Rc::clone(&tick_slot);
         let callback = Closure::<dyn FnMut(f64)>::new(move |ts: f64| {
+            // A hidden tab draws nothing and costs nothing. `visibilitychange`
+            // announces the flag; the loop restarts from there.
+            if next.hidden.get() {
+                next.running.set(false);
+                next.raf.set(0);
+                return;
+            }
             let viewport = (
                 canvas.client_width().max(1) as f32,
                 canvas.client_height().max(1) as f32,
@@ -602,10 +719,13 @@ impl View {
                 canvas.set_height(px.1);
             }
 
-            {
+            let idle = {
                 let mut guard = state.borrow_mut();
                 let st: &mut State = &mut guard;
-                let dt = if st.last_ts > 0.0 {
+                // A frame after a sleep is a fresh start, not a catch-up: the
+                // wall-clock gap is dropped rather than clamped, or waking from
+                // an idle minute would integrate four capped steps at once.
+                let dt = if st.last_ts > 0.0 && (ts - st.last_ts) < 500.0 {
                     ((ts - st.last_ts) / 1000.0).clamp(0.0, 0.1) as f32
                 } else {
                     STEP
@@ -630,15 +750,24 @@ impl View {
                 // so the animation costs no state beyond one phase per lit node.
                 st.scene.advance_glow(dt);
 
-                let params = st.style.params();
-                st.acc = (st.acc + dt).min(STEP * 4.0);
-                let mut steps = 0;
-                while st.acc >= STEP && steps < 4 {
-                    let scene = &mut st.scene;
-                    force::step(&mut scene.bodies, &scene.links, &params, st.alpha);
-                    st.acc -= STEP;
-                    st.alpha = (st.alpha * force::ALPHA_DECAY).max(force::ALPHA_FLOOR);
-                    steps += 1;
+                // Physics is O(n²) and the cooling factor is the only thing that
+                // says positions can still move. At the floor the springs,
+                // charge and collision passes have nothing left to resolve — the
+                // collision pass is what heals overlaps, and overlaps only
+                // appear when something moved.
+                if st.alpha > force::ALPHA_FLOOR {
+                    let params = st.style.params();
+                    st.acc = (st.acc + dt).min(STEP * 4.0);
+                    let mut steps = 0;
+                    while st.acc >= STEP && steps < 4 {
+                        let scene = &mut st.scene;
+                        force::step(&mut scene.bodies, &scene.links, &params, st.alpha);
+                        st.acc -= STEP;
+                        st.alpha = (st.alpha * force::ALPHA_DECAY).max(force::ALPHA_FLOOR);
+                        steps += 1;
+                    }
+                } else {
+                    st.acc = 0.0;
                 }
 
                 // The seed cloud is far wider than the settled one, so the fit
@@ -674,19 +803,24 @@ impl View {
                     }
                 }
 
-                if st.settle_fit_pending
-                    && !st.camera_touched
-                    && st.style.auto_fit
-                    && st.alpha <= force::ALPHA_FLOOR * 1.6
-                {
-                    let points: Vec<Vec3> =
-                        st.scene.bodies.iter().map(|b| b.pos).collect();
-                    if points.len() > 1 {
-                        let mut camera = st.camera;
-                        camera.fit(&points, st.style.fit_padding_px, viewport);
-                        st.camera = camera;
+                if st.settle_fit_pending {
+                    if !st.camera_touched && st.style.auto_fit && st.alpha <= IDLE_ALPHA {
+                        let points: Vec<Vec3> =
+                            st.scene.bodies.iter().map(|b| b.pos).collect();
+                        if points.len() > 1 {
+                            let mut camera = st.camera;
+                            camera.fit(&points, st.style.fit_padding_px, viewport);
+                            st.camera = camera;
+                        }
+                        st.settle_fit_pending = false;
+                    } else if st.camera_touched || !st.style.auto_fit {
+                        // The refit can never be honoured once the camera is the
+                        // user's (or autofit is off), and a pending flag that
+                        // nothing can clear is a loop that never sleeps: the
+                        // graphs with a focus directive were still drawing 60
+                        // times a second long after everything had settled.
+                        st.settle_fit_pending = false;
                     }
-                    st.settle_fit_pending = false;
                 }
 
                 // Decide, then draw: everything about *what* is shown lives in
@@ -695,96 +829,194 @@ impl View {
                     crate::frame::build(&st.camera, viewport, dpr, &st.scene, &st.style);
                 renderer.borrow_mut().draw(&frame);
                 update_overlay(&mut overlay.borrow_mut(), st, viewport);
-                // Assertable state for e2e (the canvas has no DOM children).
-                // Assertable state for e2e: computed from the renderer's own
-                // projection, never from the DOM overlay — labels hide at the
-                // edges, and a checker that read them measured whatever was
-                // visible rather than what the layout did.
-                let projected: Vec<(f32, f32)> = st
-                    .scene
-                    .bodies
-                    .iter()
-                    .filter_map(|b| st.camera.project(viewport, b.pos).map(|s| (s.x, s.y)))
-                    .collect();
-                let mut min_px = f32::INFINITY;
-                for i in 0..projected.len() {
-                    for j in (i + 1)..projected.len() {
-                        let (a, b) = (projected[i], projected[j]);
-                        min_px = min_px.min(((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt());
-                    }
-                }
-                let (cloud_cx, cloud_cy, cloud_w, cloud_h) = if projected.is_empty() {
-                    (0.0, 0.0, 0.0, 0.0)
-                } else {
-                    let n = projected.len() as f32;
-                    let cx = projected.iter().map(|p| p.0).sum::<f32>() / n;
-                    let cy = projected.iter().map(|p| p.1).sum::<f32>() / n;
-                    let w = projected.iter().map(|p| p.0).fold(f32::NEG_INFINITY, f32::max)
-                        - projected.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
-                    let h = projected.iter().map(|p| p.1).fold(f32::NEG_INFINITY, f32::max)
-                        - projected.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
-                    (cx, cy, w, h)
-                };
-                let _ = canvas.set_attribute(
-                    "data-fg",
-                    &format!(
-                        "nodes={} links={} alpha={:.3} min_px={:.1} c={:.0},{:.0} spread={:.0}x{:.0} d={:.0} r={:.1} vp={:.0}x{:.0} ppu={:.2} cl={:.1} touch={} sel={} halo={} domes={} ph={:.2}",
-                        st.scene.nodes.len(),
-                        st.scene.links.len(),
-                        st.alpha,
-                        min_px,
-                        cloud_cx,
-                        cloud_cy,
-                        cloud_w,
-                        cloud_h,
-                        st.camera.distance,
-                        st.scene
-                            .bodies
-                            .iter()
-                            .map(|b| (b.pos - st.camera.target).len())
-                            .fold(0.0_f32, f32::max),
-                        viewport.0,
-                        viewport.1,
-                        st.collide_world,
-                        st.scene
-                            .bodies
-                            .iter()
-                            .map(|b| b.collide)
-                            .fold(f32::INFINITY, f32::min),
-                        u8::from(st.camera_touched),
-                        st.scene
-                            .selected
-                            .map(|i| i.to_string())
-                            .unwrap_or_else(|| "-".to_string()),
-                        frame.haloes.len(),
-                        frame.domes.len(),
-                        st.scene.glow_phase()
-                    ),
-                );
 
+                // Nothing left to animate: the layout is at rest, no flight, no
+                // drag, no refit owed, and no pointer over the canvas to breathe
+                // the halo for. Then this frame is the last one until an event
+                // asks for another.
+                let at_rest = st.alpha <= IDLE_ALPHA
+                    && st.flight.is_none()
+                    && st.drag.is_none()
+                    && !st.settle_fit_pending;
+                let idle = at_rest && !st.pointer_inside;
+                Self::write_debug(st, &canvas, viewport, &frame, idle);
+                idle
+            };
+
+            if idle {
+                ticker.running.set(false);
+                ticker.raf.set(0);
+                return;
             }
-
-            if let Some(window) = web_sys::window() {
-                let slot = reschedule.borrow();
-                if let Some(cb) = slot.as_ref() {
-                    if let Ok(id) = window.request_animation_frame(cb.as_ref().unchecked_ref()) {
-                        raf.set(id);
-                    }
+            let scheduled = web_sys::window().and_then(|window| {
+                let slot = ticker.tick.borrow();
+                slot.as_ref()
+                    .and_then(|cb| window.request_animation_frame(cb.as_ref().unchecked_ref()).ok())
+            });
+            match scheduled {
+                Some(id) => ticker.raf.set(id),
+                None => {
+                    ticker.running.set(false);
+                    ticker.raf.set(0);
                 }
             }
         });
 
-        if let Some(window) = web_sys::window() {
-            if let Ok(id) = window.request_animation_frame(callback.as_ref().unchecked_ref()) {
-                self.raf.set(id);
+        *self.ticker.tick.borrow_mut() = Some(callback);
+        self.ticker.wake();
+    }
+
+    /// Page-level reasons to run a frame: the tab becoming visible again, and the
+    /// canvas changing size. A `ResizeObserver` on the canvas covers a rack
+    /// reflow that never resizes the window; the window listener is the cheap
+    /// belt for browsers that fire it first.
+    fn install_lifecycle(&mut self) {
+        let Some(document) = web_sys::window().and_then(|w| w.document()) else {
+            return;
+        };
+        let ticker = self.ticker.clone();
+        let on_visibility = Closure::<dyn FnMut(web_sys::Event)>::new(move |_event: web_sys::Event| {
+            let hidden = web_sys::window()
+                .and_then(|w| w.document())
+                .map(|d| d.hidden())
+                .unwrap_or(false);
+            ticker.hidden.set(hidden);
+            if hidden {
+                ticker.halt();
+            } else {
+                // No state is touched while hidden, so one frame redraws the
+                // page exactly as it was left.
+                ticker.wake();
             }
+        });
+        let function = on_visibility
+            .as_ref()
+            .unchecked_ref::<js_sys::Function>()
+            .clone();
+        on_visibility.forget();
+        document
+            .add_event_listener_with_callback("visibilitychange", &function)
+            .ok();
+        self.page_listeners.push(("visibilitychange", function));
+
+        if let Some(window) = web_sys::window() {
+            let ticker = self.ticker.clone();
+            let on_resize = Closure::<dyn FnMut(web_sys::Event)>::new(move |_event: web_sys::Event| {
+                ticker.wake();
+            });
+            let function = on_resize.as_ref().unchecked_ref::<js_sys::Function>().clone();
+            on_resize.forget();
+            window
+                .add_event_listener_with_callback("resize", &function)
+                .ok();
+            self.page_listeners.push(("resize", function));
         }
-        *self.tick.borrow_mut() = Some(callback);
+
+        let ticker = self.ticker.clone();
+        let on_canvas_resize =
+            Closure::<dyn FnMut(js_sys::Array, web_sys::ResizeObserver)>::new(
+                move |_entries: js_sys::Array, _observer: web_sys::ResizeObserver| {
+                    ticker.wake();
+                },
+            );
+        if let Ok(observer) =
+            web_sys::ResizeObserver::new(on_canvas_resize.as_ref().unchecked_ref())
+        {
+            let element: &web_sys::Element = self.canvas.as_ref();
+            observer.observe(element);
+            self.observer = Some(observer);
+        }
+        on_canvas_resize.forget();
+    }
+
+    /// The canvas's only assertable state (it has no DOM children): counts, the
+    /// cooling factor and the camera's numbers. Written *only when the string
+    /// changed* — the previous version wrote a 200-character attribute every
+    /// frame, which invalidates style for the whole panel, and computed a
+    /// pairwise `min_px` over every projected node at 60 Hz, which is O(n²) for
+    /// a number the camera also moves (the journal's own note: it is a
+    /// screen-space distance, not an overlap test). Both are gone; what a
+    /// checker can read is unchanged apart from `min_px`, and `idle` now says
+    /// whether the loop has stopped.
+    fn write_debug(
+        st: &mut State,
+        canvas: &HtmlCanvasElement,
+        viewport: (f32, f32),
+        frame: &Frame,
+        idle: bool,
+    ) {
+        // Cloud centre and screen extent: one projection pass, no pairs.
+        let mut cx = 0.0_f32;
+        let mut cy = 0.0_f32;
+        let (mut x0, mut x1) = (f32::INFINITY, f32::NEG_INFINITY);
+        let (mut y0, mut y1) = (f32::INFINITY, f32::NEG_INFINITY);
+        let mut seen = 0_usize;
+        for body in &st.scene.bodies {
+            let Some(screen) = st.camera.project(viewport, body.pos) else {
+                continue;
+            };
+            cx += screen.x;
+            cy += screen.y;
+            x0 = x0.min(screen.x);
+            x1 = x1.max(screen.x);
+            y0 = y0.min(screen.y);
+            y1 = y1.max(screen.y);
+            seen += 1;
+        }
+        let (cx, cy, cw, ch) = if seen == 0 {
+            (0.0, 0.0, 0.0, 0.0)
+        } else {
+            let n = seen as f32;
+            (cx / n, cy / n, x1 - x0, y1 - y0)
+        };
+        let text = format!(
+            "nodes={} links={} alpha={:.3} c={:.0},{:.0} spread={:.0}x{:.0} d={:.0} r={:.1} vp={:.0}x{:.0} ppu={:.2} cl={:.1} touch={} sel={} halo={} domes={} ph={:.2} idle={}",
+            st.scene.nodes.len(),
+            st.scene.links.len(),
+            st.alpha,
+            cx,
+            cy,
+            cw,
+            ch,
+            st.camera.distance,
+            st.scene
+                .bodies
+                .iter()
+                .map(|b| (b.pos - st.camera.target).len())
+                .fold(0.0_f32, f32::max),
+            viewport.0,
+            viewport.1,
+            st.collide_world,
+            st.scene
+                .bodies
+                .iter()
+                .map(|b| b.collide)
+                .fold(f32::INFINITY, f32::min),
+            u8::from(st.camera_touched),
+            st.scene
+                .selected
+                .map(|i| i.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            frame.haloes.len(),
+            frame.domes.len(),
+            st.scene.glow_phase(),
+            u8::from(idle),
+        );
+        // Formatting allocates; touching the DOM does not happen unless the value
+        // moved. That is the difference between a style invalidation per frame
+        // and none at all while the loop is asleep.
+        if st.attr != text {
+            let _ = canvas.set_attribute("data-fg", &text);
+            st.attr = text;
+        }
     }
 
     fn install_input(&mut self) {
         let canvas = self.canvas.clone();
         let state = Rc::clone(&self.state);
+        // Every handler below is a reason to run a frame; with an idle loop, a
+        // handler that forgets to wake it is a frozen canvas.
+        let ticker = self.ticker.clone();
         let on_down = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
             let rect = canvas.get_bounding_client_rect();
             let point = (
@@ -833,6 +1065,9 @@ impl View {
                 mode,
             });
             canvas.set_pointer_capture(event.pointer_id()).ok();
+            // A press starts an interaction the loop must animate through.
+            st.pointer_inside = true;
+            ticker.wake();
         });
         let function = on_down.as_ref().unchecked_ref::<js_sys::Function>().clone();
         on_down.forget();
@@ -840,6 +1075,7 @@ impl View {
 
         let canvas_move = self.canvas.clone();
         let state = Rc::clone(&self.state);
+        let ticker = self.ticker.clone();
         let on_move = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
             let rect = canvas_move.get_bounding_client_rect();
             let point = (
@@ -933,13 +1169,30 @@ impl View {
                     st.hover = pick::pick(&st.camera, viewport, &st.scene.bodies, &radii, point);
                 }
             }
+            st.pointer_inside = true;
+            ticker.wake();
         });
         let function = on_move.as_ref().unchecked_ref::<js_sys::Function>().clone();
         on_move.forget();
         self.listen("pointermove", function);
 
+        {
+            // Crossing the border without moving is still an arrival: the halo
+            // breath has to start from here, not from the first pointermove.
+            let state = Rc::clone(&self.state);
+            let ticker = self.ticker.clone();
+            let on_enter = Closure::<dyn FnMut(PointerEvent)>::new(move |_event: PointerEvent| {
+                state.borrow_mut().pointer_inside = true;
+                ticker.wake();
+            });
+            let function = on_enter.as_ref().unchecked_ref::<js_sys::Function>().clone();
+            on_enter.forget();
+            self.listen("pointerenter", function);
+        }
+
         let state = Rc::clone(&self.state);
         let emit = Rc::clone(&self.emit);
+        let ticker = self.ticker.clone();
         let on_up = Closure::<dyn FnMut(PointerEvent)>::new(move |_event: PointerEvent| {
             // Only a left press on a node that did not turn into a drag counts
             // as a click. The background is not an event source: releasing
@@ -995,6 +1248,8 @@ impl View {
                 }
                 None => {}
             }
+            // The release unpins, re-cools and may have selected: one frame.
+            ticker.wake();
         });
         let function = on_up.as_ref().unchecked_ref::<js_sys::Function>().clone();
         on_up.forget();
@@ -1004,10 +1259,16 @@ impl View {
         // position the view last saw, so without this a card stays standing
         // after the cursor has gone somewhere else.
         let state = Rc::clone(&self.state);
+        let ticker = self.ticker.clone();
         let on_leave = Closure::<dyn FnMut(PointerEvent)>::new(move |_event: PointerEvent| {
             let mut guard = state.borrow_mut();
             let st: &mut State = &mut guard;
             st.hover = None;
+            // Out of the canvas: the breath stops with the last cleared frame,
+            // and a settled layout lets the loop go.
+            st.pointer_inside = false;
+            drop(guard);
+            ticker.wake();
         });
         let function = on_leave.as_ref().unchecked_ref::<js_sys::Function>().clone();
         on_leave.forget();
@@ -1021,6 +1282,7 @@ impl View {
         self.listen("contextmenu", function);
 
         let state = Rc::clone(&self.state);
+        let ticker = self.ticker.clone();
         let on_wheel = Closure::<dyn FnMut(WheelEvent)>::new(move |event: WheelEvent| {
             event.prevent_default();
             let mut guard = state.borrow_mut();
@@ -1029,6 +1291,8 @@ impl View {
             st.camera_touched = true;
             let factor = (event.delta_y() as f32 * 0.001).exp();
             st.camera.distance = (st.camera.distance * factor).clamp(1.0, 100_000.0);
+            drop(guard);
+            ticker.wake();
         });
         let function = on_wheel.as_ref().unchecked_ref::<js_sys::Function>().clone();
         on_wheel.forget();
@@ -1043,17 +1307,27 @@ impl View {
     }
 
     pub fn dispose(&mut self) {
-        let id = self.raf.replace(0);
-        if id != 0 {
-            if let Some(window) = web_sys::window() {
-                window.cancel_animation_frame(id).ok();
-            }
+        self.ticker.halt();
+        self.ticker.tick.borrow_mut().take();
+        if let Some(observer) = self.observer.take() {
+            observer.disconnect();
         }
-        self.tick.borrow_mut().take();
         for (name, function) in self.listeners.drain(..) {
             self.canvas
                 .remove_event_listener_with_callback(name, &function)
                 .ok();
+        }
+        for (name, function) in self.page_listeners.drain(..) {
+            if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+                document
+                    .remove_event_listener_with_callback(name, &function)
+                    .ok();
+            }
+            if let Some(window) = web_sys::window() {
+                window
+                    .remove_event_listener_with_callback(name, &function)
+                    .ok();
+            }
         }
         Renderer::lose_context(&self.canvas);
         let overlay = self.overlay.borrow();

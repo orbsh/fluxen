@@ -23,6 +23,7 @@ web-sys = { workspace = true, features = [
     "HtmlCanvasElement",
     "HtmlElement",
     "PointerEvent",
+    "ResizeObserver",
     "WebGl2RenderingContext",
     "WebGlBuffer",
     "WebGlProgram",
