@@ -24,6 +24,8 @@ pub use panel::panel_;
 
 pub mod tiles;
 pub use tiles::tiles_;
+pub mod record;
+pub use record::record_;
 pub mod render;
 pub use render::template_;
 pub mod svg;

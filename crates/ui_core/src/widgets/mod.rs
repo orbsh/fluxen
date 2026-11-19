@@ -6,7 +6,5 @@ pub mod input;
 pub use input::input_;
 pub mod select;
 pub use select::select_;
-pub mod table;
-pub use table::*;
 pub mod text;
 pub use text::text_;

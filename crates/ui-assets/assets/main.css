@@ -419,6 +419,56 @@
         --leave-ms: 350ms;
     }
 
+    /* A grid: `columns` present means every item is a record and every column projects one field
+       into a cell (ADR 0031 §4). Each row is its own grid reading ONE track list, so a row can be
+       styled — bordered, hovered, indented — where `display: contents` would have eaten it. */
+    .tiles.cols {
+        --tile-cols: minmax(0, 1fr);
+
+        & > .tiles-head,
+        & > .tiles-row {
+            display: grid;
+            grid-template-columns: var(--tile-cols);
+            align-items: center;
+            column-gap: 0.5em;
+        }
+
+        & > .tiles-head > .tiles-hcell {
+            padding: 0.4em 0;
+            text-align: left;
+            border-bottom: 0.1em solid var(--fg);
+        }
+
+        /* The group row of a two-row header: the cell covers the columns under it (the renderer
+           counts them off the keys), and the line it draws is lighter than the header's own. */
+        & > .tiles-head > .tiles-hcell.group {
+            border-bottom: 0.05em solid var(--secondary);
+            font-weight: 600;
+        }
+
+        & > .tiles-row > .tiles-cell {
+            /* A long value wraps inside its track instead of widening it: the columns are the
+               frame's, not the longest string's. */
+            min-width: 0;
+            padding: 0.4em 0;
+            border-bottom: 0.05em solid var(--secondary);
+        }
+
+        /* A child row is one step down per level: the indent is the whole of "grouped", and the
+           depth arrives as a custom property from the renderer's recursion. */
+        & > .tiles-row.tiles-child > .tiles-cell:first-child {
+            padding-left: calc(var(--depth, 1) * 1.25em);
+            border-bottom-style: dotted;
+        }
+    }
+
+    /* One at a time on a grid: the staged item's rows show, the rest do not. A class per row, not a
+       parent, because a child row is a SIBLING of the row it belongs to (that is how it lines up
+       with the same tracks). */
+    .tiles.cols.one > .tiles-row.off {
+        display: none;
+    }
+
     /* One at a time: every item stacks in one cell and only the current one is opaque. Both
        directions ride the opacity transition, so fading out needs no one to hold the node a while
        — and no clock outside the renderer. The stack clips: one item occupies the area, the others
@@ -1093,32 +1143,5 @@
             /*transform: scaleX(1);*/
             transition: all 0.5s ease-in-out 0s;
         }
-    }
-
-    table {
-        width: 100%;
-        border-spacing: 0;
-    }
-
-    td,
-    th {
-        padding: 0.4rem;
-
-        &:first-child {
-            padding-left: 0;
-        }
-
-        &:last-child {
-            padding-right: 0;
-        }
-    }
-
-    th {
-        border-bottom: 0.1rem solid var(--fg);
-        text-align: left;
-    }
-
-    td {
-        border-bottom: 0.05rem solid var(--fg);
     }
 }

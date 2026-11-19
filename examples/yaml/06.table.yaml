@@ -1,140 +1,102 @@
-action: append
-data:
-  attrs:
-    submit:
-    - enter
-    - button
-  children:
-  - type: text
-  - attrs:
-      class:
-      - gap
-      - md
+# 表格 = `tiles` + `columns`（ADR 0031 §4）：没有 `<table>`，也就没有 thead/tbody/tr/th/td。
+# 每条数据是一条 `record`，字段用 `attrs.selector` 命名（ADR 0020 的规则：selector 在兄弟之间
+# 指认一个子节点），`columns` 的 `key` 把字段投影成单元格。
+# 表头不是元素，是一个钩子：`header: {selector, rows: 2}` 让每个表头单元格带上这个 selector；
+# 两行表头由 key 自己长出来——`price/retail` 落在 `price` 组下，组单元格盖住它下面几列。
+# 合并单元格（colspan/rowspan）在模型里不存在：数据有层级就写成嵌套的 record，渲染成子行。
+- action: append
+  slot: chat
+  data:
+    type: bundle
+    id: table-form
+    attrs:
+      submit: [enter, button]
     children:
-    - children:
-      - type: thead
-        children:
-        - type: tr
-          children:
-          - type: th
-            children:
-            - type: image
-              attrs:
-                desc: ccacc
-                height: 1em
-          - type: th
-            children:
-            - type: text
-          - type: th
-            children:
-            - type: text
-          - type: th
-            children:
-            - type: text
-          - type: th
-            children:
-            - type: text
-      - type: tbody
-        children:
-        - children:
-          - children:
-            - source:
-                default: '853736'
-                type: text
-              sink:
-                slot: s
-                scope: local
-              type: input
-            type: td
-          - children:
-            - type: text
-              source:
-                default: a1
-            type: td
-          - children:
-            - type: text
-              source:
-                default: 2.25
-            type: td
-          - children:
-            - type: text
-              source:
-                default: a2
-            type: td
-          - children:
-            - type: text
-              source:
-                default: a3
-            type: td
-          type: tr
-        - children:
-          - children:
-            - source:
-                default: false
-                type: bool
-              sink:
-                slot: b
-                scope: local
-              type: input
-            type: td
-          - children:
-            - type: text
-              source:
-                default: b1
-            type: td
-          - children:
-            - type: text
-              source:
-                default: 0.31
-            type: td
-          - children:
-            - type: text
-              source:
-                default: b2
-            type: td
-          - children:
-            - type: text
-              source:
-                default: b3
-            type: td
-          type: tr
-        - children:
-          - children:
-            - source:
-                default: 9
-                type: number
-              sink:
-                slot: n
-                scope: local
-              type: input
-            type: td
-          - children:
-            - type: text
-              source:
-                default: c1
-            type: td
-          - children:
-            - type: text
-              source:
-                default: 33.83
-            type: td
-          - children:
-            - type: text
-              source:
-                default: c2
-            type: td
-          - children:
-            - type: text
-              source:
-                default: c3
-            type: td
-          type: tr
-      type: table
-    type: frame
-  - attrs:
-      oneshot: false
-    sink: {}
-    type: button
-  id: table-form
-  type: bundle
-slot: chat
+    - type: text
+      source: {default: ''}
+    - type: frame
+      attrs:
+        class: [gap, md]
+      children:
+      - type: tiles
+        attrs:
+          class: [--table]
+          columns:
+          - {key: qty, title: Qty, width: 5rem}
+          - {key: name, title: Name}
+          - {key: price/retail, title: Retail, width: 6rem, align: end}
+          - {key: price/list, title: List, width: 6rem, align: end}
+          - {key: note, title: Note}
+          header: {selector: --table-head, rows: 2}
+        source: {slot: table-rows}
+    - type: button
+      attrs:
+        oneshot: false
+      sink: {}
+# ---- 行：一条 record 一个 item；`id` 就是它的键（stage/step 复用同一套键） ----
+- action: append
+  slot: table-rows
+  data:
+    type: record
+    id: '853736'
+    children:
+    - type: input
+      attrs: {selector: qty}
+      source: {default: '853736', type: text}
+      sink: {slot: s, scope: local}
+    - type: text
+      attrs: {selector: name}
+      source: {default: a1}
+    - type: text
+      attrs: {selector: price/retail}
+      source: {default: 2.25}
+    - type: text
+      attrs: {selector: price/list}
+      source: {default: a2}
+    - type: text
+      attrs: {selector: note}
+      source: {default: a3}
+- action: append
+  slot: table-rows
+  data:
+    type: record
+    id: b
+    children:
+    - type: input
+      attrs: {selector: qty}
+      source: {default: false, type: bool}
+      sink: {slot: b, scope: local}
+    - type: text
+      attrs: {selector: name}
+      source: {default: b1}
+    - type: text
+      attrs: {selector: price/retail}
+      source: {default: 0.31}
+    - type: text
+      attrs: {selector: price/list}
+      source: {default: b2}
+    - type: text
+      attrs: {selector: note}
+      source: {default: b3}
+- action: append
+  slot: table-rows
+  data:
+    type: record
+    id: n
+    children:
+    - type: input
+      attrs: {selector: qty}
+      source: {default: 9, type: number}
+      sink: {slot: n, scope: local}
+    - type: text
+      attrs: {selector: name}
+      source: {default: c1}
+    - type: text
+      attrs: {selector: price/retail}
+      source: {default: 33.83}
+    - type: text
+      attrs: {selector: price/list}
+      source: {default: c2}
+    - type: text
+      attrs: {selector: note}
+      source: {default: c3}

@@ -14,7 +14,7 @@ use crate::Ctx;
 use crate::ctx::render_accrete;
 use crate::hooks::{self, use_common_css, use_source_id};
 use accrete::classify::Classify;
-use accrete::{Accrete, AccreteOps, Bind, Scope, Stage, Step, Tiles};
+use accrete::{Accrete, AccreteOps, Align, Bind, Column, Header, Scope, Stage, Step, Tiles};
 use leptos::html::*;
 use leptos::leptos_dom::helpers::set_interval_with_handle;
 use leptos::prelude::*;
@@ -124,6 +124,175 @@ fn expired_prefix(keys: &[String], stamps: &HashMap<String, u64>, tick: u64, sta
     gone
 }
 
+/// The field a column projects: the record's child whose `selector` is the key. This is ADR 0020's
+/// rule reused — a selector already names a child among its siblings, and a record's fields are
+/// exactly that, so a column can address one without the vocabulary growing a second key.
+///
+/// The first hit wins, the same rule `positions` follows: two fields with one name are one field, and
+/// the first is the one the frame wrote first.
+fn field<'a>(record: &'a Accrete, key: &str) -> Option<&'a Accrete> {
+    record
+        .borrow_children()?
+        .iter()
+        .find(|c| c.get_selector().as_deref() == Some(key))
+}
+
+/// The records a field holds, when the field holds a LIST of them (ADR 0031 §4, "Spans are not a
+/// feature; hierarchy is"). All children must be records: a mix of records and values is a frame
+/// mistake, and drawing it as the plain cell it also is keeps the mistake visible instead of
+/// silently swallowing the values.
+fn child_records(field: &Accrete) -> Vec<&Accrete> {
+    let Some(children) = field.borrow_children() else {
+        return Vec::new();
+    };
+    if !children.is_empty() && children.iter().all(|c| matches!(c, Accrete::record(_))) {
+        children.iter().collect()
+    } else {
+        Vec::new()
+    }
+}
+
+/// A column key's two halves for a two-row header: `price/retail` → (`price`, `retail`). A key with
+/// no `/` is its own group, which is how a field with no parent reads in a real header too.
+fn key_parts(key: &str) -> (&str, &str) {
+    match key.rfind('/') {
+        Some(at) => (&key[..at], &key[at + 1..]),
+        None => (key, key),
+    }
+}
+
+/// The group row of a two-row header: contiguous runs of columns sharing a group, and how many
+/// columns each covers. Runs rather than a map, because the header must read left to right in column
+/// order — the same order the cells below it sit in.
+fn head_groups(columns: &[Column]) -> Vec<(String, usize)> {
+    let mut groups: Vec<(String, usize)> = Vec::new();
+    for column in columns {
+        let (group, _) = key_parts(&column.key);
+        match groups.last_mut() {
+            Some((last, span)) if last == group => *span += 1,
+            _ => groups.push((group.to_string(), 1)),
+        }
+    }
+    groups
+}
+
+/// One cell: the column's hooks (its `selectors`), the projection's key for CSS to reach, and the
+/// field drawn inside as it is. No field = an empty cell, because a missing value is a hole in the
+/// record and drawing nothing is what a hole looks like.
+fn cell_view(ctx: &Ctx, field: Option<&Accrete>, column: &Column) -> AnyView {
+    let mut class = String::from("tiles-cell");
+    for selector in column.selectors.iter().flatten() {
+        class.push(' ');
+        class.push_str(selector);
+    }
+    let style = match column.align.unwrap_or_default() {
+        Align::Start => String::new(),
+        Align::Center => "justify-self: center;".to_string(),
+        Align::End => "justify-self: end;".to_string(),
+    };
+    let body = match field {
+        Some(f) => render_accrete(ctx, f),
+        None => ().into_any(),
+    };
+    div()
+        .class(class)
+        .attr("data-key", column.key.clone())
+        .style(style)
+        .child(body)
+        .into_any()
+}
+
+/// A row: the cells of one record. `state` is the stage (`active` / `off`) when one item holds the
+/// area, and `depth` is how far down the child rows this one sits — the indentation is CSS on
+/// `.tiles-child`, the model never says how deep anything looks.
+fn row_view(cells: Vec<AnyView>, state: &str, depth: usize) -> AnyView {
+    let mut class = String::from("tiles-row");
+    if depth > 0 {
+        class.push_str(" tiles-child");
+    }
+    if !state.is_empty() {
+        class.push(' ');
+        class.push_str(state);
+    }
+    // The level travels as a number, not as markup: CSS decides what a level looks like.
+    let style = if depth > 0 {
+        format!("--depth: {depth};")
+    } else {
+        String::new()
+    };
+    div().class(class).style(style).child(cells).into_any()
+}
+
+/// A record as rows: its own row, then the rows of every field that holds records, recursively
+/// (ADR 0031 §4). The child rows are siblings of their parent, not children of it — a grid row
+/// cannot contain a grid row without inventing the nested column set a span would have faked.
+fn record_rows(
+    ctx: &Ctx,
+    record: &Accrete,
+    columns: &[Column],
+    state: &str,
+    depth: usize,
+) -> Vec<AnyView> {
+    let mut nested: Vec<&Accrete> = Vec::new();
+    let cells: Vec<AnyView> = columns
+        .iter()
+        .map(|column| {
+            let found = field(record, &column.key);
+            match found.map(child_records) {
+                Some(children) if !children.is_empty() => {
+                    nested.extend(children);
+                    cell_view(ctx, None, column)
+                }
+                _ => cell_view(ctx, found, column),
+            }
+        })
+        .collect();
+    let mut rows = vec![row_view(cells, state, depth)];
+    for child in nested {
+        rows.extend(record_rows(ctx, child, columns, state, depth + 1));
+    }
+    rows
+}
+
+/// The header: one row of cells when `rows` is 1, a group row over a leaf row when it is 2. Every
+/// cell carries `header.selector` — that is the whole mechanism, since a header cell is not an
+/// element a frame can name (ADR 0031 §4).
+fn head_view(header: &Header, columns: &[Column]) -> AnyView {
+    let mut cells: Vec<AnyView> = Vec::new();
+    if header.rows >= 2 {
+        for (group, span) in head_groups(columns) {
+            // A group covering several columns is one cell that covers them: the grid placement is
+            // the renderer expressing the hierarchy the keys already have, not a span the frame can
+            // ask for.
+            let style = if span > 1 {
+                format!("grid-column: span {span};")
+            } else {
+                String::new()
+            };
+            cells.push(
+                div()
+                    .class(format!("tiles-hcell group {}", header.selector))
+                    .style(style)
+                    .attr("data-group", group.clone())
+                    .child(group)
+                    .into_any(),
+            );
+        }
+    }
+    for column in columns {
+        let (_, leaf) = key_parts(&column.key);
+        let title = column.title.clone().unwrap_or_else(|| leaf.to_string());
+        cells.push(
+            div()
+                .class(format!("tiles-hcell leaf {}", header.selector))
+                .attr("data-key", column.key.clone())
+                .child(title)
+                .into_any(),
+        );
+    }
+    div().class("tiles-head").child(cells).into_any()
+}
+
 /// A slot's items, cut into blocks (ADR 0031 §4).
 ///
 /// `stage: all` lays every item out; `stage: one` gives the area to a single one, chosen by
@@ -139,20 +308,46 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
 
     let stage = accrete.attrs.as_ref().map(|a| a.stage).unwrap_or_default();
     let step = accrete.attrs.as_ref().and_then(|a| a.step.clone());
+    // `columns` decides the data shape (ADR 0031 §4): present means each item is a RECORD and the
+    // node is a grid; absent means each item is drawn as it is. An empty list of columns says
+    // nothing, so it is the same as absent — a grid with no columns has no cells to place.
+    let columns = accrete
+        .attrs
+        .as_ref()
+        .and_then(|a| a.columns.clone())
+        .filter(|c| !c.is_empty());
+    let header = accrete.attrs.as_ref().and_then(|a| a.header.clone());
 
     let mut css = vec!["tiles", "f"];
     if stage == Stage::One {
         // One at a time is a stack of blocks with one of them opaque: CSS draws it, the class
-        // says which container it is.
-        css.push("rot");
+        // says which container it is. A grid stacks rows instead — same idea, one row visible.
+        css.push(if columns.is_some() { "one" } else { "rot" });
+    }
+    if columns.is_some() {
+        css.push("cols");
     }
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
+    // Every row of a grid is its own track list, all read from one custom property: the header and
+    // the body cannot drift apart, and a frame still overrides any of it with CSS.
+    let style = columns.as_ref().map(|cols| {
+        let tracks: Vec<String> = cols
+            .iter()
+            .map(|c| c.width.clone().unwrap_or_else(|| "minmax(0, 1fr)".into()))
+            .collect();
+        format!("--tile-cols: {};", tracks.join(" "))
+    });
+
     let layout: Layout = accrete.children.clone().unwrap_or_default().into();
     // No slot = nothing to tile. A list channel without an address has no items, not one.
     let Some(source) = use_source_id(&accrete).cloned() else {
-        return div().id(id.as_str()).class(css.as_str()).into_any();
+        return div()
+            .id(id.as_str())
+            .class(css.as_str())
+            .style(style.unwrap_or_default())
+            .into_any();
     };
     let slot = ctx.slot_for_list(&source);
 
@@ -353,6 +548,7 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
         let visible: Vec<String> = ks.iter().skip(gone).cloned().collect();
         let lcx = ctx.clone();
         let layout2 = layout.clone();
+        let columns2 = columns.clone();
         let po = parent_owner.clone();
         // Keyed list: the key set is diffed on every slot write, so a new item builds one node and
         // the items above it keep theirs. A row's content is a reactive closure in its own right,
@@ -366,6 +562,7 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
                 let owner = po.with(Owner::new);
                 let view = owner.with(|| {
                     let layout = layout2.clone();
+                    let columns = columns2.clone();
                     let k2 = key.clone();
                     // Per-row memo: a slot write recomputes the row this key names, and nothing
                     // else. The lookup is a table read (key → position), not a scan.
@@ -379,6 +576,22 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
                         let Some(child) = memo.get() else {
                             return div().into_any();
                         };
+                        // A grid projects each item's fields into cells; the key the item arrived
+                        // with stays the identity of ALL of its rows, so stepping and selection
+                        // address the same thing they addressed before `columns` existed.
+                        if let Some(columns) = &columns {
+                            let state = if stage == Stage::One {
+                                if staged.get().as_deref() == Some(name.as_str()) {
+                                    "active"
+                                } else {
+                                    "off"
+                                }
+                            } else {
+                                ""
+                            };
+                            return record_rows(&rctx, child.as_ref(), columns, state, 0)
+                                .into_any();
+                        }
                         let inner = match layout.select(child.as_ref()) {
                             Some(mut template) => {
                                 // The template is a shell: its `children` are replaced by exactly
@@ -508,9 +721,18 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
             });
         }
 
+        // The header sits above the rows and outside the keyed list: it is one row for the whole grid,
+        // not one per item, so it must not be rebuilt when an item arrives.
+        let head = header
+            .as_ref()
+            .zip(columns.as_ref())
+            .map(|(h, c)| head_view(h, c));
+
         div()
             .id(id.as_str())
             .class(css.as_str())
+            .style(style.clone().unwrap_or_default())
+            .child(head)
             .child(children)
             .into_any()
     }
@@ -531,6 +753,129 @@ mod tests {
             v.as_object_mut().unwrap().insert("id".into(), i.into());
         }
         Arc::new(serde_json::from_value(v).unwrap())
+    }
+
+    fn node(v: Value) -> Accrete {
+        serde_json::from_value(v).unwrap()
+    }
+
+    /// A record is a list of named fields: the name is the child's `selector`, so a column projects
+    /// by name and reordering the children cannot move a value into another column. A field whose
+    /// children are ALL records holds a list of them (the nested rows); a field that mixes records
+    /// and values stays a plain cell, because drawing half of it as hierarchy would hide the
+    /// frame's mistake.
+    #[test]
+    fn a_field_holds_a_value_or_a_list_of_records() {
+        let rec = node(json!({
+            "type": "record",
+            "children": [
+                {"type": "text", "attrs": {"selector": "name"},
+                 "source": {"default": "x"}},
+                {"type": "group", "attrs": {"selector": "options"},
+                 "children": [
+                    {"type": "record", "id": "a"},
+                    {"type": "record", "id": "b"}
+                 ]},
+                {"type": "group", "attrs": {"selector": "mixed"},
+                 "children": [
+                    {"type": "record", "id": "c"},
+                    {"type": "text", "attrs": {"selector": "name"}}
+                 ]}
+            ]
+        }));
+
+        // A field with a value: the cell it lands in is that node, and it nests nothing.
+        let name = field(&rec, "name").expect("name");
+        assert!(child_records(name).is_empty());
+
+        // All records = a list: those become the child rows under this row.
+        let options = field(&rec, "options").expect("options");
+        assert_eq!(child_records(options).len(), 2);
+
+        // Records and values together = not a hierarchy.
+        let mixed = field(&rec, "mixed").expect("mixed");
+        assert!(
+            child_records(mixed).is_empty(),
+            "a mix is not a list of records"
+        );
+
+        // A key no field answers is a hole in the record, not an error.
+        assert!(field(&rec, "price").is_none());
+
+        // Two fields with one name are one field, and the first is the one the frame wrote first
+        // (the same rule `positions` follows).
+        let dup = node(json!({
+            "type": "record",
+            "children": [
+                {"type": "text", "attrs": {"selector": "n"}, "source": {"default": "first"}},
+                {"type": "text", "attrs": {"selector": "n"}, "source": {"default": "second"}}
+            ]
+        }));
+        assert_eq!(
+            field(&dup, "n")
+                .and_then(|f| f.get_source())
+                .and_then(|b| b.default.clone()),
+            Some(json!("first"))
+        );
+
+        // An empty field is not a list either: `is_empty` would otherwise say "all records" of
+        // nothing and the row would vanish.
+        let empty = node(json!({"type": "group", "attrs": {"selector": "e"}, "children": []}));
+        assert!(child_records(&empty).is_empty());
+    }
+
+    /// A record is the item, so the key a grid addresses it by is the record's OWN id — never one
+    /// of its fields' selectors, and never the position it happens to sit at.
+    #[test]
+    fn a_record_is_keyed_by_its_own_id() {
+        let named = |id: &str| Arc::new(node(json!({"type": "record", "id": id, "children": []})));
+        let anon = || Arc::new(node(json!({"type": "record", "children": []})));
+        let (a, b) = (named("853736"), named("56459"));
+
+        let mut born = HashMap::new();
+        assert_eq!(
+            tile_keys(&[a.clone(), b.clone()], &mut born),
+            vec!["853736", "56459"]
+        );
+
+        // Removing the head renames nothing behind it.
+        assert_eq!(tile_keys(&[b.clone()], &mut born), vec!["56459"]);
+
+        // A record that names nothing borrows its arrival position, once.
+        let x = anon();
+        assert_eq!(tile_keys(&[x.clone()], &mut born), vec!["#0"]);
+        assert_eq!(tile_keys(&[b], &mut born), vec!["56459"]);
+    }
+
+    /// A two-row header reads its groups off the column keys: split on `/`, everything before the
+    /// last one is the group, the rest is the leaf. A key with no `/` is its own group. Runs are
+    /// contiguous because the header has to read left to right in column order.
+    #[test]
+    fn a_two_row_header_groups_columns_by_key_prefix() {
+        let col = |key: &str| Column {
+            key: key.into(),
+            ..Column::default()
+        };
+        let cols = [
+            col("qty"),
+            col("price/retail"),
+            col("price/wholesale"),
+            col("name"),
+        ];
+        assert_eq!(
+            head_groups(&cols[..]),
+            vec![
+                ("qty".to_string(), 1),
+                ("price".to_string(), 2),
+                ("name".to_string(), 1),
+            ]
+        );
+
+        // Only the last slash splits, so a deeper path groups under its parent path — and the leaf
+        // is what the cell title falls back to.
+        assert_eq!(key_parts("price"), ("price", "price"));
+        assert_eq!(key_parts("price/retail"), ("price", "retail"));
+        assert_eq!(key_parts("price/retail/list"), ("price/retail", "list"));
     }
 
     #[test]
