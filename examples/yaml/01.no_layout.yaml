@@ -9,9 +9,5 @@ data:
       - box
       - border
       - shadow
-    bind:
-      value:
-        kind: source
-        default: 123
-        source: test-data
+    source: {slot: test-data, default: 123}
 

@@ -19,19 +19,13 @@
 use crate::Ctx;
 use crate::ctx::{render_accrete, render_children};
 use crate::hooks::use_common_css;
-use accrete::{AccreteOps, BindVariant, Frame, FrameAttr};
+use accrete::{AccreteOps, Frame, FrameAttr};
 use leptos::html::*;
 use leptos::prelude::*;
 
 /// 槽名（`bind.value.source`），没有绑定就是 `None`。
 fn source_of(accrete: &Frame) -> Option<String> {
-    accrete
-        .get_bind()
-        .and_then(|x| x.get("value"))
-        .and_then(|b| match &b.variant {
-            BindVariant::Source { source, .. } => Some(source.clone()),
-            _ => None,
-        })
+    accrete.get_source().and_then(|b| b.slot.clone())
 }
 
 pub fn frame_(accrete: Frame, ctx: &Ctx) -> AnyView {

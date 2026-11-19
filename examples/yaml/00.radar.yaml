@@ -63,10 +63,7 @@
       attrs:
         class:
         - f
-      bind:
-        value:
-          kind: source
-          source: trend
+      source: {slot: trend}
     - type: frame
       id: radar-row
       attrs:
@@ -81,40 +78,28 @@
         attrs:
           class:
           - f
-        bind:
-          value:
-            kind: source
-            source: radar_rd
+        source: {slot: radar_rd}
       - type: canvas
         url: /assets/g2chart/index.js
         id: radar-mkt
         attrs:
           class:
           - f
-        bind:
-          value:
-            kind: source
-            source: radar_mkt
+        source: {slot: radar_mkt}
       - type: canvas
         url: /assets/g2chart/index.js
         id: radar-ops
         attrs:
           class:
           - f
-        bind:
-          value:
-            kind: source
-            source: radar_ops
+        source: {slot: radar_ops}
 
     - type: text
       attrs:
         class:
         - box
         format: md
-      bind:
-        value:
-          kind: source
-          source: summary
+      source: {slot: summary}
 
 # 图表数据与摘要走数据槽（ADR 0005：set 建槽、指针 patch 追加）——流式内容
 # 不进布局平面：写布局节点会重渲染整行、重挂模块宿主（实测见 docs/PLAN.md）。
@@ -123,593 +108,583 @@
   data:
     type: canvas
     url: /assets/g2chart/index.js
-    bind:
-      value:
-        kind: default
-        default:
-          type: line
-          data:
-          - day: 09-03
-            avg: 4.07
-            dept: 研发部
-          - day: 09-03
-            avg: 3.95
-            dept: 市场部
-          - day: 09-03
-            avg: 4.18
-            dept: 运营部
-          - day: 09-04
-            avg: 3.86
-            dept: 研发部
-          - day: 09-04
-            avg: 3.97
-            dept: 市场部
-          - day: 09-04
-            avg: 4.11
-            dept: 运营部
-          - day: 09-05
-            avg: 3.64
-            dept: 研发部
-          - day: 09-05
-            avg: 3.97
-            dept: 市场部
-          - day: 09-05
-            avg: 3.88
-            dept: 运营部
-          - day: 09-06
-            avg: 3.61
-            dept: 研发部
-          - day: 09-06
-            avg: 3.75
-            dept: 市场部
-          - day: 09-06
-            avg: 3.67
-            dept: 运营部
-          - day: 09-07
-            avg: 3.57
-            dept: 研发部
-          - day: 09-07
-            avg: 3.92
-            dept: 市场部
-          - day: 09-07
-            avg: 3.48
-            dept: 运营部
-          - day: 09-08
-            avg: 3.43
-            dept: 研发部
-          - day: 09-08
-            avg: 3.98
-            dept: 市场部
-          - day: 09-08
-            avg: 3.71
-            dept: 运营部
-          - day: 09-09
-            avg: 3.47
-            dept: 研发部
-          - day: 09-09
-            avg: 3.93
-            dept: 市场部
-          - day: 09-09
-            avg: 3.95
-            dept: 运营部
-          - day: 09-10
-            avg: 3.24
-            dept: 研发部
-          - day: 09-10
-            avg: 4.11
-            dept: 市场部
-          - day: 09-10
-            avg: 3.84
-            dept: 运营部
-          - day: 09-11
-            avg: 3.2
-            dept: 研发部
-          - day: 09-11
-            avg: 3.92
-            dept: 市场部
-          - day: 09-11
-            avg: 3.75
-            dept: 运营部
-          - day: 09-12
-            avg: 3.36
-            dept: 研发部
-          - day: 09-12
-            avg: 3.76
-            dept: 市场部
-          - day: 09-12
-            avg: 3.79
-            dept: 运营部
-          - day: 09-13
-            avg: 3.43
-            dept: 研发部
-          - day: 09-13
-            avg: 3.69
-            dept: 市场部
-          - day: 09-13
-            avg: 3.81
-            dept: 运营部
-          - day: 09-14
-            avg: 3.21
-            dept: 研发部
-          - day: 09-14
-            avg: 3.47
-            dept: 市场部
-          - day: 09-14
-            avg: 3.66
-            dept: 运营部
-          - day: 09-15
-            avg: 3.3
-            dept: 研发部
-          - day: 09-15
-            avg: 3.44
-            dept: 市场部
-          - day: 09-15
-            avg: 3.57
-            dept: 运营部
-          - day: 09-16
-            avg: 3.34
-            dept: 研发部
-          - day: 09-16
-            avg: 3.41
-            dept: 市场部
-          - day: 09-16
-            avg: 3.47
-            dept: 运营部
-          - day: 09-17
-            avg: 3.49
-            dept: 研发部
-          - day: 09-17
-            avg: 3.51
-            dept: 市场部
-          - day: 09-17
-            avg: 3.34
-            dept: 运营部
-          encode:
-            x: day
-            y: avg
-            color: dept
-            shape: smooth
-          style:
-            lineWidth: 2
-          scale:
-            y:
-              domain:
-              - 3.0
-              - 5.0
-          interaction:
-            tooltip:
-              crosshairs: true
+    source:
+      default:
+        type: line
+        data:
+        - day: 09-03
+          avg: 4.07
+          dept: 研发部
+        - day: 09-03
+          avg: 3.95
+          dept: 市场部
+        - day: 09-03
+          avg: 4.18
+          dept: 运营部
+        - day: 09-04
+          avg: 3.86
+          dept: 研发部
+        - day: 09-04
+          avg: 3.97
+          dept: 市场部
+        - day: 09-04
+          avg: 4.11
+          dept: 运营部
+        - day: 09-05
+          avg: 3.64
+          dept: 研发部
+        - day: 09-05
+          avg: 3.97
+          dept: 市场部
+        - day: 09-05
+          avg: 3.88
+          dept: 运营部
+        - day: 09-06
+          avg: 3.61
+          dept: 研发部
+        - day: 09-06
+          avg: 3.75
+          dept: 市场部
+        - day: 09-06
+          avg: 3.67
+          dept: 运营部
+        - day: 09-07
+          avg: 3.57
+          dept: 研发部
+        - day: 09-07
+          avg: 3.92
+          dept: 市场部
+        - day: 09-07
+          avg: 3.48
+          dept: 运营部
+        - day: 09-08
+          avg: 3.43
+          dept: 研发部
+        - day: 09-08
+          avg: 3.98
+          dept: 市场部
+        - day: 09-08
+          avg: 3.71
+          dept: 运营部
+        - day: 09-09
+          avg: 3.47
+          dept: 研发部
+        - day: 09-09
+          avg: 3.93
+          dept: 市场部
+        - day: 09-09
+          avg: 3.95
+          dept: 运营部
+        - day: 09-10
+          avg: 3.24
+          dept: 研发部
+        - day: 09-10
+          avg: 4.11
+          dept: 市场部
+        - day: 09-10
+          avg: 3.84
+          dept: 运营部
+        - day: 09-11
+          avg: 3.2
+          dept: 研发部
+        - day: 09-11
+          avg: 3.92
+          dept: 市场部
+        - day: 09-11
+          avg: 3.75
+          dept: 运营部
+        - day: 09-12
+          avg: 3.36
+          dept: 研发部
+        - day: 09-12
+          avg: 3.76
+          dept: 市场部
+        - day: 09-12
+          avg: 3.79
+          dept: 运营部
+        - day: 09-13
+          avg: 3.43
+          dept: 研发部
+        - day: 09-13
+          avg: 3.69
+          dept: 市场部
+        - day: 09-13
+          avg: 3.81
+          dept: 运营部
+        - day: 09-14
+          avg: 3.21
+          dept: 研发部
+        - day: 09-14
+          avg: 3.47
+          dept: 市场部
+        - day: 09-14
+          avg: 3.66
+          dept: 运营部
+        - day: 09-15
+          avg: 3.3
+          dept: 研发部
+        - day: 09-15
+          avg: 3.44
+          dept: 市场部
+        - day: 09-15
+          avg: 3.57
+          dept: 运营部
+        - day: 09-16
+          avg: 3.34
+          dept: 研发部
+        - day: 09-16
+          avg: 3.41
+          dept: 市场部
+        - day: 09-16
+          avg: 3.47
+          dept: 运营部
+        - day: 09-17
+          avg: 3.49
+          dept: 研发部
+        - day: 09-17
+          avg: 3.51
+          dept: 市场部
+        - day: 09-17
+          avg: 3.34
+          dept: 运营部
+        encode:
+          x: day
+          y: avg
+          color: dept
+          shape: smooth
+        style:
+          lineWidth: 2
+        scale:
+          y:
+            domain:
+            - 3.0
+            - 5.0
+        interaction:
+          tooltip:
+            crosshairs: true
 - action: set
   slot: summary
   data:
     type: text
-    bind:
-      value:
-        kind: default
-        default: ""
+    source:
+      default: ""
 - action: set
   slot: radar_rd
   data:
     type: canvas
     url: /assets/g2chart/index.js
-    bind:
-      value:
-        kind: default
-        default:
-          type: view
-          data:
-          - dept: 研发部
-            name: 张伟
-            dim: 出勤纪律
-            value: 4.4
-          - dept: 研发部
-            name: 张伟
-            dim: 工作质量
-            value: 4.1
-          - dept: 研发部
-            name: 张伟
-            dim: 工作量投入
-            value: 3.6
-          - dept: 研发部
-            name: 张伟
-            dim: 协作沟通
-            value: 4.7
-          - dept: 研发部
-            name: 张伟
-            dim: 学习成长
-            value: 4.0
-          - dept: 研发部
-            name: 李娜
-            dim: 出勤纪律
-            value: 3.9
-          - dept: 研发部
-            name: 李娜
-            dim: 工作质量
-            value: 4.6
-          - dept: 研发部
-            name: 李娜
-            dim: 工作量投入
-            value: 4.2
-          - dept: 研发部
-            name: 李娜
-            dim: 协作沟通
-            value: 3.6
-          - dept: 研发部
-            name: 李娜
-            dim: 学习成长
-            value: 4.4
-          - dept: 研发部
-            name: 王强
-            dim: 出勤纪律
-            value: 4.6
-          - dept: 研发部
-            name: 王强
-            dim: 工作质量
-            value: 4.9
-          - dept: 研发部
-            name: 王强
-            dim: 工作量投入
-            value: 4.5
-          - dept: 研发部
-            name: 王强
-            dim: 协作沟通
-            value: 3.2
-          - dept: 研发部
-            name: 王强
-            dim: 学习成长
-            value: 3.6
-          - dept: 研发部
-            name: 刘洋
-            dim: 出勤纪律
-            value: 3.6
-          - dept: 研发部
-            name: 刘洋
-            dim: 工作质量
-            value: 3.8
-          - dept: 研发部
-            name: 刘洋
-            dim: 工作量投入
-            value: 4.8
-          - dept: 研发部
-            name: 刘洋
-            dim: 协作沟通
-            value: 4.0
-          - dept: 研发部
-            name: 刘洋
-            dim: 学习成长
-            value: 4.6
-          coordinate:
-            type: polar
-          # N 轴等分用标度自己的旋钮（G2 官方雷达配方，轴数跟着数据的 dim 值走）：
-          # `padding: 0.5` 让每个维度占一个槽、`align: 0` 让第一个落在正上方，
-          # N 轴各隔 360/N 度。不要手拼 `range`，那会留缺口并把末端维度顶到画布边缘。
-          scale:
-            x:
-              padding: 0.5
-              align: 0
-            y:
-              domain:
-              - 0
-              - 5
-              tickCount: 5
-          axis:
-            x:
-              grid: true
-              title: null
-            y: false
-          legend:
-            color:
-              layout:
-                justContent: true
-          children:
-          - type: area
-            encode:
-              x: dim
-              y: value
-              color: name
-            style:
-              fillOpacity: 0.15
-              lineWidth: 0
-          - type: line
-            encode:
-              x: dim
-              y: value
-              color: name
-            style:
-              lineWidth: 2
-              join: round
-              cap: round
-          interaction:
-            tooltip: {}
+    source:
+      default:
+        type: view
+        data:
+        - dept: 研发部
+          name: 张伟
+          dim: 出勤纪律
+          value: 4.4
+        - dept: 研发部
+          name: 张伟
+          dim: 工作质量
+          value: 4.1
+        - dept: 研发部
+          name: 张伟
+          dim: 工作量投入
+          value: 3.6
+        - dept: 研发部
+          name: 张伟
+          dim: 协作沟通
+          value: 4.7
+        - dept: 研发部
+          name: 张伟
+          dim: 学习成长
+          value: 4.0
+        - dept: 研发部
+          name: 李娜
+          dim: 出勤纪律
+          value: 3.9
+        - dept: 研发部
+          name: 李娜
+          dim: 工作质量
+          value: 4.6
+        - dept: 研发部
+          name: 李娜
+          dim: 工作量投入
+          value: 4.2
+        - dept: 研发部
+          name: 李娜
+          dim: 协作沟通
+          value: 3.6
+        - dept: 研发部
+          name: 李娜
+          dim: 学习成长
+          value: 4.4
+        - dept: 研发部
+          name: 王强
+          dim: 出勤纪律
+          value: 4.6
+        - dept: 研发部
+          name: 王强
+          dim: 工作质量
+          value: 4.9
+        - dept: 研发部
+          name: 王强
+          dim: 工作量投入
+          value: 4.5
+        - dept: 研发部
+          name: 王强
+          dim: 协作沟通
+          value: 3.2
+        - dept: 研发部
+          name: 王强
+          dim: 学习成长
+          value: 3.6
+        - dept: 研发部
+          name: 刘洋
+          dim: 出勤纪律
+          value: 3.6
+        - dept: 研发部
+          name: 刘洋
+          dim: 工作质量
+          value: 3.8
+        - dept: 研发部
+          name: 刘洋
+          dim: 工作量投入
+          value: 4.8
+        - dept: 研发部
+          name: 刘洋
+          dim: 协作沟通
+          value: 4.0
+        - dept: 研发部
+          name: 刘洋
+          dim: 学习成长
+          value: 4.6
+        coordinate:
+          type: polar
+        # N 轴等分用标度自己的旋钮（G2 官方雷达配方，轴数跟着数据的 dim 值走）：
+        # `padding: 0.5` 让每个维度占一个槽、`align: 0` 让第一个落在正上方，
+        # N 轴各隔 360/N 度。不要手拼 `range`，那会留缺口并把末端维度顶到画布边缘。
+        scale:
+          x:
+            padding: 0.5
+            align: 0
+          y:
+            domain:
+            - 0
+            - 5
+            tickCount: 5
+        axis:
+          x:
+            grid: true
+            title: null
+          y: false
+        legend:
+          color:
+            layout:
+              justContent: true
+        children:
+        - type: area
+          encode:
+            x: dim
+            y: value
+            color: name
+          style:
+            fillOpacity: 0.15
+            lineWidth: 0
+        - type: line
+          encode:
+            x: dim
+            y: value
+            color: name
+          style:
+            lineWidth: 2
+            join: round
+            cap: round
+        interaction:
+          tooltip: {}
 - action: set
   slot: radar_mkt
   data:
     type: canvas
     url: /assets/g2chart/index.js
-    bind:
-      value:
-        kind: default
-        default:
-          type: view
-          data:
-          - dept: 市场部
-            name: 陈静
-            dim: 出勤纪律
-            value: 4.2
-          - dept: 市场部
-            name: 陈静
-            dim: 工作质量
-            value: 3.7
-          - dept: 市场部
-            name: 陈静
-            dim: 工作量投入
-            value: 4.8
-          - dept: 市场部
-            name: 陈静
-            dim: 协作沟通
-            value: 4.5
-          - dept: 市场部
-            name: 陈静
-            dim: 学习成长
-            value: 3.4
-          - dept: 市场部
-            name: 陈静
-            dim: 创新性
-            value: 3.9
-          - dept: 市场部
-            name: 杨帆
-            dim: 出勤纪律
-            value: 4.6
-          - dept: 市场部
-            name: 杨帆
-            dim: 工作质量
-            value: 4.2
-          - dept: 市场部
-            name: 杨帆
-            dim: 工作量投入
-            value: 3.8
-          - dept: 市场部
-            name: 杨帆
-            dim: 协作沟通
-            value: 4.1
-          - dept: 市场部
-            name: 杨帆
-            dim: 学习成长
-            value: 4.5
-          - dept: 市场部
-            name: 杨帆
-            dim: 创新性
-            value: 4.9
-          - dept: 市场部
-            name: 赵磊
-            dim: 出勤纪律
-            value: 3.8
-          - dept: 市场部
-            name: 赵磊
-            dim: 工作质量
-            value: 4.0
-          - dept: 市场部
-            name: 赵磊
-            dim: 工作量投入
-            value: 4.2
-          - dept: 市场部
-            name: 赵磊
-            dim: 协作沟通
-            value: 4.8
-          - dept: 市场部
-            name: 赵磊
-            dim: 学习成长
-            value: 3.2
-          - dept: 市场部
-            name: 赵磊
-            dim: 创新性
-            value: 3.6
-          coordinate:
-            type: polar
-          # N 轴等分用标度自己的旋钮（G2 官方雷达配方，轴数跟着数据的 dim 值走）：
-          # `padding: 0.5` 让每个维度占一个槽、`align: 0` 让第一个落在正上方，
-          # N 轴各隔 360/N 度。不要手拼 `range`，那会留缺口并把末端维度顶到画布边缘。
-          scale:
-            x:
-              padding: 0.5
-              align: 0
-            y:
-              domain:
-              - 0
-              - 5
-              tickCount: 5
-          axis:
-            x:
-              grid: true
-              title: null
-            y: false
-          legend:
-            color:
-              layout:
-                justContent: true
-          children:
-          - type: area
-            encode:
-              x: dim
-              y: value
-              color: name
-            style:
-              fillOpacity: 0.15
-              lineWidth: 0
-          - type: line
-            encode:
-              x: dim
-              y: value
-              color: name
-            style:
-              lineWidth: 2
-              join: round
-              cap: round
-          interaction:
-            tooltip: {}
+    source:
+      default:
+        type: view
+        data:
+        - dept: 市场部
+          name: 陈静
+          dim: 出勤纪律
+          value: 4.2
+        - dept: 市场部
+          name: 陈静
+          dim: 工作质量
+          value: 3.7
+        - dept: 市场部
+          name: 陈静
+          dim: 工作量投入
+          value: 4.8
+        - dept: 市场部
+          name: 陈静
+          dim: 协作沟通
+          value: 4.5
+        - dept: 市场部
+          name: 陈静
+          dim: 学习成长
+          value: 3.4
+        - dept: 市场部
+          name: 陈静
+          dim: 创新性
+          value: 3.9
+        - dept: 市场部
+          name: 杨帆
+          dim: 出勤纪律
+          value: 4.6
+        - dept: 市场部
+          name: 杨帆
+          dim: 工作质量
+          value: 4.2
+        - dept: 市场部
+          name: 杨帆
+          dim: 工作量投入
+          value: 3.8
+        - dept: 市场部
+          name: 杨帆
+          dim: 协作沟通
+          value: 4.1
+        - dept: 市场部
+          name: 杨帆
+          dim: 学习成长
+          value: 4.5
+        - dept: 市场部
+          name: 杨帆
+          dim: 创新性
+          value: 4.9
+        - dept: 市场部
+          name: 赵磊
+          dim: 出勤纪律
+          value: 3.8
+        - dept: 市场部
+          name: 赵磊
+          dim: 工作质量
+          value: 4.0
+        - dept: 市场部
+          name: 赵磊
+          dim: 工作量投入
+          value: 4.2
+        - dept: 市场部
+          name: 赵磊
+          dim: 协作沟通
+          value: 4.8
+        - dept: 市场部
+          name: 赵磊
+          dim: 学习成长
+          value: 3.2
+        - dept: 市场部
+          name: 赵磊
+          dim: 创新性
+          value: 3.6
+        coordinate:
+          type: polar
+        # N 轴等分用标度自己的旋钮（G2 官方雷达配方，轴数跟着数据的 dim 值走）：
+        # `padding: 0.5` 让每个维度占一个槽、`align: 0` 让第一个落在正上方，
+        # N 轴各隔 360/N 度。不要手拼 `range`，那会留缺口并把末端维度顶到画布边缘。
+        scale:
+          x:
+            padding: 0.5
+            align: 0
+          y:
+            domain:
+            - 0
+            - 5
+            tickCount: 5
+        axis:
+          x:
+            grid: true
+            title: null
+          y: false
+        legend:
+          color:
+            layout:
+              justContent: true
+        children:
+        - type: area
+          encode:
+            x: dim
+            y: value
+            color: name
+          style:
+            fillOpacity: 0.15
+            lineWidth: 0
+        - type: line
+          encode:
+            x: dim
+            y: value
+            color: name
+          style:
+            lineWidth: 2
+            join: round
+            cap: round
+        interaction:
+          tooltip: {}
 - action: set
   slot: radar_ops
   data:
     type: canvas
     url: /assets/g2chart/index.js
-    bind:
-      value:
-        kind: default
-        default:
-          type: view
-          data:
-          - dept: 运营部
-            name: 孙悦
-            dim: 出勤纪律
-            value: 4.8
-          - dept: 运营部
-            name: 孙悦
-            dim: 工作质量
-            value: 4.1
-          - dept: 运营部
-            name: 孙悦
-            dim: 工作量投入
-            value: 4.5
-          - dept: 运营部
-            name: 孙悦
-            dim: 协作沟通
-            value: 4.3
-          - dept: 运营部
-            name: 孙悦
-            dim: 学习成长
-            value: 3.5
-          - dept: 运营部
-            name: 孙悦
-            dim: 创新性
-            value: 3.2
-          - dept: 运营部
-            name: 孙悦
-            dim: 客户意识
-            value: 4.0
-          - dept: 运营部
-            name: 周军
-            dim: 出勤纪律
-            value: 5.0
-          - dept: 运营部
-            name: 周军
-            dim: 工作质量
-            value: 3.9
-          - dept: 运营部
-            name: 周军
-            dim: 工作量投入
-            value: 4.4
-          - dept: 运营部
-            name: 周军
-            dim: 协作沟通
-            value: 4.0
-          - dept: 运营部
-            name: 周军
-            dim: 学习成长
-            value: 3.7
-          - dept: 运营部
-            name: 周军
-            dim: 创新性
-            value: 3.4
-          - dept: 运营部
-            name: 周军
-            dim: 客户意识
-            value: 3.8
-          - dept: 运营部
-            name: 吴敏
-            dim: 出勤纪律
-            value: 4.1
-          - dept: 运营部
-            name: 吴敏
-            dim: 工作质量
-            value: 4.3
-          - dept: 运营部
-            name: 吴敏
-            dim: 工作量投入
-            value: 4.6
-          - dept: 运营部
-            name: 吴敏
-            dim: 协作沟通
-            value: 4.9
-          - dept: 运营部
-            name: 吴敏
-            dim: 学习成长
-            value: 4.0
-          - dept: 运营部
-            name: 吴敏
-            dim: 创新性
-            value: 3.6
-          - dept: 运营部
-            name: 吴敏
-            dim: 客户意识
-            value: 4.5
-          - dept: 运营部
-            name: 郑华
-            dim: 出勤纪律
-            value: 4.5
-          - dept: 运营部
-            name: 郑华
-            dim: 工作质量
-            value: 4.0
-          - dept: 运营部
-            name: 郑华
-            dim: 工作量投入
-            value: 4.2
-          - dept: 运营部
-            name: 郑华
-            dim: 协作沟通
-            value: 4.1
-          - dept: 运营部
-            name: 郑华
-            dim: 学习成长
-            value: 3.8
-          - dept: 运营部
-            name: 郑华
-            dim: 创新性
-            value: 3.5
-          - dept: 运营部
-            name: 郑华
-            dim: 客户意识
-            value: 3.9
-          coordinate:
-            type: polar
-          # N 轴等分用标度自己的旋钮（G2 官方雷达配方，轴数跟着数据的 dim 值走）：
-          # `padding: 0.5` 让每个维度占一个槽、`align: 0` 让第一个落在正上方，
-          # N 轴各隔 360/N 度。不要手拼 `range`，那会留缺口并把末端维度顶到画布边缘。
-          scale:
-            x:
-              padding: 0.5
-              align: 0
-            y:
-              domain:
-              - 0
-              - 5
-              tickCount: 5
-          axis:
-            x:
-              grid: true
-              title: null
-            y: false
-          legend:
-            color:
-              layout:
-                justContent: true
-          children:
-          - type: area
-            encode:
-              x: dim
-              y: value
-              color: name
-            style:
-              fillOpacity: 0.15
-              lineWidth: 0
-          - type: line
-            encode:
-              x: dim
-              y: value
-              color: name
-            style:
-              lineWidth: 2
-              join: round
-              cap: round
-          interaction:
-            tooltip: {}
+    source:
+      default:
+        type: view
+        data:
+        - dept: 运营部
+          name: 孙悦
+          dim: 出勤纪律
+          value: 4.8
+        - dept: 运营部
+          name: 孙悦
+          dim: 工作质量
+          value: 4.1
+        - dept: 运营部
+          name: 孙悦
+          dim: 工作量投入
+          value: 4.5
+        - dept: 运营部
+          name: 孙悦
+          dim: 协作沟通
+          value: 4.3
+        - dept: 运营部
+          name: 孙悦
+          dim: 学习成长
+          value: 3.5
+        - dept: 运营部
+          name: 孙悦
+          dim: 创新性
+          value: 3.2
+        - dept: 运营部
+          name: 孙悦
+          dim: 客户意识
+          value: 4.0
+        - dept: 运营部
+          name: 周军
+          dim: 出勤纪律
+          value: 5.0
+        - dept: 运营部
+          name: 周军
+          dim: 工作质量
+          value: 3.9
+        - dept: 运营部
+          name: 周军
+          dim: 工作量投入
+          value: 4.4
+        - dept: 运营部
+          name: 周军
+          dim: 协作沟通
+          value: 4.0
+        - dept: 运营部
+          name: 周军
+          dim: 学习成长
+          value: 3.7
+        - dept: 运营部
+          name: 周军
+          dim: 创新性
+          value: 3.4
+        - dept: 运营部
+          name: 周军
+          dim: 客户意识
+          value: 3.8
+        - dept: 运营部
+          name: 吴敏
+          dim: 出勤纪律
+          value: 4.1
+        - dept: 运营部
+          name: 吴敏
+          dim: 工作质量
+          value: 4.3
+        - dept: 运营部
+          name: 吴敏
+          dim: 工作量投入
+          value: 4.6
+        - dept: 运营部
+          name: 吴敏
+          dim: 协作沟通
+          value: 4.9
+        - dept: 运营部
+          name: 吴敏
+          dim: 学习成长
+          value: 4.0
+        - dept: 运营部
+          name: 吴敏
+          dim: 创新性
+          value: 3.6
+        - dept: 运营部
+          name: 吴敏
+          dim: 客户意识
+          value: 4.5
+        - dept: 运营部
+          name: 郑华
+          dim: 出勤纪律
+          value: 4.5
+        - dept: 运营部
+          name: 郑华
+          dim: 工作质量
+          value: 4.0
+        - dept: 运营部
+          name: 郑华
+          dim: 工作量投入
+          value: 4.2
+        - dept: 运营部
+          name: 郑华
+          dim: 协作沟通
+          value: 4.1
+        - dept: 运营部
+          name: 郑华
+          dim: 学习成长
+          value: 3.8
+        - dept: 运营部
+          name: 郑华
+          dim: 创新性
+          value: 3.5
+        - dept: 运营部
+          name: 郑华
+          dim: 客户意识
+          value: 3.9
+        coordinate:
+          type: polar
+        # N 轴等分用标度自己的旋钮（G2 官方雷达配方，轴数跟着数据的 dim 值走）：
+        # `padding: 0.5` 让每个维度占一个槽、`align: 0` 让第一个落在正上方，
+        # N 轴各隔 360/N 度。不要手拼 `range`，那会留缺口并把末端维度顶到画布边缘。
+        scale:
+          x:
+            padding: 0.5
+            align: 0
+          y:
+            domain:
+            - 0
+            - 5
+            tickCount: 5
+        axis:
+          x:
+            grid: true
+            title: null
+          y: false
+        legend:
+          color:
+            layout:
+              justContent: true
+        children:
+        - type: area
+          encode:
+            x: dim
+            y: value
+            color: name
+          style:
+            fillOpacity: 0.15
+            lineWidth: 0
+        - type: line
+          encode:
+            x: dim
+            y: value
+            color: name
+          style:
+            lineWidth: 2
+            join: round
+            cap: round
+        interaction:
+          tooltip: {}

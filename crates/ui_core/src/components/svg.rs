@@ -55,7 +55,7 @@ pub fn group_(accrete: Group, ctx: &Ctx) -> AnyView {
         .into_any()
 }
 
-/// SVG 路径：`d` 取 `bind["value"].default`。
+/// SVG 路径：`d` 取 `source`。
 pub fn path_(accrete: Path, _ctx: &Ctx) -> AnyView {
     let mut css = vec!["path"];
     use_common_css(&mut css, &accrete);

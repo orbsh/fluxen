@@ -20,12 +20,11 @@
       - type: text
         attrs:
           format: md
-        bind:
-          value:
-            kind: local
-            slot: chan
-            path: /data
-            default: "**未选频道**"
+        source:
+          slot: chan
+          scope: local
+          path: /data
+          default: "**未选频道**"
     - type: frame
       attrs:
         class:
@@ -36,28 +35,18 @@
         horizontal: true
       children:
       - type: select
-        bind:
-          value:
-            kind: local
-            slot: chan
-          options:
-            kind: source
-            source: menu
+        source: {slot: chan, scope: local}
+        sink: {slot: chan, scope: local}
+        options: {slot: menu}
 - action: append
   slot: menu
   data:
     type: text
     id: general
-    bind:
-      value:
-        kind: default
-        default: 综合频道
+    source: {default: 综合频道}
 - action: append
   slot: menu
   data:
     type: text
     id: tech
-    bind:
-      value:
-        kind: default
-        default: 技术频道
+    source: {default: 技术频道}

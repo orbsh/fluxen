@@ -1,6 +1,6 @@
 use crate::Ctx;
 use crate::ctx::render_accrete;
-use crate::hooks::{use_common_css, use_source, use_source_id, use_source_untracked};
+use crate::hooks::{self, use_common_css, use_source_id};
 use accrete::{Accrete, AccreteOps, Pages, PagesDisplay};
 use leptos::html::*;
 use leptos::prelude::*;
@@ -31,8 +31,8 @@ pub(crate) fn key_of(v: &Value) -> Option<String> {
 
 /// id 字典页面容器（ADR 0010）。
 ///
-/// `bind["value"]`：source（list 平面）页面行，行 id = 字典键。
-/// `bind["select"]`：local/source 订阅，path 提键（path 缺省 = 整值）。
+/// `source`：页面行（list 平面），行 id = 字典键。
+/// `select`：第二个值（ADR 0031 §2 的具名通道），订阅选中键（path 缺省 = 整值）。
 /// `display`：`Render` 只挂命中行（切页丢子树状态）；`Dom` 全挂、
 /// 未命中行容器加 `hide` class（状态全保）。未命中键 warn + 空白。
 pub fn pages_(accrete: Pages, ctx: &Ctx, id: String) -> AnyView {
@@ -46,7 +46,7 @@ pub fn pages_(accrete: Pages, ctx: &Ctx, id: String) -> AnyView {
     let css = css.join(" ");
 
     let display = accrete.display.clone();
-    // 页面行来源：bind["value"] 必须是 Source（list 平面）
+    // 页面行来源：`source` 必须给槽（list 平面）
     let Some(source) = use_source_id(&accrete).cloned() else {
         return div().id(id.as_str()).class(css.as_str()).into_any();
     };
@@ -58,12 +58,14 @@ pub fn pages_(accrete: Pages, ctx: &Ctx, id: String) -> AnyView {
     // 选中键：effect 订阅 select 绑定（local 槽/source 槽 + path 提取），
     // 把「读绑定 + 判类型」集中在这一处，渲染闭包只消费键信号。
     // 初值 untracked 读（同发射侧纪律：避免订阅链在构造期就挂上）。
-    let seed = key_of(&use_source_untracked(&ctx, &accrete, "select").unwrap_or(Value::Null));
+    let seed = key_of(
+        &hooks::value_of(&ctx, accrete.select.as_ref(), false).unwrap_or(Value::Null),
+    );
     let selected: RwSignal<Option<String>> = parent_owner.with(|| RwSignal::new(seed));
     {
         let ctx2 = ctx.clone();
         let acc2 = accrete.clone();
-        Effect::new(move |_| match use_source(&ctx2, &acc2, "select") {
+        Effect::new(move |_| match hooks::value_of(&ctx2, acc2.select.as_ref(), true) {
             Some(v) => match key_of(&v) {
                 Some(k) => selected.set(Some(k)),
                 // 非字符串 = warn + 不切换（保持上一个键）
@@ -157,7 +159,7 @@ mod tests {
     fn row(id: Option<&str>, text: &str) -> Accrete {
         let mut v = json!({
             "type": "text",
-            "bind": { "value": { "kind": "default", "default": text } }
+            "source": { "default": text }
         });
         if let Some(i) = id {
             v.as_object_mut().unwrap().insert("id".into(), i.into());
@@ -174,9 +176,9 @@ mod tests {
                 .collect();
         let d = dict_of(&rows);
         assert_eq!(d.len(), 3);
-        assert_eq!(d["home"].get_bind().unwrap()["value"].default, Some(json!("h")));
-        assert_eq!(d["#1"].get_bind().unwrap()["value"].default, Some(json!("p")));
-        assert_eq!(d["about"].get_bind().unwrap()["value"].default, Some(json!("a")));
+        assert_eq!(d["home"].get_source().unwrap().default, Some(json!("h")));
+        assert_eq!(d["#1"].get_source().unwrap().default, Some(json!("p")));
+        assert_eq!(d["about"].get_source().unwrap().default, Some(json!("a")));
     }
 
     #[test]

@@ -1,18 +1,16 @@
 action: set
 slot: float
 data:
-  type: popup
+  type: panel
   attrs:
+    place: anchor
     class:
     - --cart
     - box
     - border
     - primary
     direction: U
-  bind:
-    value:
-      kind: source
-      source: cart
+  source: {slot: cart}
   children:
   - type: template
     name: cart
@@ -20,18 +18,9 @@ data:
   - type: frame
     children:
     - type: text
-      bind:
-        value:
-          kind: default
-          default: a
+      source: {default: a}
     - type: text
-      bind:
-        value:
-          kind: default
-          default: b
+      source: {default: b}
     - type: text
-      bind:
-        value:
-          kind: default
-          default: c
+      source: {default: c}
 

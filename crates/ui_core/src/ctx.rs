@@ -150,44 +150,32 @@ impl Ctx {
             .set(Some(Arc::new(accrete)));
     }
 
-    /// emit 统一出口（ADR 0008，形状修订见 ADR 0010/0023）：`Dest` 上行
-    /// transport（送进宿主的一个目标），`Local` 不上行——写入 local 平面具名值槽
-    /// 的载荷是与上行同形的包装对象 `Outflow {dest, id?, data}`：载荷
-    /// 形状由接收方定义、不由方向决定（同一次上行从远端改绑 local，
-    /// 订阅方 path/键零改动）。包装里的 dest 取 `Local.name`，缺省 = 槽名
-    /// （槽即频道）。发射侧忽略自己的 `path` 字段（写必整值——指针提取
-    /// 是订阅侧的事）。其他变体返回 false，调用方保持自己的兜底。
-    pub fn emit(&self, variant: &accrete::BindVariant, id: Option<String>, payload: Value) -> bool {
-        match variant {
-            accrete::BindVariant::Dest { dest: landed } => {
-                let landed = landed.clone();
-                let ctx = self.clone();
-                leptos::task::spawn_local(async move {
-                    ctx.send(landed, id, payload).await;
-                });
-                true
-            }
-            accrete::BindVariant::Local { slot, name, report, .. } => {
-                let wrapped = to_value(&content::Outflow {
-                    dest: name.clone().unwrap_or_else(|| slot.clone()),
-                    id: id.clone(),
-                    data: payload.clone(),
-                })
-                .unwrap_or(Value::Null);
-                self.slot_for_value(slot).set(Some(wrapped));
-                // 一次点击，两个事件（ADR 0028）：本地槽已经写下（页面立刻切换），
-                // 再向 venue 发同一个值。落点各自处置载荷——槽按 ADR 0010 包成
-                // `Outflow`，远程那头把值当作事件的 `data`。
-                if let Some(event) = report.clone() {
-                    let ctx = self.clone();
-                    leptos::task::spawn_local(async move {
-                        ctx.send(event, id, payload).await;
-                    });
-                }
-                true
-            }
-            _ => false,
+    /// One way out for every write (ADR 0031 §2): the sink's `scope` decides the
+    /// destination, and nothing else does. `local` assigns in this page and
+    /// wraps the payload as `Outflow {dest: slot, id?, data}` so a subscriber
+    /// cannot tell a remote write from an in-page emit (ADR 0010/0011);
+    /// `remote` is the existing upward event; `both` does the two.
+    /// False when the sink has no address — the caller keeps its own fallback.
+    pub fn emit(&self, sink: &accrete::Bind, id: Option<String>, payload: Value) -> bool {
+        let Some(slot) = sink.slot.clone() else {
+            return false;
+        };
+        if sink.scope.local() {
+            let wrapped = to_value(&content::Outflow {
+                dest: slot.clone(),
+                id: id.clone(),
+                data: payload.clone(),
+            })
+            .unwrap_or(Value::Null);
+            self.slot_for_value(&slot).set(Some(wrapped));
         }
+        if sink.scope.remote() {
+            let ctx = self.clone();
+            leptos::task::spawn_local(async move {
+                ctx.send(slot, id, payload).await;
+            });
+        }
+        true
     }
 
     /// 取（或首次时建）某 source 的列表槽。外层 map 用 untracked 读：
@@ -438,7 +426,7 @@ fn inject_writes(current: Option<&Value>, incoming: &Value) -> bool {
 /// was measured entering each view closure at depth 1, one after another — never nested — so no
 /// render-time stack (depth counter, in-flight set) can see it.
 mod slots {
-    use accrete::{Accrete, AccreteOps, BindVariant};
+    use accrete::{Accrete, AccreteOps};
     use std::cell::RefCell;
     use std::collections::{HashMap, HashSet};
 
@@ -452,17 +440,11 @@ mod slots {
     /// shape. `borrow_children` is the trait method every variant answers, so this stays correct
     /// when a variant is added.
     fn collect(accrete: &Accrete, out: &mut HashSet<String>) {
-        if let Some(bind) = accrete.get_bind() {
-            for b in bind.values() {
-                match &b.variant {
-                    BindVariant::Source { source, .. } => {
-                        out.insert(source.clone());
-                    }
-                    BindVariant::Local { slot, .. } => {
-                        out.insert(slot.clone());
-                    }
-                    _ => {}
-                }
+        // Both channels address a slot; which plane it lives in does not matter
+        // to the cycle check, only that the read follows the slot.
+        for b in [accrete.get_source(), accrete.get_sink()].into_iter().flatten() {
+            if let Some(slot) = &b.slot {
+                out.insert(slot.clone());
             }
         }
         if let Some(children) = accrete.borrow_children() {

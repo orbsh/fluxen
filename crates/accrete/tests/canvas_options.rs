@@ -24,7 +24,7 @@ fn options_roundtrip_keeps_module_vocabulary() {
             "physics": { "charge": -200, "linkDistance": 120 },
             "palette": ["#818cf8", "#34d399"]
         },
-        "bind": { "value": { "kind": "source", "source": "mfg" } }
+        "source": { "slot": "mfg" }
     });
     let node = accrete(src.clone());
     assert_eq!(serde_json::to_value(&node).unwrap(), src);

@@ -2,8 +2,6 @@ action: set
 slot: login
 data:
   type: text
-  bind:
-    value:
-      kind: default
-      default: "**hello**"
+  source:
+    default: "**hello**"
 

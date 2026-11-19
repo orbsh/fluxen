@@ -28,7 +28,7 @@ fn rack(src: &str) -> accrete::Rack {
 
 #[test]
 fn a_rack_that_says_nothing_about_view_is_the_old_rack() {
-    let bare = rack(r#"{"type":"rack","bind":{"value":{"kind":"source","source":"msgs"}}}"#);
+    let bare = rack(r#"{"type":"rack","source":{"slot":"msgs"}}"#);
     assert!(
         bare.attrs.map(|a| a.view).unwrap_or_default().is_none(),
         "an old frame carries no view at all"
@@ -39,7 +39,7 @@ fn a_rack_that_says_nothing_about_view_is_the_old_rack() {
 fn the_old_scroll_switch_still_decodes() {
     let scrolling = rack(
         r#"{"type":"rack","attrs":{"scroll":true},
-            "bind":{"value":{"kind":"source","source":"msgs"}}}"#,
+            "source":{"slot":"msgs"}}"#,
     );
     assert!(scrolling.attrs.unwrap().scroll, "the boolean survives");
 }
@@ -49,7 +49,7 @@ fn the_notice_recipe_is_a_set_of_values() {
     let notice = rack(
         r#"{"type":"rack","attrs":{"view":{"layout":"exclusive","enter":"fade","scroll":"none",
                                 "play":"rotate","every":6000,"pause":"click"}},
-            "bind":{"value":{"kind":"source","source":"notice"}}}"#,
+            "source":{"slot":"notice"}}"#,
     );
     let view = notice.attrs.and_then(|a| a.view).expect("view decodes");
     assert_eq!(view.layout, RackLayout::Exclusive);
@@ -69,7 +69,7 @@ fn the_notice_recipe_is_a_set_of_values() {
 fn a_fixed_window_says_how_many() {
     let fixed = rack(
         r#"{"type":"rack","attrs":{"view":{"layout":"fixed","count":3}},
-            "bind":{"value":{"kind":"source","source":"rows"}}}"#,
+            "source":{"slot":"rows"}}"#,
     );
     let view = fixed.attrs.and_then(|a| a.view).expect("view decodes");
     assert_eq!(view.layout, RackLayout::Fixed);
@@ -80,7 +80,7 @@ fn a_fixed_window_says_how_many() {
 fn a_frame_can_say_how_long_a_row_takes() {
     let paced = rack(
         r#"{"type":"rack","attrs":{"view":{"enter":"fade","enter_ms":1200,"leave_ms":900}},
-            "bind":{"value":{"kind":"source","source":"notice"}}}"#,
+            "source":{"slot":"notice"}}"#,
     );
     let view = paced.attrs.and_then(|a| a.view).expect("view decodes");
     assert_eq!(view.enter_ms, Some(1200));
@@ -88,7 +88,7 @@ fn a_frame_can_say_how_long_a_row_takes() {
 
     let silent = rack(
         r#"{"type":"rack","attrs":{"view":{"enter":"fade"}},
-            "bind":{"value":{"kind":"source","source":"notice"}}}"#,
+            "source":{"slot":"notice"}}"#,
     );
     let view = silent.attrs.and_then(|a| a.view).expect("view decodes");
     assert_eq!(view.enter_ms, None, "absent means the CSS default");

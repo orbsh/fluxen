@@ -33,10 +33,7 @@
           height: 100%
         style:
           fit_padding_px: 56
-        bind:
-          value:
-            kind: source
-            source: graph
+        source: {slot: graph}
     # ---- 右栏：消息流 --------------------------------------------------------
     - type: frame
       attrs:
@@ -54,10 +51,7 @@
           - gap
           - scrolly
           scroll: true
-        bind:
-          value:
-            kind: source
-            source: chat
+        source: {slot: chat}
         item:
         - type: frame
           attrs:
@@ -93,10 +87,7 @@
           children:
           - type: input
             id: test
-            bind:
-              value:
-                kind: dest
-                dest: message
+            sink: {slot: message}
     # ---- 右侧窄轨：拖拽的落点（ADR 0019）------------------------------------
     # 气泡里的单元往这边一拖就成一条 pin。落点贴在窗口右边缘，常态一条细条，
     # 拖拽在飞时展开；`--rail` 让它向左长，否则长到屏幕外（custom.css）。
@@ -108,29 +99,24 @@
         - --rail
         accept:
         - snippet
-      bind:
-        value:
-          kind: dest
-          dest: pin
+      sink: {slot: pin}
 
 # ---- 图的初始快照：crate 层 --------------------------------------------------
 - action: set
   slot: graph
   data:
     type: group
-    bind:
-      value:
-        kind: default
-        default:
-          focus: null
-          nodes:
-            - {id: accrete, name: accrete, kind: crate, weight: 9}
-            - {id: ui_leptos, name: ui_leptos, kind: crate, weight: 8}
-            - {id: content, name: content, kind: crate, weight: 7}
-            - {id: transport, name: transport, kind: crate, weight: 5}
-            - {id: stage, name: stage, kind: crate, weight: 6}
-          links:
-            - {source: ui_leptos, target: accrete, kind: renders, strength: 5}
-            - {source: stage, target: content, kind: encodes, strength: 4}
-            - {source: stage, target: ui_leptos, kind: serves, strength: 3}
-            - {source: transport, target: content, kind: carries, strength: 3}
+    source:
+      default:
+        focus: null
+        nodes:
+          - {id: accrete, name: accrete, kind: crate, weight: 9}
+          - {id: ui_leptos, name: ui_leptos, kind: crate, weight: 8}
+          - {id: content, name: content, kind: crate, weight: 7}
+          - {id: transport, name: transport, kind: crate, weight: 5}
+          - {id: stage, name: stage, kind: crate, weight: 6}
+        links:
+          - {source: ui_leptos, target: accrete, kind: renders, strength: 5}
+          - {source: stage, target: content, kind: encodes, strength: 4}
+          - {source: stage, target: ui_leptos, kind: serves, strength: 3}
+          - {source: transport, target: content, kind: carries, strength: 3}

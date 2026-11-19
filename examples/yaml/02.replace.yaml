@@ -19,10 +19,7 @@
         format: md
         class:
         - clear
-      bind:
-        value:
-          kind: default
-          default: old
+      source: {default: old}
 - action: patch
   slot: chat
   id: s2

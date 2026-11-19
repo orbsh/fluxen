@@ -1,12 +1,13 @@
 use crate::Ctx;
 use crate::hooks::use_default;
-use accrete::{AccreteOps, Bind, BindVariant, Button, ButtonAttr};
+use accrete::{AccreteOps, Button, ButtonAttr};
 use leptos::ev::click;
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::Value;
 
-/// 按钮：默认文本取 `bind["value"].default`；`Submit` 变体切换 form 的确认信号。
+/// 按钮：文本取 `source`；有 `sink` 就是表单的确认键。提交不是第三条通道
+/// （ADR 0031 §2）：表单持有落点，按钮只声明"我朝外走"。
 pub fn button_(accrete: Button, ctx: &Ctx) -> AnyView {
     let t = use_default(&accrete)
         .unwrap_or(Value::String("Ok".into()))
@@ -20,13 +21,9 @@ pub fn button_(accrete: Button, ctx: &Ctx) -> AnyView {
         .map(|ButtonAttr { oneshot, .. }| *oneshot)
         .unwrap_or(false);
 
-    let Some(Bind {
-        variant: BindVariant::Submit { .. },
-        ..
-    }) = accrete.get_bind().and_then(|x| x.get("value").cloned())
-    else {
+    if accrete.get_sink().is_none() {
         return div().into_any();
-    };
+    }
 
     let Some(confirm) = ctx.form.as_ref().map(|fs| fs.confirm) else {
         return div().into_any();

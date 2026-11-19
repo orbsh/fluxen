@@ -14,9 +14,7 @@ fn accrete(js: Value) -> Accrete {
 }
 
 fn default_of(b: &Accrete) -> Option<Value> {
-    b.get_bind()
-        .and_then(|m| m.get("value"))
-        .and_then(|x| x.default.clone())
+    b.get_source().and_then(|x| x.default.clone())
 }
 
 #[test]
@@ -26,7 +24,7 @@ fn expand_replaces_template_with_substituted_accrete() {
         "greet".into(),
         json!({
             "type": "text",
-            "bind": { "value": { "kind": "default", "default": "hi {{ name }}" } }
+            "source": { "default": "hi {{ name }}" }
         })
         .to_string(),
     );
@@ -103,7 +101,7 @@ fn expand_recurses_into_children() {
         "lbl".into(),
         json!({
             "type": "text",
-            "bind": { "value": { "kind": "default", "default": "{{t}}" } }
+            "source": { "default": "{{t}}" }
         })
         .to_string(),
     );

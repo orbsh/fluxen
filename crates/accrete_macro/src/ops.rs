@@ -29,11 +29,17 @@ pub fn impl_accrete_ops(ast: &DeriveInput) -> syn::Result<TokenStream2> {
         attrs_mut = quote! { Some(&mut self.attrs) };
     };
 
-    let mut get_bind = quote! { None };
-    let mut set_bind = quote! {};
-    if struct_has_field(ast, "bind") {
-        get_bind = quote! { self.bind.as_ref() };
-        set_bind = quote! { self.bind = bind; }
+    // Channels are per-struct: a field that is not there is a channel the node
+    // does not accept, and the default trait method says so.
+    let get_source = if struct_has_field(ast, "source") {
+        quote! { self.source.as_ref() }
+    } else {
+        quote! { None }
+    };
+    let get_sink = if struct_has_field(ast, "sink") {
+        quote! { self.sink.as_ref() }
+    } else {
+        quote! { None }
     };
 
     Ok(quote! {
@@ -59,11 +65,11 @@ pub fn impl_accrete_ops(ast: &DeriveInput) -> syn::Result<TokenStream2> {
             fn borrow_attrs_mut(&mut self) -> Option<&mut dyn Classify> {
                 #attrs_mut
             }
-            fn get_bind(&self) -> Option<&HashMap<String, Bind>> {
-                #get_bind
+            fn get_source(&self) -> Option<&Bind> {
+                #get_source
             }
-            fn set_bind(&mut self, bind: Option<HashMap<String, Bind>>) {
-                #set_bind
+            fn get_sink(&self) -> Option<&Bind> {
+                #get_sink
             }
         }
     })
@@ -103,15 +109,15 @@ pub fn impl_accrete_ops_variant(ast: &DeriveInput) -> syn::Result<TokenStream2> 
                 }
             }
 
-            fn get_bind(&self) -> Option<&HashMap<String, Bind>> {
+            fn get_source(&self) -> Option<&Bind> {
                 match self {
-                    #(#name::#r(c) => { c.get_bind() }),*
+                    #(#name::#r(c) => { c.get_source() }),*
                 }
             }
 
-            fn set_bind(&mut self, bind: Option<HashMap<String, Bind>>) {
+            fn get_sink(&self) -> Option<&Bind> {
                 match self {
-                    #(#name::#r(c) => { c.set_bind(bind) }),*
+                    #(#name::#r(c) => { c.get_sink() }),*
                 }
             }
 

@@ -2,8 +2,5 @@ action: append
 slot: chat
 data:
   type: text
-  bind:
-    value:
-      kind: default
-      default: who are you?
+  source: {default: who are you?}
 

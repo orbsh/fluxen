@@ -16,21 +16,18 @@ fn accrete(js: Value) -> Accrete {
 fn row() -> Accrete {
     accrete(json!({
         "type": "text", "id": "a1",
-        "bind": { "value": { "kind": "default", "default": "hello" } }
+        "source": { "default": "hello" }
     }))
 }
 
 fn default_of(b: &Accrete) -> Value {
-    b.get_bind()
-        .and_then(|m| m.get("value"))
-        .and_then(|x| x.default.clone())
-        .unwrap()
+    b.get_source().and_then(|x| x.default.clone()).unwrap()
 }
 
 #[test]
 fn replace_deep_value() {
     let mut b = row();
-    b.replace_at("/bind/value/default", json!("bye")).expect("patch");
+    b.replace_at("/source/default", json!("bye")).expect("patch");
     assert_eq!(default_of(&b), json!("bye"));
 }
 
@@ -56,21 +53,22 @@ fn replace_attrs_field() {
 #[test]
 fn append_string_value() {
     let mut b = row();
-    b.append_at("/bind/value/default", json!(", world"))
+    b.append_at("/source/default", json!(", world"))
         .expect("append token");
     assert_eq!(default_of(&b), json!("hello, world"));
 }
 
 #[test]
 fn append_array_value() {
+    // A literal list channel: no slot, `default` is the array itself.
     let mut b = accrete(json!({
         "type": "select",
-        "bind": { "options": { "kind": "default", "default": ["a"] } }
+        "options": { "default": ["a"] }
     }));
-    b.append_at("/bind/options/default", json!("b"))
+    b.append_at("/options/default", json!("b"))
         .expect("append into array");
     assert_eq!(
-        b.get_bind().unwrap()["options"].default.clone().unwrap(),
+        b.get_at("/options/default").unwrap(),
         json!(["a", "b"])
     );
 }
@@ -78,7 +76,7 @@ fn append_array_value() {
 #[test]
 fn path_miss_is_error() {
     let mut b = row();
-    assert!(b.replace_at("/bind/nope/default", json!(1)).is_err());
+    assert!(b.replace_at("/source/nope/default", json!(1)).is_err());
     assert!(b.replace_at("/children/0", json!(1)).is_err());
     // node untouched after misses
     assert_eq!(default_of(&b), json!("hello"));

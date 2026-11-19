@@ -1,6 +1,6 @@
 use crate::Ctx;
 use crate::hooks::{node_id, use_common_css};
-use accrete::{AccreteOps, Bind, BindVariant, Input, JsType};
+use accrete::{AccreteOps, Input, JsType};
 use leptos::ev;
 use leptos::html::*;
 use leptos::prelude::*;
@@ -13,8 +13,9 @@ fn default_option_jskind(v: &Option<JsType>) -> Value {
         .unwrap_or_else(|| Value::String(String::new()))
 }
 
-/// 输入框：`Field` 绑定写 form 字段信号；`Event`/`Local` 绑定在 Enter 时
-/// emit（落点由 Ctx::emit 路由，ADR 0008）。
+/// 输入框：`sink` 是本字段的去向（ADR 0031 §2）。`scope: local` 且外层
+/// 表单认领了这个槽名 = 写表单字段；其余情况在 Enter 时经 `Ctx::emit`
+/// 按 scope 路由（本页值槽 / 上行 / 两者）。
 pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let node_id = node_id(&accrete);
@@ -22,34 +23,36 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
-    // (落点变体, 字段名, JsType)——Field 用字段名接 form 信号，
-    // Event/Local 用变体走 ctx.emit。
-    let bind = accrete.get_bind().and_then(|x| x.get("value")).cloned();
-    let (variant, key, kind) = match bind {
-        Some(Bind { variant, r#type, .. }) => {
-            let field = match &variant {
-                BindVariant::Field { field, .. } => field.clone(),
-                _ => String::new(),
-            };
-            (variant, field, r#type)
-        }
-        None => (BindVariant::Default {}, String::new(), None),
-    };
-    let bind_type = match &variant {
-        BindVariant::Field { .. } => "field",
-        BindVariant::Dest { .. } | BindVariant::Local { .. } => "send",
-        _ => "",
-    };
-
-    let field_sig = if bind_type == "field" {
-        ctx.form
-            .as_ref()
-            .and_then(|fs| fs.fields.get(&key).copied())
+    let sink = accrete.get_sink().cloned();
+    // 类型可以在任一通道上：读侧给显示，写侧给上行载荷的解析。
+    let kind = sink
+        .as_ref()
+        .and_then(|s| s.r#type.clone())
+        .or_else(|| accrete.get_source().and_then(|b| b.r#type.clone()));
+    // 表单字段 = 本页赋值且外层表单认领了这个槽名（槽名即字段名）。
+    let field_sig = sink
+        .as_ref()
+        .filter(|s| s.scope.local())
+        .and_then(|s| s.slot.as_ref())
+        .and_then(|k| ctx.form.as_ref().and_then(|fs| fs.fields.get(k).copied()));
+    let bind_type = if field_sig.is_some() {
+        "field"
+    } else if sink.is_some() {
+        "send"
     } else {
-        None
+        ""
     };
 
-    let slot = field_sig.unwrap_or_else(|| RwSignal::new(default_option_jskind(&kind)));
+    // 初值：读侧的字面量，否则类型缺省——输入框不订阅自己要写的槽（自读自写
+    // 的回路会把刚发出的内容还原）。
+    let slot = field_sig.unwrap_or_else(|| {
+        RwSignal::new(
+            accrete
+                .get_source()
+                .and_then(|b| b.default.clone())
+                .unwrap_or_else(|| default_option_jskind(&kind)),
+        )
+    });
 
     let oninput = {
         let k1 = kind.clone();
@@ -71,7 +74,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let onkeydown = {
         let ctx = ctx.clone();
         let k2 = kind.clone();
-        let variant_emit = variant.clone();
+        let sink_emit = sink.clone();
         let nid = node_id.clone();
         move |ev: web_sys::KeyboardEvent| {
             if ev.key() == "Enter" {
@@ -82,6 +85,9 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
                         }
                     }
                     "send" => {
+                        let Some(sink) = sink_emit.clone() else {
+                            return;
+                        };
                         let ctx = ctx.clone();
                         let kk = k2.clone();
                         let val = slot.get_untracked();
@@ -100,9 +106,9 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
                         {
                             el.set_value("");
                         }
-                        // 落点统一路由（ADR 0008）：Event 上行、Local 写槽；
-                        // `id` = 本输入节点自身的 id（ADR 0010 的发射节点 id）。
-                        ctx.emit(&variant_emit, nid.clone(), val);
+                        // 一个出口（ADR 0031）：scope 决定写本页、上行，还是两者；
+                        // `id` = 本输入节点自身的 id（ADR 0010）。
+                        ctx.emit(&sink, nid.clone(), val);
                     }
                     _ => {}
                 }

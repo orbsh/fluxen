@@ -24,8 +24,14 @@ pub trait AccreteOps {
     fn set_children(&mut self, accrete: Vec<Accrete>);
     fn borrow_attrs(&self) -> Option<&dyn Classify>;
     fn borrow_attrs_mut(&mut self) -> Option<&mut dyn Classify>;
-    fn get_bind(&self) -> Option<&HashMap<String, Bind>>;
-    fn set_bind(&mut self, bind: Option<HashMap<String, Bind>>);
+    /// The two channels (ADR 0031 §2). A node that accepts neither answers None,
+    /// which is what makes "a channel this node does not take" a frame error.
+    fn get_source(&self) -> Option<&Bind> {
+        None
+    }
+    fn get_sink(&self) -> Option<&Bind> {
+        None
+    }
     fn get_id(&self) -> &Option<String>;
 }
 
@@ -76,66 +82,56 @@ impl JsType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Where a value is authoritative (ADR 0031 §1). The store is chosen by this
+/// field, not by a separate variant: `local` lives in the page's own value
+/// plane, `remote` on the side that owns the session, `both` assigns locally
+/// and mirrors the change up.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(tag = "kind", rename_all = "lowercase")]
-pub enum BindVariant {
-    Source {
-        source: String,
-        /// 可选 JSON Pointer（ADR 0008）：进槽内节点的 WIRE SHAPE 提取
-        /// 子值（与 ADR 0005 patch 路径同一词法）；省略 = 取槽节点自己的
-        /// `bind[<key>].default`（同 key 直传惯例）。
-        #[serde(skip_serializing_if = "Option::is_none")]
-        path: Option<String>,
-    },
-    /// 具名本地值槽（ADR 0008）：独立于 data（Accrete 展示形态）的
-    /// 裸 Value 平面——发射侧省略 `path`（整值写入），订阅侧带 `path`
-    /// 时进槽内 Value 的 JSON Pointer 提取子值（形状归生产端，
-    /// 与 wire-shape 无关）。
-    /// ADR 0010：落槽载荷与上行同形（`Outflow {slot, id?, data}` 包装
-    /// 对象）——事件形状由事件定义、不由落点决定，`kind: event` 改绑
-    /// `kind: local` 订阅方零改动。`name` 缺省 = 槽名（槽即频道）；
-    /// `path` 仍是订阅侧字段，发射侧忽略。
-    Local {
-        slot: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        path: Option<String>,
-        /// 包装里的那个名字，缺省 = 槽名。另起的名字才写它——落点本身是 `slot`。
-        #[serde(skip_serializing_if = "Option::is_none")]
-        name: Option<String>,
-        /// 本地切换之外的第二个去向：这是**点击**，venue 也需要知道（ADR 0028）。
-        /// 一次导航点击既是"页面里的选中值变了"，也是"这个人走到了某个岛"——前者是本地
-        /// 值槽，后者只有 venue 能记住（跨设备续上）。写本地槽之后再照发一份，事件名由
-        /// 帧给（框架不认识"岛"这个词），载荷是这次的值本身。
-        #[serde(skip_serializing_if = "Option::is_none")]
-        report: Option<String>,
-    },
-    /// 上行目标：这个控件把交互送到宿主上的哪个目标（ADR 0023）。叫 `dest` 而不是 `slot`：
-    /// 上下行并不对称（下行写页面里的位置，上行调起宿主的一个处理器），所以不共用一个词;
-    /// `event` 留给 DOM 与后端自己的事件，UI 侧不用这个词。
-    Dest {
-        dest: String,
-    },
-    Field {
-        field: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        payload: Option<Value>,
-    },
-    Submit {},
-    Default {},
+#[serde(rename_all = "lowercase")]
+pub enum Scope {
+    #[default]
+    Remote,
+    Local,
+    Both,
 }
 
-impl Default for BindVariant {
-    fn default() -> Self {
-        BindVariant::Default {}
+impl Scope {
+    /// Absent on the wire: `remote` is what every frame that says nothing means.
+    fn is_remote(s: &Scope) -> bool {
+        *s == Scope::Remote
+    }
+
+    /// True when the value lives in this page (ADR 0031 §1: local and both).
+    pub fn local(self) -> bool {
+        matches!(self, Self::Local | Self::Both)
+    }
+
+    /// True when the value reaches the far side (remote and both).
+    pub fn remote(self) -> bool {
+        matches!(self, Self::Remote | Self::Both)
     }
 }
 
+/// One value, one address, one scope (ADR 0031 §1-2). `source` is where a value
+/// flows in, `sink` where it flows out; both are this same struct.
+///
+/// No `slot` means the value is a literal: `default` *is* the value (that is
+/// what the retired `kind: default` said). With a slot, `default` is what to
+/// use while the slot is still empty.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(deny_unknown_fields)]
 pub struct Bind {
-    #[serde(flatten)]
-    pub variant: BindVariant,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<String>,
+    #[serde(default, skip_serializing_if = "Scope::is_remote")]
+    pub scope: Scope,
+    /// JSON Pointer into the slot's value (ADR 0008): the shape belongs to the
+    /// producer, the read picks one field out of it. ADR 0031 is silent on
+    /// extraction — it is orthogonal to the address, so it stays.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -243,6 +239,7 @@ pub struct StyleAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Canvas {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -262,7 +259,7 @@ pub struct Canvas {
     /// 具名数据槽（槽内节点的 `bind.value.default` 原始 JSON 即模块 data 区），
     /// 流式喂数据 = 对该槽 `set`/`patch`（指针 `/bind/value/default/...`）。
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
 }
 
 /// 三维力导向关系图（ADR 0018）。原生组件，不是 canvas 模块：渲染器与布局
@@ -285,6 +282,7 @@ pub struct Canvas {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct ForceGraph {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -294,7 +292,11 @@ pub struct ForceGraph {
     #[serde(default, skip_serializing_if = "force_graph_style_is_default")]
     pub style: ForceGraphStyle,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
+
+    /// Second value: the theme channel (`true`/`"dark"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme: Option<Bind>,
 }
 
 /// 图渲染器的旋钮。语义与 canvas 的 `options` 同级：挂载期配置，改它要
@@ -491,13 +493,14 @@ fn is_default_state(s: &PanelState) -> bool {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Panel {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<PanelAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -510,13 +513,14 @@ pub struct Panel {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Layer {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<LayerAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -556,13 +560,14 @@ pub struct FoldAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Fold {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<FoldAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -585,13 +590,14 @@ pub struct FormAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Form {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<FormAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub sink: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -600,13 +606,14 @@ pub struct Form {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Popup {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<DirectionAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -615,13 +622,14 @@ pub struct Popup {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Svg {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<SizeAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -630,13 +638,14 @@ pub struct Svg {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Group {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<StyleAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -644,13 +653,14 @@ pub struct Group {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Path {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -674,13 +684,18 @@ pub enum PagesDisplay {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Pages {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
+
+    /// Second value (ADR 0031 §2 named field): the selected key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub select: Option<Bind>,
     #[serde(default)]
     pub display: PagesDisplay,
 }
@@ -818,13 +833,14 @@ pub enum RackPause {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Rack {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<RackAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -847,12 +863,14 @@ pub struct ButtonAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Button {
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ButtonAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
+    pub sink: Option<Bind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -877,38 +895,47 @@ pub struct ImageAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Image {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ImageAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Input {
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
+    pub sink: Option<Bind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Select {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
+    pub sink: Option<Bind>,
+
+    /// Second value: the option rows (list plane).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub options: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -995,26 +1022,33 @@ pub struct TextAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Text {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<TextAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct TextArea {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
+    pub sink: Option<Bind>,
+
+    /// Second value: the placeholder text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<Bind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -1036,13 +1070,14 @@ pub struct FrameAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Frame {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<FrameAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub source: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -1130,6 +1165,7 @@ pub struct DockAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Dock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -1139,7 +1175,7 @@ pub struct Dock {
     /// （包装与上行同形，ADR 0010）。带什么货由源（`grab`）给，落点不再附加任何
     /// 元数据——事件名与帧的 `id` 已经唯一确定是哪个落点。
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bind: Option<HashMap<String, Bind>>,
+    pub sink: Option<Bind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }

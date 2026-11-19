@@ -4,7 +4,7 @@
 //! and which kinds it accepts.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
-use accrete::{Accrete, DockExpand};
+use accrete::{Accrete, AccreteOps, DockExpand};
 use serde_json::json;
 
 #[test]
@@ -34,7 +34,7 @@ fn grab_may_be_a_bare_wrapper() {
     // 只有 children 的极小形状也必须解析得出来（没有 kind、没有 payload）。
     let wire = json!({
         "type": "grab",
-        "children": [{ "type": "text", "bind": { "value": { "kind": "default", "default": "卡片" } } }]
+        "children": [{ "type": "text", "source": { "default": "卡片" } }]
     });
     let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
     match &node {
@@ -53,18 +53,16 @@ fn dock_owns_the_dest_and_the_landing_id() {
     let wire = json!({
         "type": "dock",
         "id": "rail",
-        "bind": { "value": { "kind": "dest", "dest": "pin" } }
+        "sink": { "slot": "pin" }
     });
     let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
     match &node {
         Accrete::dock(d) => {
             assert_eq!(d.id.as_deref(), Some("rail"));
             // 落点由上行槽名 + 帧的 id（dock 自己）确定；不另带元数据。
-            let value = d.bind.as_ref().unwrap().get("value").unwrap();
-            assert!(matches!(
-                &value.variant,
-                accrete::BindVariant::Dest { dest: landed } if landed == "pin"
-            ));
+            // drop 是值流出，所以这条通道是 `sink`（ADR 0031 §2）。
+            let sink = d.get_sink().unwrap();
+            assert_eq!(sink.slot.as_deref(), Some("pin"));
         }
         other => panic!("expected dock, got {other:?}"),
     }
@@ -137,7 +135,7 @@ fn dock_accepts_a_closed_set_of_kinds_or_all_of_them() {
 fn dock_children_are_what_was_dropped() {
     let wire = json!({
         "type": "dock",
-        "children": [{ "type": "text", "bind": { "value": { "kind": "default", "default": "已钉住" } } }]
+        "children": [{ "type": "text", "source": { "default": "已钉住" } }]
     });
     let node: Accrete = serde_json::from_value(wire.clone()).unwrap();
     match &node {

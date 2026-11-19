@@ -14,42 +14,40 @@
     attrs:
       class:
       - f
-    bind:
-      value:
-        kind: default
-        default:
-          type: line
-          data:
-          - {day: Dec 01, value: 44, team: TEAM A}
-          - {day: Dec 02, value: 55, team: TEAM A}
-          - {day: Dec 03, value: 31, team: TEAM A}
-          - {day: Dec 04, value: 47, team: TEAM A}
-          - {day: Dec 05, value: 31, team: TEAM A}
-          - {day: Dec 06, value: 43, team: TEAM A}
-          - {day: Dec 07, value: 26, team: TEAM A}
-          - {day: Dec 08, value: 41, team: TEAM A}
-          - {day: Dec 09, value: 31, team: TEAM A}
-          - {day: Dec 10, value: 47, team: TEAM A}
-          - {day: Dec 11, value: 33, team: TEAM A}
-          - {day: Dec 01, value: 55, team: TEAM B}
-          - {day: Dec 02, value: 69, team: TEAM B}
-          - {day: Dec 03, value: 45, team: TEAM B}
-          - {day: Dec 04, value: 61, team: TEAM B}
-          - {day: Dec 05, value: 43, team: TEAM B}
-          - {day: Dec 06, value: 54, team: TEAM B}
-          - {day: Dec 07, value: 37, team: TEAM B}
-          - {day: Dec 08, value: 52, team: TEAM B}
-          - {day: Dec 09, value: 44, team: TEAM B}
-          - {day: Dec 10, value: 61, team: TEAM B}
-          - {day: Dec 11, value: 43, team: TEAM B}
-          encode:
-            x: day
-            y: value
-            color: team
-          style:
-            lineWidth: 2
-          interaction:
-            tooltip: {shared: true}
+    source:
+      default:
+        type: line
+        data:
+        - {day: Dec 01, value: 44, team: TEAM A}
+        - {day: Dec 02, value: 55, team: TEAM A}
+        - {day: Dec 03, value: 31, team: TEAM A}
+        - {day: Dec 04, value: 47, team: TEAM A}
+        - {day: Dec 05, value: 31, team: TEAM A}
+        - {day: Dec 06, value: 43, team: TEAM A}
+        - {day: Dec 07, value: 26, team: TEAM A}
+        - {day: Dec 08, value: 41, team: TEAM A}
+        - {day: Dec 09, value: 31, team: TEAM A}
+        - {day: Dec 10, value: 47, team: TEAM A}
+        - {day: Dec 11, value: 33, team: TEAM A}
+        - {day: Dec 01, value: 55, team: TEAM B}
+        - {day: Dec 02, value: 69, team: TEAM B}
+        - {day: Dec 03, value: 45, team: TEAM B}
+        - {day: Dec 04, value: 61, team: TEAM B}
+        - {day: Dec 05, value: 43, team: TEAM B}
+        - {day: Dec 06, value: 54, team: TEAM B}
+        - {day: Dec 07, value: 37, team: TEAM B}
+        - {day: Dec 08, value: 52, team: TEAM B}
+        - {day: Dec 09, value: 44, team: TEAM B}
+        - {day: Dec 10, value: 61, team: TEAM B}
+        - {day: Dec 11, value: 43, team: TEAM B}
+        encode:
+          x: day
+          y: value
+          color: team
+        style:
+          lineWidth: 2
+        interaction:
+          tooltip: {shared: true}
 - action: patch
   slot: chat
   id: stream-chart
