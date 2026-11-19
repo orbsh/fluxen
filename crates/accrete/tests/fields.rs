@@ -1,5 +1,6 @@
 //! ADR 0031 §4 step 4b: `tiles` grew `columns` (a grid) and a `header`, and the row came with it
 //! as its own node, `record`. The `table/thead/tbody/tr/th/td` family is deleted, not aliased.
+//! (That step shipped under those two spellings; the frame now says `fields` and `entry`.)
 //!
 //! These are wire-contract checks, so every shape is decoded through the codec: what a frame may
 //! say is the thing being pinned, and a retired spelling must not decode at all.
@@ -22,15 +23,15 @@ fn roundtrip(v: serde_json::Value) -> Accrete {
     b
 }
 
-/// A grid is `tiles` + `columns` + `header` + `record` items — the four things step 4b adds, in
-/// one frame, because they are only meaningful together: columns project record fields, and the
-/// header reads the columns' keys.
+/// A grid is `tiles` + `fields` + `header` + `entry` items — the four things step 4b adds, in
+/// one frame, because they are only meaningful together: fields project an entry's fields, and the
+/// header reads the fields' keys.
 #[test]
 fn a_grid_round_trips_with_its_header_and_rows() {
     let grid = roundtrip(json!({
         "type": "tiles",
         "attrs": {
-            "columns": [
+            "fields": [
                 {"key": "qty", "title": "", "width": "4rem"},
                 {"key": "name", "title": "Name"},
                 {"key": "price/retail", "title": "Retail", "width": "6rem", "align": "end"},
@@ -41,7 +42,7 @@ fn a_grid_round_trips_with_its_header_and_rows() {
         "source": {"slot": "goods"},
         "children": [
             {
-                "type": "record",
+                "type": "entry",
                 "id": "853736",
                 "children": [
                     {"type": "input", "attrs": {"selector": "qty"},
@@ -63,21 +64,21 @@ fn a_grid_round_trips_with_its_header_and_rows() {
     };
     let attrs = t.attrs.as_ref().expect("attrs");
 
-    let columns = attrs.columns.as_ref().expect("columns");
-    assert_eq!(columns.len(), 4);
-    assert_eq!(columns[0].key, "qty");
-    assert_eq!(columns[0].title.as_deref(), Some(""));
-    assert_eq!(columns[0].width.as_deref(), Some("4rem"));
+    let fields = attrs.fields.as_ref().expect("fields");
+    assert_eq!(fields.len(), 4);
+    assert_eq!(fields[0].key, "qty");
+    assert_eq!(fields[0].title.as_deref(), Some(""));
+    assert_eq!(fields[0].width.as_deref(), Some("4rem"));
     // Absent width/align stay absent: the renderer's defaults, not a value the frame guessed.
-    assert_eq!(columns[1].width, None);
-    assert_eq!(columns[1].align, None);
+    assert_eq!(fields[1].width, None);
+    assert_eq!(fields[1].align, None);
     assert_eq!(
-        columns[2].key, "price/retail",
+        fields[2].key, "price/retail",
         "the key is a path, not a name"
     );
-    assert_eq!(columns[2].align, Some(accrete::Align::End));
+    assert_eq!(fields[2].align, Some(accrete::Align::End));
     assert_eq!(
-        columns[3].selectors.as_deref(),
+        fields[3].selectors.as_deref(),
         Some(&["muted".to_string(), "wrap".to_string()][..])
     );
 
@@ -85,14 +86,14 @@ fn a_grid_round_trips_with_its_header_and_rows() {
     assert_eq!(header.selector, "--goods-head");
     assert_eq!(header.rows, 2);
 
-    // The row is a node of its own, and its fields are its children — one selector per column.
+    // The row is a node of its own, and its fields are its children — one selector per field.
     let rows = t.children.as_ref().expect("children");
     assert_eq!(rows.len(), 1);
-    let Accrete::record(r) = &rows[0] else {
-        panic!("not a record: {:?}", rows[0])
+    let Accrete::entry(e) = &rows[0] else {
+        panic!("not an entry: {:?}", rows[0])
     };
-    assert_eq!(r.id.as_deref(), Some("853736"));
-    assert_eq!(r.children.as_ref().map(|c| c.len()), Some(4));
+    assert_eq!(e.id.as_deref(), Some("853736"));
+    assert_eq!(e.children.as_ref().map(|c| c.len()), Some(4));
 }
 
 /// `rows` is a closed set of two answers: a third would render as something nobody chose, so it is
@@ -102,7 +103,7 @@ fn a_header_of_three_rows_does_not_decode() {
     let bad = json!({
         "type": "tiles",
         "attrs": {
-            "columns": [{"key": "qty"}],
+            "fields": [{"key": "qty"}],
             "header": {"selector": "head", "rows": 3}
         },
         "source": {"slot": "goods"}
@@ -113,7 +114,7 @@ fn a_header_of_three_rows_does_not_decode() {
     // 1 is the default and stays off the wire; 2 is the one value worth writing.
     let one = roundtrip(json!({
         "type": "tiles",
-        "attrs": {"columns": [{"key": "qty"}], "header": {"selector": "head", "rows": 1}},
+        "attrs": {"fields": [{"key": "qty"}], "header": {"selector": "head", "rows": 1}},
         "source": {"slot": "goods"}
     }));
     let wire = serde_json::to_value(&one).expect("encode");

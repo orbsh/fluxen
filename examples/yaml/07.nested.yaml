@@ -1,14 +1,14 @@
-# Hierarchy instead of merged cells (ADR 0031 §4): a field whose children are records is a list,
+# Hierarchy instead of merged cells (ADR 0031 §4): a field whose children are entries is a list,
 # and the grid draws each of them as a child row under the row it belongs to.
 # No colspan/rowspan anywhere - the data already says which row a row hangs from.
-# Columns are shared by every row, so a child record names the same fields its parent does.
+# Fields are shared by every row, so a child entry names the same fields its parent does.
 - action: append
   slot: orders
   data:
     type: tiles
     attrs:
       class: [--orders]
-      columns:
+      fields:
       - {key: order/no, title: Order, width: 7rem}
       - {key: item/lines, title: Lines}
       - {key: qty, title: Qty, width: 5rem, align: end}
@@ -16,11 +16,11 @@
       # Two rows: `order/no` groups under `order`, `item/lines` under `item` - the key is the path.
       header: {selector: --orders-head, rows: 2}
     source: {slot: orders}
-# ---- one order per record; its `item/lines` field holds the line records ----
+# ---- one order per entry; its `item/lines` field holds the line entries ----
 - action: append
   slot: orders
   data:
-    type: record
+    type: entry
     id: A-1001
     children:
     - type: text
@@ -29,7 +29,7 @@
     - type: frame
       attrs: {selector: item/lines}
       children:
-      - type: record
+      - type: entry
         id: A-1001-1
         children:
         - type: text
@@ -38,7 +38,7 @@
         - type: text
           attrs: {selector: amount}
           source: {default: 4.50}
-      - type: record
+      - type: entry
         id: A-1001-2
         children:
         - type: text
@@ -50,7 +50,7 @@
 - action: append
   slot: orders
   data:
-    type: record
+    type: entry
     id: A-1002
     children:
     - type: text
@@ -59,7 +59,7 @@
     - type: frame
       attrs: {selector: item/lines}
       children:
-      - type: record
+      - type: entry
         id: A-1002-1
         children:
         - type: text

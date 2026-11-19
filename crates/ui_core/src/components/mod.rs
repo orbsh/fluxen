@@ -20,8 +20,8 @@ pub use panel::panel_;
 
 pub mod tiles;
 pub use tiles::tiles_;
-pub mod record;
-pub use record::record_;
+pub mod entry;
+pub use entry::entry_;
 pub mod render;
 pub use render::stamp_;
 pub mod svg;
