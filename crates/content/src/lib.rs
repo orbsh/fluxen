@@ -1,7 +1,7 @@
 pub mod codec;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 /// 下行的一帧就是**动作列表**本身（ADR 0021 决策 6）：没有信封。
 /// 宿主要带自己的 `ev`／`sender`／`created`，就装在宿主自己的帧里——三个宿主
@@ -44,6 +44,13 @@ pub enum Content<T> {
     /// otherwise → the named data slot.
     #[serde(rename = "patch")]
     Patch(PatchOp),
+
+    /// Page configuration (ADR 0038 §2): options by name, each written into that
+    /// option's `remote` half. Merge, not replace — a member left out keeps its value,
+    /// and a member that is `null` clears its remote half. Not generic over `T`: the
+    /// configuration's currency is a bare `Value`, not a node tree.
+    #[serde(rename = "config")]
+    Config(ConfigOp),
 
     #[serde(rename = "empty")]
     #[default]
@@ -122,6 +129,14 @@ pub struct PatchOp {
     pub path: String,
     pub op: PatchKind,
     pub value: Value,
+}
+
+/// One frame's worth of options (ADR 0038 §2). `data` is required: a `config` frame
+/// that carries nothing is a producer bug, and an absent `data` fails to decode here
+/// rather than silently meaning "no change".
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ConfigOp {
+    pub data: Map<String, Value>,
 }
 
 /// Registration of a stamp definition (ADR 0037). `data` is the node tree itself — a

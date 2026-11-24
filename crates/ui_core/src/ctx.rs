@@ -4,7 +4,7 @@ use accrete::{Accrete, AccreteOps};
 use content::codec::ActiveCodec;
 use content::{Content, PatchKind};
 use leptos::prelude::*;
-use serde_json::{Value, to_value};
+use serde_json::{Map, Value, to_value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::{LazyLock, RwLock};
@@ -33,6 +33,24 @@ pub type DataSlot = RwSignal<Option<std::sync::Arc<Accrete>>>;
 /// 与 data（Accrete）分平面。
 pub type ValueSlot = RwSignal<Option<Value>>;
 
+/// 一个页面选项的两半（ADR 0038 §2）：`local` 是页面自己的选择，`remote` 是远端给的默认。
+/// 生效值本地优先、远端回落——与 `both` 的读法是同一条规则（ADR 0031 §1）。
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ConfigValue {
+    pub local: Option<Value>,
+    pub remote: Option<Value>,
+}
+
+impl ConfigValue {
+    /// 生效值：页面选过就是页面的，否则是远端的；两半都空 = 组件自己的默认。
+    pub fn effective(&self) -> Option<&Value> {
+        self.local.as_ref().or(self.remote.as_ref())
+    }
+}
+
+/// 一个选项的槽：per-key 信号，写一个选项不通知别的选项的订阅者。
+pub type ConfigSlot = RwSignal<ConfigValue>;
+
 #[derive(Clone)]
 pub struct Ctx {
     pub transport: LeptosTransport,
@@ -42,6 +60,9 @@ pub struct Ctx {
     pub list: RwSignal<HashMap<String, ListSlot>>,
     /// local 平面：`kind: local` 事件落点与订阅共用的具名 Value 槽。
     pub vals: RwSignal<HashMap<String, ValueSlot>>,
+    /// 页面选项（ADR 0038 §2）：自己的命名空间，一个选项一个信号、local/remote 两半。
+    /// 它不是 slot 平面的一员——slot 是应用的名字，混在一起就答不出"哪些名字是配置"。
+    pub config: RwSignal<HashMap<String, ConfigSlot>>,
     /// 拖拽会话（ADR 0034）：`Some` 即「有拖拽在飞」，里面放的就是那个源框节点
     /// 本身——货物是它自己的子树，所以不再有第二份平行的结构（复制体和原体迟早
     /// 对不上）。这是渲染器里唯一一份跨组件的瞬态态：源和落点隔着别的节点，本地信号
@@ -83,6 +104,7 @@ impl Ctx {
         let data = RwSignal::new(HashMap::new());
         let list = RwSignal::new(HashMap::new());
         let vals = RwSignal::new(HashMap::new());
+        let config = RwSignal::new(HashMap::new());
         let drag = RwSignal::new(None);
 
         // 读循环：transport.on() -> frame 信号
@@ -107,6 +129,7 @@ impl Ctx {
             data,
             list,
             vals,
+            config,
             drag,
             owner: Owner::current().expect("Ctx::new requires a reactive owner"),
             bundle: None,
@@ -233,6 +256,160 @@ impl Ctx {
             .get(source)
             .copied()
             .unwrap_or(slot)
+    }
+
+    /// 取（或首次时建）某选项的槽（语义同 slot_for_value——per-key 信号、建在根 owner 下）。
+    /// 读一个还没出现过的选项会为它建槽：没有槽就无从订阅，而"没写过"与"不存在"在这里
+    /// 本来就是同一种状态，区别只在值是不是空。
+    pub fn config_slot(&self, name: &str) -> ConfigSlot {
+        if let Some(s) = self.config.get_untracked().get(name).copied() {
+            return s;
+        }
+        let slot = self.owner.with(|| RwSignal::new(ConfigValue::default()));
+        let key = name.to_string();
+        self.config.update(|m| {
+            m.entry(key).or_insert(slot);
+        });
+        self.config
+            .get_untracked()
+            .get(name)
+            .copied()
+            .unwrap_or(slot)
+    }
+
+    /// 生效的选项值（本地优先、远端回落）。读即订阅这一个选项——别的选项变了不重跑。
+    pub fn config_get(&self, name: &str) -> Option<Value> {
+        self.config_slot(name).get().effective().cloned()
+    }
+
+    /// 页面自己的写法（ADR 0038 §2）：指针第一段是选项名，其余写进这个选项的 `local`
+    /// 半边；选项级的 `null` 清掉本地半边，把选项交还给远端。写会创建路径上的容器——
+    /// 写有路径，没有"打错目标"这回事（`patch` 的拒绝语义是另一件事）。
+    pub fn set_config(&self, path: &str, value: Value) -> Result<(), String> {
+        let segs = pointer_segments(path)?;
+        let Some((name, rest)) = segs.split_first() else {
+            return Err(format!("config path names no option: {path:?}"));
+        };
+        let slot = self.config_slot(name);
+        let cur = slot.get_untracked();
+        let local = if rest.is_empty() && value.is_null() {
+            None
+        } else {
+            let mut acc = cur.local.clone().unwrap_or(Value::Null);
+            write_into(&mut acc, rest, value)?;
+            Some(acc)
+        };
+        let next = ConfigValue {
+            local,
+            remote: cur.remote.clone(),
+        };
+        if next != cur {
+            slot.set(next);
+        }
+        Ok(())
+    }
+
+    /// 把每个选项镜像成文档根上的 `data-<name>`（ADR 0038 §3）：一个选项一个 effect，
+    /// 写了设属性、清了摘属性，别的选项不跟着重写。选项名原样进属性名（`skin` →
+    /// `data-skin`），所以 CSS 只认一个选择器。
+    pub fn mirror_config(&self) {
+        let Some(root) = web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.document_element())
+        else {
+            tracing::warn!("mirror_config: no document root to mirror onto");
+            return;
+        };
+        // 键集变了才长 effect：已经挂上的选项继续用自己那份跟值。
+        let seen: std::rc::Rc<std::cell::RefCell<std::collections::HashSet<String>>> =
+            Default::default();
+        let ctx = self.clone();
+        let owner = self.owner.clone();
+        Effect::new(move |_| {
+            for name in ctx.config.get().keys().cloned().collect::<Vec<_>>() {
+                if !seen.borrow_mut().insert(name.clone()) {
+                    continue;
+                }
+                let slot = ctx.config_slot(&name);
+                let el = root.clone();
+                let attr = format!("data-{name}");
+                owner.with(|| {
+                    let el = el.clone();
+                    let attr = attr.clone();
+                    Effect::new(move |_| {
+                        // 只订阅这一个选项
+                        let v = slot.get().effective().cloned();
+                        match v {
+                            Some(v) => {
+                                let text = match &v {
+                                    Value::String(s) => s.clone(),
+                                    other => other.to_string(),
+                                };
+                                if el.set_attribute(&attr, &text).is_err() {
+                                    tracing::warn!("mirror_config: cannot set {attr}");
+                                }
+                            }
+                            None => {
+                                el.remove_attribute(&attr).ok();
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    }
+}
+
+/// 一帧里的一个成员落进远程半边：`null` 清掉它，值没变就返回 None（不写、不通知）。
+fn merge_remote(cur: &ConfigValue, incoming: &Value) -> Option<ConfigValue> {
+    let next = ConfigValue {
+        local: cur.local.clone(),
+        remote: if incoming.is_null() {
+            None
+        } else {
+            Some(incoming.clone())
+        },
+    };
+    (next != *cur).then_some(next)
+}
+
+/// JSON Pointer（RFC 6901）分段，`~1`/`~0` 反转义——与 `Accrete::with_pointer` 同一套语法。
+fn pointer_segments(path: &str) -> Result<Vec<String>, String> {
+    if !path.starts_with('/') {
+        return Err(format!("config path must start with '/': {path:?}"));
+    }
+    Ok(path[1..]
+        .split('/')
+        .map(|s| s.replace("~1", "/").replace("~0", "~"))
+        .collect())
+}
+
+/// 把值写进 `segs` 指定的位置，缺的容器按需长出来。空路径 = 整值替换。
+fn write_into(root: &mut Value, segs: &[String], value: Value) -> Result<(), String> {
+    let Some((seg, rest)) = segs.split_first() else {
+        *root = value;
+        return Ok(());
+    };
+    match root {
+        Value::Object(map) => {
+            let child = map.entry(seg.clone()).or_insert(Value::Null);
+            write_into(child, rest, value)
+        }
+        Value::Array(arr) => {
+            let at: usize = seg
+                .parse()
+                .map_err(|_| format!("config path segment {seg:?} is not an array index"))?;
+            let child = arr
+                .get_mut(at)
+                .ok_or_else(|| format!("config path index {at} is out of range"))?;
+            write_into(child, rest, value)
+        }
+        Value::Null => {
+            // 没写过 = 空：在这一段长出一个对象，再往下走
+            *root = Value::Object(Map::new());
+            write_into(root, segs, value)
+        }
+        _ => Err(format!("config path hits a scalar at segment {seg:?}")),
     }
 }
 
@@ -383,6 +560,18 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 if let Err(e) = result {
                     // 未命中是合法降级（补丁可能先于其 create 到达），warn 保证可观测。
                     tracing::warn!("patch {x:?} skipped: {e}");
+                }
+            }
+            Content::Config(x) => {
+                // 页面选项（ADR 0038 §2）：按成员合并，且只写远程半边——一帧永远不覆盖
+                // 页面自己的选择（ADR 0031 §1 给 `both` 定的优先级）。
+                for (name, v) in &x.data {
+                    let slot = ctx.config_slot(name);
+                    let cur = slot.get_untracked();
+                    if let Some(next) = merge_remote(&cur, v) {
+                        tracing::info!("config {name:?} = {:.120?}", v);
+                        slot.set(next);
+                    }
                 }
             }
             Content::Empty => {}
@@ -547,3 +736,90 @@ pub fn render_accrete(ctx: &Ctx, accrete: &Accrete) -> AnyView {
 pub fn render_children(ctx: &Ctx, subs: &[Accrete]) -> Vec<AnyView> {
     subs.iter().map(|b| render_accrete(ctx, b)).collect()
 }
+
+#[cfg(test)]
+mod config_tests {
+    use super::{ConfigValue, merge_remote, pointer_segments, write_into};
+    use serde_json::{Value, json};
+
+    fn remote(v: Value) -> ConfigValue {
+        ConfigValue {
+            local: None,
+            remote: Some(v),
+        }
+    }
+
+    #[test]
+    fn a_new_member_lands_in_the_remote_half() {
+        let next = merge_remote(&ConfigValue::default(), &json!("sketch")).unwrap();
+        assert_eq!(next.remote, Some(json!("sketch")));
+        assert_eq!(next.local, None);
+    }
+
+    #[test]
+    fn an_equal_member_is_not_written() {
+        let cur = remote(json!("sketch"));
+        assert_eq!(merge_remote(&cur, &json!("sketch")), None);
+    }
+
+    #[test]
+    fn null_clears_the_remote_half_and_keeps_the_local_one() {
+        let cur = ConfigValue {
+            local: Some(json!("normal")),
+            remote: Some(json!("sketch")),
+        };
+        let next = merge_remote(&cur, &Value::Null).unwrap();
+        assert_eq!(next.remote, None);
+        assert_eq!(next.local, Some(json!("normal")));
+    }
+
+    #[test]
+    fn clearing_an_absent_half_writes_nothing() {
+        let cur = ConfigValue {
+            local: Some(json!("normal")),
+            remote: None,
+        };
+        assert_eq!(merge_remote(&cur, &Value::Null), None);
+    }
+
+    #[test]
+    fn local_wins_and_remote_is_the_fallback() {
+        let both = ConfigValue {
+            local: Some(json!("normal")),
+            remote: Some(json!("sketch")),
+        };
+        assert_eq!(both.effective(), Some(&json!("normal")));
+        let only_remote = remote(json!("sketch"));
+        assert_eq!(only_remote.effective(), Some(&json!("sketch")));
+        assert_eq!(ConfigValue::default().effective(), None);
+    }
+
+    #[test]
+    fn a_pointer_creates_the_object_it_names() {
+        let mut acc = Value::Null;
+        let segs = pointer_segments("/density/number").unwrap();
+        write_into(&mut acc, &segs, json!(4)).unwrap();
+        assert_eq!(acc, json!({"density": {"number": 4}}));
+    }
+
+    #[test]
+    fn a_pointer_through_a_scalar_is_refused() {
+        let mut acc = json!({"density": "compact"});
+        let segs = pointer_segments("/density/number").unwrap();
+        assert!(write_into(&mut acc, &segs, json!(4)).is_err());
+    }
+
+    #[test]
+    fn a_path_without_a_leading_slash_is_refused() {
+        assert!(pointer_segments("skin").is_err());
+    }
+
+    #[test]
+    fn pointer_escapes_are_unescaped() {
+        assert_eq!(
+            pointer_segments("/a~1b/c~0d").unwrap(),
+            vec!["a/b".to_string(), "c~d".to_string()]
+        );
+    }
+}
+
