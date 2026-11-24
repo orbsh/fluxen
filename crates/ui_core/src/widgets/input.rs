@@ -1,5 +1,6 @@
 use crate::Ctx;
 use crate::hooks::{enter_pressed, field_changed, locked, node_id, use_common_css, value_of};
+use crate::rough;
 use accrete::{AccreteOps, Input, JsType};
 use leptos::ev;
 use leptos::html::*;
@@ -275,10 +276,11 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
                 ),
             )
             .on(ev::keydown, on_key(true, field, ctx.clone()));
-        return match placeholder {
+        let el = match placeholder {
             Some(ph) => base.placeholder(ph).into_any(),
             None => base.into_any(),
         };
+        return rough::field_host(&ctx, accrete.id.as_deref(), el);
     }
 
     // Reactivity sinks into the attribute closure: `value` is a DynProperty, so a
@@ -312,10 +314,11 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
             ),
         )
         .on(ev::keydown, on_key(false, field, ctx.clone()));
-    match (&kind, placeholder) {
+    let el = match (&kind, placeholder) {
         (Some(JsType::bool), Some(ph)) => base.checked(checked).placeholder(ph).into_any(),
         (Some(JsType::bool), None) => base.checked(checked).into_any(),
         (_, Some(ph)) => base.value(value).placeholder(ph).into_any(),
         (_, None) => base.value(value).into_any(),
-    }
+    };
+    rough::field_host(&ctx, accrete.id.as_deref(), el)
 }

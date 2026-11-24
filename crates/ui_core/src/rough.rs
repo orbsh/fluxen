@@ -16,14 +16,26 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 
 /// The pen: one rectangle, drawn the way a hand would. Each returned string is one
-/// stroked pass — `roughr` emits two, and the second pass is the tell that makes a
-/// sketch look drawn rather than traced.
+/// tracing, and there are two of them — the same rectangle by a slightly different
+/// hand — which is what makes a hairline read as pencil gone over twice rather than
+/// as a shape traced once. Two tracings is the whole budget: an edge drawn more than
+/// twice stops looking sketched and starts looking bold.
 #[must_use]
 pub fn border_paths(w: f32, h: f32, seed: u64) -> Vec<String> {
+    both_hands(seed)
+        .into_iter()
+        .flat_map(|s| rect_passes(w, h, s))
+        .collect()
+}
+
+fn rect_passes(w: f32, h: f32, seed: u64) -> Vec<String> {
     let Ok(opts) = OptionsBuilder::default()
         .seed(seed)
         .roughness(1.2)
         .bowing(1.0)
+        // roughr traces every line twice of its own accord; two hands on top of that would be four passes
+        // over one edge, which reads heavy instead of sketchy. One edge, two passes, and no more.
+        .disable_multi_stroke(true)
         .build()
     else {
         return Vec::new();
@@ -36,6 +48,47 @@ pub fn border_paths(w: f32, h: f32, seed: u64) -> Vec<String> {
         .map(ops_to_d)
         .filter(|d| !d.is_empty())
         .collect()
+}
+
+/// Two hands for one line: the given seed, and the same seed stirred. The second is
+/// never zero (that is roughr's "pick one for me") and never the first.
+fn both_hands(seed: u64) -> [u64; 2] {
+    [seed, seed.rotate_left(17) | 1]
+}
+
+/// The selected mark: an L in the corner — down the right edge and along the bottom,
+/// a few pixels outside the box — drawn by the same two hands and traced the same way.
+/// A heavy stroke would say "selected" in a voice the rest of the page does not use;
+/// a right angle gone over twice says it in the one it does. The stylesheet decides
+/// when it shows (the box carrying `selected`), so nothing here watches for a class.
+#[must_use]
+pub fn mark_paths(w: f32, h: f32, seed: u64) -> Vec<String> {
+    let (out_x, out_y) = (w + 3.0, h + 3.0);
+    let (in_x, in_y) = (6.0, 6.0);
+    let mut paths = Vec::new();
+    for s in both_hands(seed.rotate_right(9) | 1) {
+        let Ok(opts) = OptionsBuilder::default()
+            .seed(s)
+            .roughness(0.9)
+            .bowing(0.5)
+            .disable_multi_stroke(true)
+            .build()
+        else {
+            continue;
+        };
+        let pen = Generator::default();
+        for (x1, y1, x2, y2) in [(out_x, in_y, out_x, out_y), (out_x, out_y, in_x, out_y)] {
+            paths.extend(
+                pen.line(x1, y1, x2, y2, &Some(opts.clone()))
+                    .sets
+                    .iter()
+                    .filter(|set| set.op_set_type == OpSetType::Path)
+                    .map(ops_to_d)
+                    .filter(|d| !d.is_empty()),
+            );
+        }
+    }
+    paths
 }
 
 /// One op set as SVG path data. Three ops are all a stroked outline uses; an op
@@ -89,6 +142,35 @@ pub fn border_layer(ctx: &Ctx, class: Option<&Vec<String>>, id: Option<&str>) ->
     sketch_layer(ctx, seed_for(id))
 }
 
+/// For a widget whose border is not something the page asked for but something its
+/// element type always paints — a field, a select, a button. There is no `is-border`
+/// to look for, so the only question left is the skin, which `sketch_layer` answers.
+pub fn drawn_border(ctx: &Ctx, id: Option<&str>) -> AnyView {
+    sketch_layer(ctx, seed_for(id))
+}
+
+/// A box for a widget that cannot hold its own drawing (a field is void, a textarea holds
+/// text). The wrapper is `display: contents` until the skin is on, so normal mode has no
+/// box of its own and the child lays out exactly as it did; sketching turns it into the
+/// host the drawing needs and takes the child's painted edge away.
+pub fn field_host(ctx: &Ctx, id: Option<&str>, child: AnyView) -> AnyView {
+    view! {
+        <span class="rough-host">
+            {child}
+            {drawn_border(ctx, id)}
+        </span>
+    }
+    .into_any()
+}
+
+/// Whether the page is in the drawing skin — the same question `sketch_layer` asks,
+/// for a widget that has to decide its own shape (a field needs a host box for its
+/// drawing; nothing else does).
+#[must_use]
+pub fn sketching(ctx: &Ctx) -> bool {
+    matches!(ctx.config_get("sketch"), Some(Value::Bool(true)))
+}
+
 /// The layer, mounted only while the skin asks for it.
 pub fn sketch_layer(ctx: &Ctx, seed: u64) -> AnyView {
     let ctx = ctx.clone();
@@ -109,7 +191,8 @@ pub fn sketch_layer(ctx: &Ctx, seed: u64) -> AnyView {
 #[component]
 pub fn RoughBorder(seed: u64) -> impl IntoView {
     let svg_ref = NodeRef::<svg::Svg>::new();
-    let paths = RwSignal::new(Vec::<String>::new());
+    let edges = RwSignal::new(Vec::<String>::new());
+    let marks = RwSignal::new(Vec::<String>::new());
     let view_box = RwSignal::new(String::new());
 
     Effect::new(move |_| {
@@ -135,7 +218,8 @@ pub fn RoughBorder(seed: u64) -> impl IntoView {
             }
             last.set((w, h));
             if w < 1.0 || h < 1.0 {
-                paths.set(Vec::new());
+                edges.set(Vec::new());
+                marks.set(Vec::new());
                 return;
             }
             let d = border_paths(w, h, seed);
@@ -144,7 +228,8 @@ pub fn RoughBorder(seed: u64) -> impl IntoView {
             }
             view_box.set(format!("0 0 {w} {h}"));
             host_mark.set_attribute("data-rough", "ready").ok();
-            paths.set(d);
+            edges.set(d);
+            marks.set(mark_paths(w, h, seed));
         });
         match web_sys::ResizeObserver::new(cb.as_ref().unchecked_ref()) {
             Ok(ro) => {
@@ -173,17 +258,20 @@ pub fn RoughBorder(seed: u64) -> impl IntoView {
             viewBox=move || view_box.get()
         >
             {move || {
-                paths
+                // Paint lives in the stylesheet (`svg.rough path`): one place for the
+                // pen, and `currentColor` is what makes the stroke follow
+                // `light-dark()` without this file knowing dark mode exists. The class
+                // says which of the two marks a path belongs to — the edge, or the L
+                // that only a selected box shows.
+                let edge = edges
                     .get()
                     .into_iter()
-                    .map(|d| {
-                        // Paint lives in the stylesheet (`svg.rough path`): one place
-                        // for the pen, and `currentColor` is what makes the stroke
-                        // follow `light-dark()` without this file knowing dark mode
-                        // exists.
-                        view! { <path d=d /> }
-                    })
-                    .collect_view()
+                    .map(|d| view! { <path class="edge" d=d /> });
+                let mark = marks
+                    .get()
+                    .into_iter()
+                    .map(|d| view! { <path class="mark" d=d /> });
+                edge.chain(mark).collect_view()
             }}
         </svg>
     }
@@ -191,7 +279,7 @@ pub fn RoughBorder(seed: u64) -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    use super::{border_paths, ops_to_d, seed_for};
+    use super::{border_paths, mark_paths, ops_to_d, seed_for};
     use roughr::core::{Op, OpSet, OpSetType, OpType};
 
     #[test]
@@ -214,6 +302,31 @@ mod tests {
     #[test]
     fn a_different_seed_draws_a_different_line() {
         assert_ne!(border_paths(120.0, 60.0, 7), border_paths(120.0, 60.0, 8));
+    }
+
+    #[test]
+    fn a_one_pixel_line_is_gone_over_more_than_once() {
+        // One tracing reads as a traced shape; two hands over the same rectangle read as pencil. Each string
+        // is one hand (four edges, one subpath each), so two strings and eight subpaths is the floor.
+        let d = border_paths(120.0, 60.0, 7);
+        assert!(d.len() >= 2, "a border is retraced: {d:?}");
+        let subpaths: usize = d.iter().map(|one| one.matches("M ").count()).sum();
+        assert!(subpaths >= 8, "four edges, twice over: {subpaths}");
+    }
+
+    #[test]
+    fn the_selected_mark_is_an_l_outside_the_box() {
+        let marks = mark_paths(120.0, 60.0, 7);
+        assert!(!marks.is_empty(), "no mark for a real box");
+        // The L lives a few pixels past the box's right edge and below its bottom.
+        assert!(
+            marks.iter().any(|d| d.contains(&format!("{}", 123.0))
+                || d.split_whitespace()
+                    .any(|n| n.parse::<f32>().is_ok_and(|v| v > 120.0))),
+            "the mark is not outside the box: {marks:?}"
+        );
+        assert_eq!(marks, mark_paths(120.0, 60.0, 7));
+        assert_ne!(marks, mark_paths(120.0, 60.0, 8));
     }
 
     #[test]
