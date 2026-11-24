@@ -36,8 +36,8 @@ impl FromStr for CodecType {
     }
 }
 
-/// 用于运行时执行 (替代 Box<dyn Codec>)
-/// 去除了冗余的内部结构体，直接内联逻辑
+/// For runtime execution (replaces Box<dyn Codec>)
+/// The redundant inner struct is gone; the logic is inlined directly
 #[derive(Debug, Clone)]
 pub enum ActiveCodec {
     Json,

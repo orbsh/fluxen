@@ -27,7 +27,7 @@ def send_text(payload):
     s.sendall(bytes(hdr) + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
 
 def set_ev(slot, accrete):
-    # 一帧就是一个动作列表（信封归宿主，ADR 0021 决策 6）
+    # one frame is one action list (the envelope belongs to the host, ADR 0021 decision 6)
     return [{"action": "set", "slot": slot, "data": accrete}]
 
 def append(slot, id, v, sel=None):

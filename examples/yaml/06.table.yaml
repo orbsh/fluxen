@@ -1,11 +1,11 @@
-# 表格 = `tiles` + `fields`（ADR 0031 §4）：没有 `<table>`，也就没有 thead/tbody/tr/th/td。
-# 每条数据是一条 `entry`，字段用 `attrs.selector` 命名（ADR 0020 的规则：selector 在兄弟之间
-# 指认一个子节点），`fields` 的 `key` 把字段投影成单元格。
-# 表头不是元素，是一个钩子：`header: {selector, layers: 2}` 让每个表头单元格带上这个 selector；
-# 两行表头由 key 自己长出来——`price/retail` 落在 `price` 组下，组单元格盖住它下面几列。
-# `layers` 而不是 `rows`：`dir: row` 的时候表头是一列，不是一行（ADR 0035）；这张表是默认的
-# `col`（元素自上而下流），所以表头仍然在上面那一行。
-# 合并单元格（colspan/rowspan）在模型里不存在：数据有层级就写成嵌套的 entry，渲染成子行。
+# A table = `tiles` + `fields` (ADR 0031 §4): no `<table>`, hence no thead/tbody/tr/th/td.
+# Each row of data is an `entry`, and fields are named with `attrs.selector` (ADR 0020's rule: a selector
+# singles out one child node among its siblings), and `fields`' `key` projects a field into a cell.
+# The header is not an element but a hook: `header: {selector, layers: 2}` puts that selector on every header cell;
+# the two header rows grow out of the keys themselves — `price/retail` sits under the `price` group, and the group cell covers the columns beneath it.
+# `layers` rather than `rows`: when `dir: row` the header is a column, not a row (ADR 0035); this table is the default
+# `col` (elements flow top to bottom), so the header is still the row on top.
+# Merged cells (colspan/rowspan) do not exist in the model: hierarchical data is written as nested entries and rendered as child rows.
 - action: append
   slot: chat
   data:
@@ -35,7 +35,7 @@
       attrs:
         oneshot: false
       sink: {}
-# ---- 行：一条 entry 一个 item；`id` 就是它的键（stage/step 复用同一套键） ----
+# ---- rows: one entry per item; `id` is its key (stage/step reuse the same set of keys) ----
 - action: append
   slot: table-rows
   data:

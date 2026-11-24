@@ -15,7 +15,7 @@ itertools.workspace = true
 js-sys.workspace = true
 leptos.workspace = true
 markdown.workspace = true
-# 手绘边（ADR 0038 §4）：纯数据生成，不带浏览器；几何回来、颜色自己上（currentColor）。
+# Hand-drawn border (ADR 0038 §4): pure data generation, no browser involved; the geometry comes back and the colour goes on itself (currentColor).
 roughr.workspace = true
 send_wrapper.workspace = true
 serde.workspace = true

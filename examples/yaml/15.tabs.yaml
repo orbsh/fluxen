@@ -1,11 +1,11 @@
-# 标签页联动（ADR 0010 诚实形态；ADR 0031 §4 起是 tiles）：两份互异的数据——
-# 菜单项（tab 栏，短标签行）与页面内容（tiles 的行），内容不等于被点的 id。
-# select 点击 emit 包装对象 {slot, id?, data}（与上行同形）落 local 槽
-# `page`；标题与 tiles 订阅同槽、各按 data 取件——同事件两处消费。
-# 页面行就在 tiles 的槽里（行 id = 键）：`window: {size: 1}` 是页，`step: {slot: page}`
-# 是导航写的那根轴——不引入任何寻址语法。
-# 纯前端往返为零：菜单与页面都由服务端喂（list 平面），此后每次点击
-# 不经过 transport。横排 tab 栏 = select 自身 attrs.horizontal: true。
+# Tab linkage (ADR 0010's honest shape; tiles since ADR 0031 §4): two distinct datasets —
+# menu items (the tab bar, short label rows) and page content (rows of tiles); the content is not the id that was clicked.
+# Clicking select emits the wrapper object {slot, id?, data} (same shape as uplink) into the local slot
+# `page`; the title and the tiles subscribe to the same slot and each take their piece by data — one event consumed in two places.
+# The page rows live right in the tiles slot (row id = key): `window: {size: 1}` is the page, `step: {slot: page}`
+# is the axis the navigation writes — no addressing syntax is introduced.
+# Purely frontend, zero round trips: menu and pages alike are fed by the server (list plane), and from then on every click
+# does not go through transport. The horizontal tab bar = select's own attrs.horizontal: true.
 - action: create
   slot: ""
   data:
@@ -47,7 +47,7 @@
         window: {size: 1}
       source: {slot: pages}
       step: {slot: page}
-# ---- 菜单行：短标签 + id（tab 栏的选项） ----
+# ---- menu rows: short label + id (the options of the tab bar) ----
 - action: append
   slot: tabs
   data:
@@ -66,7 +66,7 @@
     type: text
     id: about
     source: {default: 关于}
-# ---- 页面行：id 与菜单同键、内容互异（tiles 的行） ----
+# ---- page rows: same keys as the menu ids, distinct content (rows of tiles) ----
 - action: append
   slot: pages
   data:

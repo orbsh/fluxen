@@ -1,7 +1,7 @@
-# ADR 0034: 拖拽的两端都在 frame 上。左边两行可拖（源框的 id 就是行的身份，
-# 货物就是它自己的子树），右边两个落点：rail 只收 tag=message、发 pin；
-# trash 只收 tag=note——这次拖的两个都配不上它，落上去等于没落。
-# 同页多落点靠事件名分开，不用额外寻址。
+# ADR 0034: both ends of a drag live on frames. The two rows on the left are draggable (the source frame's id is the row's identity,
+# the cargo is its own subtree), while the right side has two drop targets: rail accepts only tag=message and emits a pin;
+# trash accepts only tag=note — neither of the two things dragged here matches it, so dropping there is as good as not dropping.
+# Several drop targets on one page are kept apart by event name; no extra addressing is needed.
 action: create
 slot: ""
 data:

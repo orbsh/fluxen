@@ -1,7 +1,7 @@
-//! WebSocket 传输实现（gloo-net，wasm 环境，框架无关）。
+//! WebSocket transport implementation (gloo-net, wasm environment, framework agnostic).
 //!
-//! 框架绑定的部分（连接状态信号、字节流桥接到框架 signal）留在各 UI crate；
-//! 本 crate 只提供纯粹的 `Transport` 实现：连接、emit 编码上行、on 吐下行帧。
+//! The framework-bound parts (connection-state signals, bridging the byte stream into a framework signal) stay in each UI crate;
+//! this crate only provides the pure `Transport` implementation: connect, emit encodes upstream, on yields downstream frames.
 
 use content::Outflow;
 use content::codec::ActiveCodec;
@@ -19,7 +19,7 @@ use transport::{Event, Transport};
 
 type SharedRx = Rc<RefCell<futures::channel::mpsc::UnboundedReceiver<Vec<u8>>>>;
 
-/// WebSocket 传输。wasm 单线程，`Rc<RefCell<...>>` 持有收发两端。
+/// WebSocket transport. wasm is single-threaded; `Rc<RefCell<...>>` holds both the send and receive ends.
 pub struct WsTransport {
     write: Rc<RefCell<SplitSink<WebSocket, Message>>>,
     rx: SharedRx,
@@ -27,10 +27,10 @@ pub struct WsTransport {
 }
 
 impl WsTransport {
-    /// 连接并启动读循环。下行帧通过内部 channel 桥接为流。
+    /// Connect and start the read loop. Downstream frames are bridged into a stream via an internal channel.
     ///
-    /// 失败返回错误而不是 panic：连不上（服务端未起、代理/握手被拒）是
-    /// 页面必须能呈现的状态，不是进程级不可能事件。
+    /// Failure returns an error instead of panicking: being unable to connect (server not up, proxy/handshake
+    /// rejected) is a state the page must be able to surface, not a process-level impossibility.
     pub fn new(url: &str, codec: ActiveCodec) -> Result<Self, String> {
         let ws = WebSocket::open(url).map_err(|e| format!("ws open failed: {e:?}"))?;
         let (write, mut read) = ws.split();
@@ -54,7 +54,7 @@ impl WsTransport {
     }
 }
 
-/// 共享 receiver 的流包装：wasm 单线程下多个消费者顺序拉取同一流。
+/// Stream wrapper around the shared receiver: under single-threaded wasm several consumers poll the same stream in turn.
 struct SharedRxStream(SharedRx);
 
 impl Stream for SharedRxStream {

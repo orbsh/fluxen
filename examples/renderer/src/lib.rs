@@ -5,7 +5,7 @@
 //! replace, and this crate is one such host (ours): read `#main`, open the socket, hand the page a
 //! `window.fluxen.send` handle. A host that wraps the core in its own binary (prism) writes its own
 //! boot and never depends on this crate — the ownership rule is
-//! `docs/decisions/0021-external-integration.md` 「归属」.
+//! `docs/decisions/0021-external-integration.md`, the section on ownership (`## 归属`).
 
 // Unit tests may use the unwrap/panic vocabulary the production targets are
 // denied (a panicking test is a failing test). `cfg(test)` is on only for this
@@ -20,11 +20,11 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 
-/// 入口：解析 `#main` 的 host/token/codec/path，建立 WS，挂载响应式根，
-/// 并把页面级上行把手（`window.fluxen.send`）交给页面上的 JS。
+/// Entry point: resolve host/token/codec/path from `#main`, establish the WS, mount the reactive root,
+/// and hand the page-level uplink handle (`window.fluxen.send`) to the page's JS.
 pub fn mount() -> Result<(), String> {
-    // 挂载是页面级操作，每一步都可能失败（不在浏览器里、页面缺 #main、
-    // WS 连不上）；这些是调用方要呈现的状态，走 Result，不 panic。
+    // Mounting is a page-level operation; every step can fail (not in a browser, page lacks #main,
+    // WS won't connect); these are states the caller must surface, so they go through Result, no panic.
     let win = web_sys::window().ok_or("mount() outside a browser (no window)")?;
     let doc = win.document().ok_or("no document")?;
     let loc = doc.location().ok_or("no document.location")?;
@@ -40,8 +40,8 @@ pub fn mount() -> Result<(), String> {
             host = loc.host().map_err(|_| "document.location has no host")?;
         }
 
-        // 页面级配置：框架在 `#main` 上钉自己的通道路径与编码（宿主可能不是 `/channel`、
-        // 也可能只认 JSON）。页面 URL 的查询串更具体，仍然优先。
+        // Page-level config: the framework pins its channel path and encoding on `#main` (the host may not use `/channel`,
+        // or may only accept JSON). The page URL's query string is more specific and still wins.
         if let Some(p) = ele.get_attribute("data-path") {
             if p.starts_with('/') {
                 path = p;
@@ -92,22 +92,22 @@ pub fn mount() -> Result<(), String> {
         .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
         .ok_or("no #main element to mount into")?;
 
-    // 传输先建：连不上是页面级错误（Result），不能挂上界面再炸。
+    // Build the transport first: failing to connect is a page-level error (Result); don't mount the UI and blow up after.
     let transport: std::rc::Rc<dyn transport::Transport> = std::rc::Rc::new(
         transport_ws::WsTransport::new(&url, codec.clone())?,
     );
 
-    // mount_to 返回的 UnmountHandle 被 Drop 时会卸载视图——`let _ =` 会让界面挂上即被拆掉
-    // （症状正是"ws 正常但界面空白"）。必须 forget 持有整个应用生命周期。
+    // The UnmountHandle returned by mount_to unmounts the view when dropped — `let _ =` tears the UI down as soon as it mounts
+    // (the symptom is exactly "ws works but the UI is blank"). It must be forgotten to live for the whole app lifetime.
     leptos::mount::mount_to(parent, move || {
-        // 必须在 Leptos 的运行期里装配：`Ctx::new` 用 Executor::spawn_local，早于
-        // mount_to 调用它会 panic（"before a global executor was initialized"）。
+        // Must be assembled inside the Leptos runtime: `Ctx::new` uses Executor::spawn_local, and calling
+        // it before mount_to panics ("before a global executor was initialized").
         let ctx = Ctx::new(transport, codec);
-        // 页面选项镜像到文档根（ADR 0038 §3）：`skin` 之类由生产者建页时下发，
-        // CSS 只认 `html[data-<名字>]`。一行装配，宿主换 boot 时同样一行。
+        // Mirror page options onto the document root (ADR 0038 §3): things like `skin` are sent down when the producer builds the page,
+        // and CSS only looks at `html[data-<name>]`. One line of assembly; a host swapping the boot does the same one line.
         ctx.mirror_config();
         publish_page_send(ctx.clone());
-        // 响应式根：仅当 layout 变化时重建
+        // Reactive root: rebuilt only when the layout changes
         move || {
             let layout = ctx.layout.get();
             ui_core::render::dispatch(&layout, &ctx)
@@ -117,13 +117,13 @@ pub fn mount() -> Result<(), String> {
     Ok(())
 }
 
-/// 页面级上行把手：`window.fluxen.send(event, data)`。
+/// Page-level uplink handle: `window.fluxen.send(event, data)`.
 ///
-/// 与 canvas 模块拿到的 `host.send` 是同一条腿——都落在 `Ctx::send` 上，
-/// 页面上只有这一条上行通道。框架的客户端 runtime 用它发 hello 与 nav。
+/// It is the same leg the canvas module gets as `host.send` — both land on `Ctx::send`;
+/// the page has only this one uplink channel. The framework's client runtime uses it to send hello and nav.
 ///
-/// 连接还没打开时调用不会丢：`emit` 是 future，gloo 的 `Sink::poll_ready`
-/// 在 `readyState == 0` 时挂起、`open` 时唤醒，所以这里只管 spawn。
+/// Calls made while the connection is still opening are not lost: `emit` is a future, and gloo's `Sink::poll_ready`
+/// suspends while `readyState == 0` and wakes on `open`, so all this does is spawn.
 fn publish_page_send(ctx: Ctx) {
     let send = Closure::<dyn FnMut(JsValue, JsValue)>::new(move |name: JsValue, data: JsValue| {
         let Some(name) = name.as_string() else {
@@ -132,8 +132,8 @@ fn publish_page_send(ctx: Ctx) {
             ));
             return;
         };
-        // `Outflow.data` 是 serde_json::Value，页面上给的是任意 JS 值：
-        // undefined 之类的不可序列化值落成 null，不让它变成一个假帧。
+        // `Outflow.data` is a serde_json::Value while the page hands over an arbitrary JS value:
+        // unserializable values like undefined become null, so they never turn into a bogus frame.
         let data = js_sys::JSON::stringify(&data)
             .ok()
             .and_then(|text| serde_json::from_str(&String::from(text)).ok())
@@ -153,6 +153,6 @@ fn publish_page_send(ctx: Ctx) {
     if let Some(window) = web_sys::window() {
         let _ = js_sys::Reflect::set(&window, &JsValue::from_str("fluxen"), &handle);
     }
-    // 常驻到页面卸载：回收它等于把把手抽走（与 mount 的 forget 同理）。
+    // Live until the page unloads: reclaiming it would pull the handle away (same reasoning as mount's forget).
     send.forget();
 }

@@ -3,7 +3,7 @@ use accrete::{Accrete, AccreteOps, Bind, classify::Classify};
 use leptos::prelude::*;
 use serde_json::Value;
 
-/// 追加公共 CSS：非横向的 Box/Case/Text/Tab/Select 加 `col`，并扩展 class 列表。
+/// Append common CSS: a non-horizontal Box/Case/Text/Tab/Select gets `col`, and the class list is extended.
 ///
 /// `Tiles` is left out: it names its own direction from `attrs.dir` (ADR 0035), and a second opinion
 /// here would fight it — `dir: row` has to be able to say row, whatever this function would add.
@@ -153,8 +153,8 @@ pub fn use_target<'a>(
     })
 }
 
-/// 发射节点自身的 id（ADR 0010：包装对象的 `id` = 发射节点 id）。
-/// 空串按无身份处理——与行身份同一约定（`''` 不构成 id）。
+/// The emitting node's own id (ADR 0010: the wrapper object's `id` = the emitting node's id).
+/// An empty string counts as no identity — the same convention as row identity (`''` does not make an id).
 pub(crate) fn node_id(accrete: &impl AccreteOps) -> Option<String> {
     accrete.get_id().clone().filter(|s| !s.is_empty())
 }

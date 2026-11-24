@@ -1,19 +1,19 @@
-# Canvas 示例（ADR 0007）：3dbrowser 多实例 + 流式喂载荷。只留两件网格模型——鞋
-# （MaterialsVariantsShoe）与车（ToyCar）；手表/头盔/沙发不再随示例分发，需要时按
-# examples/renderer/assets/3dbrowser/README.md 的地址自行取。这两件都靠 glTF 节点
-# 旋转装配（ToyCar 的 ToyCar/Fabric/Glass 三个部件各带一个），所以它们同时是
-# "归一化必须与节点变换复合、不能覆盖"的回归样本（见模块 src/lib.rs 的注释）。
-# 前置：模块产物在 examples/renderer/assets/3dbrowser/（配方见
-# examples/modules/3dbrowser/Cargo.toml 头注释；stage serve 自带静态服务）；
-# 布局侧先发 00.main.yaml（本文件往 chat rack 追加两行）。
+# Canvas example (ADR 0007): several 3dbrowser instances + streaming payloads. Only two mesh models are kept — the shoe
+# (MaterialsVariantsShoe) and the car (ToyCar); the watch/helmet/sofa no longer ship with the example, fetch them from
+# the addresses in examples/renderer/assets/3dbrowser/README.md when you need them. Both of these rely on glTF node
+# rotation assemblies (ToyCar has one each on its ToyCar/Fabric/Glass parts), so they also serve as
+# regression samples for "normalisation must compose with node transforms, not overwrite them" (see the comments in the module's src/lib.rs).
+# Prerequisites: the module artifacts are in examples/renderer/assets/3dbrowser/ (recipe in the
+# header comment of examples/modules/3dbrowser/Cargo.toml; stage serve brings its own static serving);
+# the layout side sends 00.main.yaml first (this file appends two rows to the chat rack).
 #
-# 每个模型一条独立消息：每个 canvas 自成一帧 append 进 chat，聊天流里
-# 竖排。两条消息各挂各的数据槽（m3d_shoe / m3d_car）——数据槽是单值的，
-# 同一槽被多个 canvas 订阅时后写的 set 覆盖先写的，所以多实例必须各挂各的
-# 槽，每槽 set 一次，互不覆盖。
+# One separate message per model: each canvas is its own frame appended to chat, stacked
+# vertically in the chat stream. The two messages each hang on their own data slot (m3d_shoe / m3d_car) — data slots are single-valued,
+# and when several canvases subscribe to the same slot the set written later overwrites the earlier one, so multiple instances must each hang on their own
+# slot, one set per slot, so nothing is overwritten.
 #
-# 素材均为 CC0（Khronos glTF-Sample-Assets），下载地址见
-# examples/renderer/assets/3dbrowser/README.md。
+# All assets are CC0 (Khronos glTF-Sample-Assets); download addresses are in
+# examples/renderer/assets/3dbrowser/README.md.
 - action: append
   slot: chat
   data:

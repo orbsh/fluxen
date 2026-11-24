@@ -17,18 +17,18 @@ pub async fn run(port: u16) -> anyhow::Result<()> {
 
     // Background task: print everything coming back from the mirror (UI event
     // frames, peer chatter) so the console doubles as an event monitor.
-    // 回显用 YAML 而不是单行 JSON（2026-10-02 用户裁决）：`<-` 后换行、
-    // 结构化缩进——事件流是给人读的，与 /send 载体同形。
+    // Echo as YAML rather than one-line JSON (user ruling 2026-10-02): a newline after `<-`, and
+    // structured indentation — the event stream is meant for humans, the same shape as the /send payload.
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
     tokio::spawn(async move {
         while let Some(Ok(msg)) = stream.next().await {
-            // UI 默认以 CBOR 上行：Binary 帧解码回 JSON 再打印，否则事件流
-            // 在默认配置下静默消失（auto-detect 首字节，无需 pin 编解码）。
+            // The UI sends CBOR by default: decode the Binary frame back to JSON before printing, otherwise the event stream
+            // vanishes silently under the default config (auto-detect on the first byte, no codec pinning needed).
             let text = match &msg {
                 Message::Text(t) => serde_json::from_str::<serde_json::Value>(t)
                     .ok()
                     .and_then(|v| serde_yaml::to_string(&v).ok())
-                    // 非 JSON 的文本帧按原样显示
+                    // Text frames that are not JSON are shown as they are
                     .or_else(|| Some(t.clone())),
                 Message::Binary(b) => content::codec::ActiveCodec::Cbor
                     .decode_auto::<serde_json::Value>(b)
@@ -87,7 +87,7 @@ pub async fn run(port: u16) -> anyhow::Result<()> {
                 .map_err(|e| e.to_string())
                 .and_then(|src| parse_yaml_to_frame(&src).map_err(|e| e.msg))
                 .and_then(|frame| {
-                    // 上线的是动作列表本身（ADR 0021 决策 6）
+                    // What goes on the wire is the action list itself (ADR 0021 decision 6)
                     serde_json::to_string(&frame).map_err(|e| e.to_string())
                 })
             {

@@ -6,7 +6,7 @@ use leptos::html::*;
 use leptos::prelude::*;
 use leptos::svg;
 
-/// SVG 容器：`SizeAttr::size_style()` 尺寸 + 公共 CSS。
+/// SVG container: `SizeAttr::size_style()` size + common CSS.
 pub fn svg_(accrete: Svg, ctx: &Ctx) -> AnyView {
     let mut css = vec!["svg"];
     use_common_css(&mut css, &accrete);
@@ -28,7 +28,7 @@ pub fn svg_(accrete: Svg, ctx: &Ctx) -> AnyView {
         .into_any()
 }
 
-/// SVG 路径：`d` 取 `source`。
+/// SVG path: `d` comes from `source`.
 pub fn path_(accrete: Path, _ctx: &Ctx) -> AnyView {
     let mut css = vec!["path"];
     use_common_css(&mut css, &accrete);

@@ -1,10 +1,10 @@
-//! ADR 0014 的 `layer` 在 ADR 0030 里并进了 `panel`（place: viewport, state: bound）。
-//! `portal` 已删除：跨处出现靠"服务端写槽、谁绑谁显示"，不需要搬运子树。
-//! 之后，各类形状都要过真实 codec 的往返——wire 是契约，Rust 端枚举构造不算数。
+//! ADR 0014's `layer` was folded into `panel` in ADR 0030 (place: viewport, state: bound).
+//! `portal` is deleted: appearing across places works by "the server writes a slot, whoever binds it displays it", no subtree hauling needed.
+//! After that, every kind of shape must go through the real codec round trip — the wire is the contract, a Rust-side enum construction does not count.
 //!
-//! 注意：accrere 的解码不设 `deny_unknown_fields`，所以旧帧里多带的
-//! `overlay`/`dismiss` 键会被静默忽略——不是报错，是退化成纯定位 float。所以
-//! 「撤干净」这条用**编码结果里没有这两个键**来守，而不是用解码失败来守。
+//! Note: accrere's decode does not set `deny_unknown_fields`, so the extra
+//! `overlay`/`dismiss` keys in old frames are silently ignored — not an error, just a degraded plain float. So
+//! "swept clean" is guarded by **the encoded result having neither key**, not by a decode failure.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use accrete::Accrete;
@@ -19,26 +19,26 @@ fn roundtrip(src: &str) -> Accrete {
 
 #[test]
 fn viewport_bound_roundtrip() {
-    // 典型形状：local 槽控显隐 + dismiss + 模态内容
+    // Typical shape: a local slot drives show/hide + dismiss + modal content
     roundtrip(
         r##"{"type":"panel","id":"login_layer","attrs":{"place":"viewport","state":"bound","dismiss":true},
              "source":{"slot":"login_modal","scope":"local"},
              "children":[{"type":"text","source":{"default":"hi"}}]}"##,
     );
-    // 无 attrs / 无 bind / 无 children：三项全可选，省略即空
+    // No attrs / no bind / no children: all three are optional, omitted means empty
     roundtrip(r#"{"type":"panel","id":"bare","attrs":{"place":"viewport","state":"bound"}}"#);
-    // data 槽绑定也合法（渲染侧两支都读）
+    // Binding a data slot is legal too (both render-side arms read it)
     roundtrip(r#"{"type":"panel","id":"l2","attrs":{"place":"viewport","state":"bound"},"source":{"slot":"modal"}}"#);
 }
 
 #[test]
 fn float_is_not_a_word_any_more() {
-    // `float` 整个删掉了（ADR 0031）：贴角的东西是 panel 的 viewport 那一格 + 位置。
+    // `float` is deleted entirely (ADR 0031): a corner-anchored thing is panel's viewport cell + a position.
     let err = serde_json::from_str::<Accrete>(r#"{"type":"float","attrs":{"top":"1rem"}}"#)
         .expect_err("float 应当解码失败");
     assert!(err.to_string().contains("unknown variant"), "{err}");
 
-    // 同一个形状换成 panel：位置键被展平进 attrs，不需要额外一层
+    // The same shape as a panel: the position keys are flattened into attrs, no extra layer needed
     let p = roundtrip(
         r#"{"type":"panel","attrs":{"place":"viewport","state":"bound","right":"1rem","top":"1rem"},
             "source":{"slot":"notice"},"children":[]}"#,

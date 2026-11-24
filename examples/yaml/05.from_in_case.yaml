@@ -1,6 +1,6 @@
-# 一张商品表（ADR 0031 §4）：`tiles` + `fields`，不再有 table/thead/tbody/tr/th/td。
-# 每一条数据是一条 `entry`，字段名 = 子节点的 `attrs.selector`；字段只按 key 投影，不认位置。
-# 行是 append 进 `goods` 槽的，所以增删一行是列表操作，不是改布局。
+# A goods table (ADR 0031 §4): `tiles` + `fields`, no more table/thead/tbody/tr/th/td.
+# Every row of data is an `entry`, with the field name = the child node's `attrs.selector`; fields are projected by key only, never by position.
+# Rows are appended into the `goods` slot, so adding or removing a row is a list operation, not a layout change.
 - action: append
   slot: chat
   data:
@@ -35,7 +35,7 @@
         attrs:
           oneshot: true
         sink: {}
-# ---- 三行商品：id 就是行的键（同一套键给 stage/step/remove 用） ----
+# ---- three goods rows: the id is the row's key (the same set of keys is used by stage/step/remove) ----
 - action: append
   slot: goods
   data:

@@ -1,13 +1,13 @@
-//! 3dbrowser —— ADR 0007 模块契约的示例实现：按需加载的 three-d 能力模块。
+//! 3dbrowser — an example implementation of the ADR 0007 module contract: an on-demand three-d capability module.
 //!
-//! 构建（在本目录）：
+//! Build (in this directory):
 //! ```sh
 //! cargo build --release
 //! wasm-bindgen gen --target web -o pkg target/wasm32-unknown-unknown/browser3d.wasm
 //! ```
-//! `pkg/` + 本目录 `index.js` 一起放 CDN（或本地 assets），Canvas 组件的
-//! `url` 指向 `index.js`。宿主只认识四个导出（mount/update/resize/unmount），
-//! 数据区语义（`assets`/`primitives`）完全归本模块。
+//! Put `pkg/` + this directory's `index.js` on a CDN (or local assets); the Canvas component's
+//! `url` points at `index.js`. The host only knows four exports (mount/update/resize/unmount);
+//! the data-area semantics (`assets`/`primitives`) belong entirely to this module.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use js_sys::Uint8Array;
@@ -18,7 +18,7 @@ use std::rc::Rc;
 use three_d::*;
 use wasm_bindgen::prelude::*;
 
-/// 自定义数据区的 schema（模块私有词汇，核心不校验）。
+/// Schema of the custom data area (module-private vocabulary; the core does not validate it).
 ///
 /// ```json
 /// {
@@ -27,16 +27,16 @@ use wasm_bindgen::prelude::*;
 ///   "clear": [0.9, 0.92, 0.96, 1.0]
 /// }
 /// ```
-/// null = 占位（ADR 0005 指针只能 replace 已存在的键，流式喂 URL 时先以
-/// null 占位、后逐帧 replace 成真值）；模块跳过 null，见到非 null 才加载。
+/// null = placeholder (an ADR 0005 pointer can only replace an existing key, so when streaming a URL in,
+/// hold a null placeholder first and replace it with the real value frame by frame); the module skips null and loads only non-null.
 #[derive(Debug, Default, Deserialize)]
 struct Spec {
     #[serde(default)]
     primitives: HashMap<String, PrimSpec>,
     #[serde(default)]
     assets: HashMap<String, Option<String>>,
-    /// 清屏色 `[r, g, b, a]`（0..1）。缺省 = 全透明（alpha 0），画布透出宿主
-    /// 页面背景；要固定底色就在数据区里显式给四元组。
+    /// Clear color `[r, g, b, a]` (0..1). Default = fully transparent (alpha 0), so the canvas shows the host
+    /// page background; for a fixed color, give the four-tuple explicitly in the data area.
     #[serde(default)]
     clear: Option<[f32; 4]>,
 }
@@ -54,9 +54,9 @@ fn decode(data: &JsValue) -> Result<Spec, JsError> {
     Ok(spec)
 }
 
-/// panic 消息透传到 console.error：wasm 默认（panic=abort）只给 JS 一个裸
-/// `unreachable`，连"哪个模型、为什么"都看不到——本模块踩过一次
-/// shader link 失败（glb 缺 tangent），全靠这条消息才定位。
+/// Forward panic messages to console.error: by default (panic=abort) wasm hands JS only a bare
+/// `unreachable`, with no sign of "which model, why" — this module once hit a
+/// shader link failure (glb missing tangent), and this one message is what located it.
 fn install_panic_hook() {
     use std::sync::Once;
     static ONCE: Once = Once::new();
@@ -70,29 +70,29 @@ fn install_panic_hook() {
 struct State {
     context: Context,
     camera: Camera,
-    /// 三灯布光：key 主光（带 shadow map 投影）+ fill 补光 + rim 轮廓光，
-    /// 再配低强度 ambient 兜底——单灯直射是原示例"塑料感"的主因。
+    /// Three-light rig: key light (with shadow-map casting) + fill + rim,
+    /// plus a low-intensity ambient as a fallback — a single direct light is the main cause of the original example's "plastic" look.
     ambient: AmbientLight,
     key_light: DirectionalLight,
     fill_light: DirectionalLight,
     rim_light: DirectionalLight,
-    /// 内置几何（无光材质；与 gltf 分两趟 render，材质类型不同）。
+    /// Built-in geometry (unlit material; rendered in a separate pass from gltf, since the material types differ).
     color_objs: Vec<Gm<Mesh, ColorMaterial>>,
-    /// 已加载的 gltf 模型（PBR，吃灯光）。
+    /// Loaded gltf models (PBR, lit by the lights).
     models: Vec<Model<PhysicalMaterial>>,
     seen: HashSet<String>,
     pending: VecDeque<(String, String)>,
-    /// 当前已装载的资产 URL 集（展示语义 = 一次一件：spec 的 assets 集变化
-    /// 时整体替换模型，而非追加堆叠）。
+    /// Currently loaded asset URL set (display semantics = one at a time: when the spec's assets set changes,
+    /// the models are replaced wholesale rather than stacked up).
     current_assets: Vec<String>,
-    /// 清屏色（默认全透明，见 `Spec::clear`）。
+    /// Clear color (fully transparent by default, see `Spec::clear`).
     clear: [f32; 4],
     dirty: bool,
     size: (u32, u32),
-    /// 本实例的 canvas：加载过渡层要挂在它的父容器上（见 `overlay_build`）。
+    /// This instance's canvas: the loading overlay hangs on its parent container (see `overlay_build`).
     canvas: web_sys::HtmlCanvasElement,
-    /// 加载过渡层句柄（assets 拉取期间在容器里转圈）。幂等：需要时建、队列空
-    /// 了收；three-d 侧没有自带进度，这一层就是"下载时的过渡"。
+    /// Loading overlay handle (spins in the container while assets are fetched). Idempotent: built when needed, removed
+    /// when the queue is empty; three-d has no built-in progress, so this layer is the "download transition".
     overlay: Option<web_sys::Element>,
 }
 
@@ -110,7 +110,7 @@ impl State {
                     "cylinder" => CpuMesh::cylinder(24),
                     _ => CpuMesh::cube(),
                 };
-                // 网格排布：每加一个几何体沿 X 平移一格
+                // Grid layout: each added primitive shifts one cell along X
                 cpu.transform(Mat4::from_translation(vec3(next as f32 * 2.0 - 2.0, 0.0, 0.0)))
                     .ok();
                 let material = ColorMaterial {
@@ -126,11 +126,11 @@ impl State {
             }
         }
         for (key, url) in spec.assets {
-            let Some(url) = url else { continue };   // null 占位 = 还没到
+            let Some(url) = url else { continue };   // null placeholder = not here yet
             let id = format!("{key}:{url}");
             if self.seen.insert(id.clone()) {
-                // 展示语义 = 一次一件：资产集变化即整体替换。旧模型与旧
-                // pending 一并清掉，只让最新声明的资产进装载队列。
+                // Display semantics = one at a time: a change in the asset set means a wholesale replace. Old models
+                // and old pending entries are cleared together; only the newest declared asset enters the load queue.
                 self.models.clear();
                 self.current_assets.clear();
                 self.pending.clear();
@@ -140,18 +140,18 @@ impl State {
         }
     }
 
-    /// 处理一个挂起的 asset；异步调用方 spawn_local 包一层。
+    /// Handle one pending asset; the async caller wraps it in spawn_local.
     fn pump(&mut self) -> Option<(String, String)> {
         self.pending.pop_front()
     }
 
     fn add_model(&mut self, cpu: three_d_asset::Model) {
-        // 补算切线：很多 glb 带法线贴图（normal texture）却不含 tangent 属性，
-        // 而 three-d 的 PhysicalMaterial 在有 normal_texture 时会在 fragment
-        // shader 里声明 `in vec3 tang/bitang`，对应的 vertex shader 只有几何带
-        // tangents 时才输出它们——缺了就是 shader link 失败
-        // （"FRAGMENT varying tang does not match any VERTEX varying"）后 panic。
-        // 有 normals + uvs 就能补算；缺前提的几何保持原样（其材质也无贴图）。
+        // Compute tangents when missing: many glb files carry a normal texture but no tangent
+        // attribute, while three-d's PhysicalMaterial, given a normal_texture, declares
+        // `in vec3 tang/bitang` in the fragment shader — and the matching vertex shader only emits
+        // them when the geometry has tangents; without them it is a shader link failure
+        // ("FRAGMENT varying tang does not match any VERTEX varying") followed by a panic.
+        // normals + uvs are enough to compute them; geometry missing a prerequisite is left as is (its material has no textures either).
         let mut cpu = cpu;
         for p in cpu.geometries.iter_mut() {
             if let three_d_asset::Geometry::Triangles(mesh) = &mut p.geometry {
@@ -160,7 +160,7 @@ impl State {
                 }
             }
         }
-        // 居中、归一到 ~2 格半径，避免外部 gltf 尺度五花八门
+        // Center it and normalize to a ~2-cell radius, so wildly varying external gltf scales don't matter
         let mut model = match Model::<PhysicalMaterial>::new(&self.context, &cpu) {
             Ok(m) => m,
             Err(e) => {
@@ -177,28 +177,28 @@ impl State {
         let diag = (sz.x * sz.x + sz.y * sz.y + sz.z * sz.z).sqrt();
         let s = if diag > 0.0 { 4.0 / diag } else { 1.0 };
         for m in model.iter_mut() {
-            // 归一化必须与 glTF 节点变换**复合**，不能覆盖：three-d 把每个
-            // primitive 的节点变换挂在 Gm 上（model.rs 构造时
-            // `set_transformation(primitive.transformation)`），直接覆盖会丢掉它。
-            // 手表就是踩这条：后盖与指针靠节点旋转（-90°X）对齐表盘，被覆盖后
-            // 它们躺在自己的本地平面上、与表盘垂直（"表盘方向不对"）。
+            // Normalization must be **composed** with the glTF node transform, never overwrite it: three-d hangs each
+            // primitive's node transform on the Gm (model.rs does
+            // `set_transformation(primitive.transformation)` at construction), so a plain overwrite drops it.
+            // The watch was the case in point: case back and hands align to the dial via node rotation (-90°X), and once
+            // overwritten they lie on their own local plane, perpendicular to the dial ("the dial faces the wrong way").
             let node = m.transformation();
             m.set_transformation(Mat4::from_translation(c) * Mat4::from_scale(s) * node);
         }
-        // 模型归一化后的底面高度：缩放后的 min.y——相机取景锚点按它落位。
-        // 不画地面：模型自己站住即可（要背景色走数据区 clear）。
+        // Bottom height of the normalized model: min.y after scaling — the camera framing anchor sits on it.
+        // No ground plane: the model standing on its own is enough (for a background color use the data area's clear).
         let bottom = (aabb.min().y + c.y) * s;
-        // 相机绕底面中心上方取景，首帧即对准主体
+        // Frame the camera above the bottom-center so the first frame already faces the subject
         let cam_target = vec3(0.0, bottom + 1.0, 0.0);
         let pos = cam_target + vec3(2.8, 1.6, 7.0);
         self.camera.set_view(pos, cam_target, vec3(0.0, 1.0, 0.0));
-        // 主光 shadow map 每次场景内容变化后重建（模型参与投影）
+        // Rebuild the key light's shadow map after every scene content change (models participate in casting)
         self.relight();
         self.models.push(model);
         self.dirty = true;
     }
 
-    /// 用当前场景几何重建主光 shadow map。
+    /// Rebuild the key light's shadow map from the current scene geometry.
     fn relight(&mut self) {
         let geoms = self
             .models
@@ -237,16 +237,16 @@ impl State {
 
 thread_local! {
     static CTXS: RefCell<Vec<Option<Rc<RefCell<State>>>>> = const { RefCell::new(Vec::new()) };
-    /// 异步加载完成的模型暂存：回调里绝不碰 CTXS（frame() 的 borrow_mut
-    /// 正在进行中，直接借会 RefCell 冲突 panic）；留给下一次 frame 取走。
+    /// Staging area for models that finished async loading: the callback never touches CTXS (frame()'s borrow_mut
+    /// is in progress, and borrowing directly panics on a RefCell conflict); the next frame takes them.
     static LOADED: RefCell<Vec<(u32, String, three_d_asset::Model)>> = const { RefCell::new(Vec::new()) };
 }
 
 fn with_ctx<T>(ctx: u32, f: impl FnOnce(&mut State) -> T) -> Result<T, JsError> {
-    // 关键：CTXS 的 borrow_mut 只覆盖"取 Rc"一步，绝不能覆盖 f 的执行——
-    // f 里的 render/GPU 调用可能重入 JS（事件、rAF 里再进 mount/frame），
-    // 借着 CTXS 时被撞上就是 panic_already_borrowed。窄借窗口后，
-    // 并发安全只落在 State 自己的 RefCell 上，f 期间其他 ctx 仍可进出。
+    // Key point: CTXS's borrow_mut covers only the "take the Rc" step, never f's execution —
+    // render/GPU calls inside f can re-enter JS (events, mount/frame from rAF),
+    // and landing there while CTXS is borrowed is panic_already_borrowed. With a narrow borrow window,
+    // concurrency safety rests on State's own RefCell alone, and other ctxs can still come and go during f.
     let rc = CTXS.with(|c| {
         c.borrow_mut()
             .get(ctx as usize)
@@ -258,8 +258,8 @@ fn with_ctx<T>(ctx: u32, f: impl FnOnce(&mut State) -> T) -> Result<T, JsError> 
     Ok(f(&mut s))
 }
 
-/// 加载过渡层：在宿主容器里居中转圈。样式随模块自带（模块可能从 CDN 加载，
-/// 不能依赖宿主页面 CSS）；容器设成定位祖先，过渡层才贴合容器尺寸。
+/// Loading overlay: a centered spinner in the host container. Styles ship with the module (it may be loaded from a CDN
+/// so it cannot rely on the host page's CSS); the container is made a positioning ancestor so the overlay matches its size.
 fn overlay_build(canvas: &web_sys::HtmlCanvasElement) -> Option<web_sys::Element> {
     let doc = web_sys::window()?.document()?;
     let host = canvas.parent_element()?;
@@ -282,8 +282,8 @@ fn overlay_build(canvas: &web_sys::HtmlCanvasElement) -> Option<web_sys::Element
     Some(el)
 }
 
-/// 需要时建出过渡层（幂等）。句柄在借用里只做 clone，DOM 操作放在借用之外
-/// ——不跨回调持有 thread_local 借用（Pitfalls）。
+/// Build the overlay when needed (idempotent). Inside the borrow the handle is only cloned; DOM work happens outside
+/// it — never hold a thread_local borrow across a callback (Pitfalls).
 fn overlay_ensure(ctx: u32) {
     let canvas = with_ctx(ctx, |s| {
         if s.overlay.is_some() {
@@ -300,7 +300,7 @@ fn overlay_ensure(ctx: u32) {
     }
 }
 
-/// 装载队列空了就收掉过渡层——一次载荷多名资产时中途不闪。
+/// Remove the overlay once the load queue is empty — no flicker midway when one payload carries several assets.
 fn overlay_hide_if_idle(ctx: u32) {
     let el = with_ctx(ctx, |s| {
         if s.pending.is_empty() {
@@ -314,7 +314,7 @@ fn overlay_hide_if_idle(ctx: u32) {
     }
 }
 
-/// 契约 mount：canvas + 自定义数据区（CBOR）+ 宿主通道（本示例不用，留口）。
+/// Contract mount: canvas + custom data area (CBOR) + host channel (unused in this example, kept as a hook).
 #[wasm_bindgen]
 pub fn mount(canvas: web_sys::HtmlCanvasElement, data: JsValue, _host: JsValue) -> Result<u32, JsError> {
     install_panic_hook();
@@ -338,8 +338,8 @@ pub fn mount(canvas: web_sys::HtmlCanvasElement, data: JsValue, _host: JsValue) 
         100.0,
     );
     let state = Rc::new(RefCell::new(State {
-        // 三灯布光：key 从左上前方打（后续带 shadow map），fill 从右前弱补，
-        // rim 从后上方勾轮廓，ambient 兜底防死黑。
+        // Three-light rig: key from upper front-left (with shadow map later), a weak fill from front-right,
+        // rim from rear above for an outline, ambient as a floor against pitch black.
         ambient: AmbientLight::new(&context, 0.35, Srgba::WHITE),
         key_light: DirectionalLight::new(&context, 2.2, Srgba::WHITE, vec3(-0.5, -0.9, -0.4)),
         fill_light: DirectionalLight::new(&context, 0.6, Srgba::new(190, 205, 255, 255), vec3(0.7, -0.2, -0.3)),
@@ -351,7 +351,7 @@ pub fn mount(canvas: web_sys::HtmlCanvasElement, data: JsValue, _host: JsValue) 
         seen: HashSet::new(),
         pending: VecDeque::new(),
         current_assets: Vec::new(),
-        // 默认全透明：画布不画底色，透出宿主页面（要底色走数据区 clear）
+        // Fully transparent by default: the canvas paints no background, the host page shows through (for a color use the data area's clear)
         clear: [0.0, 0.0, 0.0, 0.0],
         dirty: true,
         size,
@@ -368,7 +368,7 @@ pub fn mount(canvas: web_sys::HtmlCanvasElement, data: JsValue, _host: JsValue) 
     Ok(id)
 }
 
-/// 契约 update：数据区增量（append/patch 后的全量重推）——幂等消费。
+/// Contract update: data-area deltas (a full re-push after append/patch) — consumed idempotently.
 #[wasm_bindgen]
 pub fn update(ctx: u32, data: JsValue) -> Result<(), JsError> {
     let spec = decode(&data)?;
@@ -376,7 +376,7 @@ pub fn update(ctx: u32, data: JsValue) -> Result<(), JsError> {
     Ok(())
 }
 
-/// 契约 resize：canvas 像素尺寸由宿主定。
+/// Contract resize: the canvas pixel size is the host's call.
 #[wasm_bindgen]
 pub fn resize(ctx: u32, w: u32, h: u32) -> Result<(), JsError> {
     with_ctx(ctx, |s| {
@@ -388,7 +388,7 @@ pub fn resize(ctx: u32, w: u32, h: u32) -> Result<(), JsError> {
     Ok(())
 }
 
-/// 契约 unmount：释放状态；canvas/GL 由浏览器回收。
+/// Contract unmount: drop the state; the canvas/GL is reclaimed by the browser.
 #[wasm_bindgen]
 pub fn unmount(ctx: u32) {
     CTXS.with(|c| {
@@ -398,10 +398,10 @@ pub fn unmount(ctx: u32) {
     });
 }
 
-/// 宿主 rAF 驱动的一帧：先泵异步 asset，再按脏位重绘。
+/// One frame driven by the host's rAF: pump async assets first, then redraw if dirty.
 #[wasm_bindgen]
 pub fn frame(ctx: u32) -> Result<(), JsError> {
-    // 上一次异步加载的成果先落场景（在本次 borrow 窗口内，无跨域借用冲突）
+    // Land the previous async load into the scene first (inside this borrow window, so no cross-domain borrow conflict)
     let mut arrived: Vec<three_d_asset::Model> = Vec::new();
     LOADED.with(|q| {
         let mut rest = Vec::new();
@@ -419,11 +419,11 @@ pub fn frame(ctx: u32) -> Result<(), JsError> {
     }
     let job = with_ctx(ctx, |s| s.pump())?;
     if let Some((id, url)) = job {
-        // 拉取期间在容器里转圈（three-d 侧没有自带进度；自带的加载 UI 只有泼溅
-        // 那边的 GS3D 有）
+        // Spin in the container during the fetch (three-d has no built-in progress; the only built-in loading UI
+        // is in GS3D over on the splash side)
         overlay_ensure(ctx);
-        // reqwest 只吃绝对 URL：相对 url 按 document.baseURI 归一化
-        // （载荷约定同源相对路径，示例 `/assets/3dbrowser/tile.glb`）。
+        // reqwest only accepts absolute URLs: resolve a relative url against document.baseURI
+        // (payloads are specified as same-origin relative paths, e.g. `/assets/3dbrowser/tile.glb`).
         let base = web_sys::window()
             .and_then(|w| w.document())
             .and_then(|d| d.base_uri().ok().flatten())
@@ -431,13 +431,13 @@ pub fn frame(ctx: u32) -> Result<(), JsError> {
         let url = web_sys::Url::new_with_base(&url, &base)
             .map(|u| u.href())
             .unwrap_or(url);
-        // 异步加载：成功后回注 LOADED，下一次 frame 在借用窗口内落场景；
-        // 失败的 asset 不回 seen，下次 update 可重试
+        // Async load: on success push back into LOADED, and the next frame lands it inside the borrow window;
+        // a failed asset is not returned to seen, so the next update can retry
         wasm_bindgen_futures::spawn_local(async move {
             match three_d_asset::io::load_async(&[&url]).await {
                 Ok(mut loaded) => {
-                    // 失败原因必须落到 console：`.ok()` 吞掉它，缺 feature /
-                    // 未知扩展这类问题会表现成"模型静默不显示"
+                    // The failure reason must reach the console: `.ok()` swallows it, and problems like a missing feature /
+                    // unknown extension show up as "the model silently doesn't appear"
                     match loaded.deserialize(&url) {
                         Ok(cpu) => LOADED.with(|q| q.borrow_mut().push((ctx, id, cpu))),
                         Err(e) => {
@@ -453,7 +453,7 @@ pub fn frame(ctx: u32) -> Result<(), JsError> {
                     forget(ctx, &id);
                 }
             }
-            // 队列空了才收过渡层：一次载荷多名资产时不中途闪
+            // Remove the overlay only when the queue is empty: no mid-way flicker when one payload carries several assets
             overlay_hide_if_idle(ctx);
         });
     }
@@ -480,7 +480,7 @@ fn forget(ctx: u32, id: &str) {
     }
 }
 
-/// 左键拖拽 = 绕 target 旋转（index.js 装事件后转发进来）。
+/// Left-button drag = orbit around the target (index.js installs the events and forwards them here).
 #[wasm_bindgen]
 pub fn push_drag(ctx: u32, dx: f32, dy: f32) {
     with_ctx(ctx, |s| {
@@ -491,7 +491,7 @@ pub fn push_drag(ctx: u32, dx: f32, dy: f32) {
     .ok();
 }
 
-/// 滚轮 = 推拉视角。
+/// Wheel = dolly the view.
 #[wasm_bindgen]
 pub fn push_wheel(ctx: u32, delta: f32) {
     with_ctx(ctx, |s| {
@@ -501,9 +501,9 @@ pub fn push_wheel(ctx: u32, delta: f32) {
     .ok();
 }
 
-/// 右键拖拽 = 平移（与 three.js OrbitControls 的 pan 同感）：相机连同 target
-/// 沿相机的 right/up 平面移动。步长按视距缩放——屏幕上同样一段拖拽，近处
-/// 移动的世界单位少、远处多，手感和轨道控制器一致。
+/// Right-button drag = pan (same feel as three.js OrbitControls' pan): the camera and the target move
+/// together along the camera's right/up plane. The step scales with view distance — for the same drag on screen,
+/// near moves fewer world units and far moves more, matching an orbit controller's feel.
 #[wasm_bindgen]
 pub fn push_pan(ctx: u32, dx: f32, dy: f32) {
     with_ctx(ctx, |s| {

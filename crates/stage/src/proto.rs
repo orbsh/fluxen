@@ -87,10 +87,10 @@ fn has_retired_key(v: &serde_yaml::Value) -> bool {
     }
 }
 
-/// 只读的节点带了 `sink:` —— serde 会静默丢掉这个键（`Bind` 之外的节点不收未知字段，
-/// 但没有 `deny_unknown_fields`，因为内部标记的枚举臂一旦收紧，schemars 就把每个臂
-/// 内联展开，`$defs` 的具名类型随之消失，SDK 生成器只能按顺序编号）。所以"接了不支持的
-/// 通道"这条错误在这里响亮地报，而不是在 serde 里。
+/// A read-only node carrying `sink:` — serde would silently drop that key (nodes other than `Bind` take no unknown fields,
+/// but there is no `deny_unknown_fields`, because once the internally tagged enum arms are tightened, schemars expands every arm
+/// inline and the named types under `$defs` disappear with it, leaving the SDK generator to number them by order). So the "took a channel
+/// it does not support" error is reported loudly here, rather than inside serde.
 fn illegal_channel(v: &serde_yaml::Value) -> Option<String> {
     const WRITERS: &[&str] = &["input", "select", "button", "bundle", "frame"];
     match v {

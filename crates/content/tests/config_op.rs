@@ -29,7 +29,7 @@ fn several_members_land_in_one_frame() {
 
 #[test]
 fn a_null_member_is_a_member() {
-    // 清除是渲染器对 "null" 的解释，线上它只是一个成员值。
+    // Clearing is the renderer's reading of "null"; on the wire it is just a member value.
     let c: Content<Value> =
         serde_json::from_value(json!({"action": "config", "data": {"skin": null}})).unwrap();
     let Content::Config(op) = c else {
@@ -49,7 +49,7 @@ fn an_empty_object_is_a_valid_frame_that_changes_nothing() {
 
 #[test]
 fn a_frame_without_data_is_refused() {
-    // 没有 data 不等于"不修改"：那是生产者的 bug，按 ADR 0003 大声失败。
+    // No data is not the same as "no change": that is a producer bug, so fail loudly as ADR 0003 says.
     let r: Result<Content<Value>, _> = serde_json::from_value(json!({"action": "config"}));
     assert!(r.is_err());
 }

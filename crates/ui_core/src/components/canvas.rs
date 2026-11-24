@@ -8,17 +8,17 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
-/// 外部渲染模块的原位挂载（ADR 0007）。这是**唯一**的可视化宿主：
+/// In-place mounting of an external render module (ADR 0007). This is the **only** visualization host:
 ///
-/// 核心不知道模块是什么：url 指向 ES module，须导出
-/// mount/update/resize/unmount 四函数；数据区（`bind["value"]` 惯例）
-/// 以 CBOR 字节推给模块，语义完全归模块（3dbrowser 用
-/// `{primitives, assets}`，g2chart 用 G2 spec）。渲染循环与输入事件归
-/// 模块自己，宿主只提供容器、载荷变化通知与尺寸。
+/// The core does not know what a module is: the url points to an ES module that must export
+/// mount/update/resize/unmount, four functions; the data area (the `bind["value"]` convention)
+/// is pushed to the module as CBOR bytes, and the semantics belong entirely to the module (3dbrowser uses
+/// `{primitives, assets}`, g2chart uses a G2 spec). The render loop and input events belong to
+/// the module itself; the host only provides the container, payload-change notification and size.
 ///
-/// 宿主不认识模块是什么，也不给它分类：`url` 指向能导出四个函数的 ES module，
-/// 种类只在数据里。图表、编辑器、关系图、流程图都是同一个节点 + 不同的 url，
-/// 框架里没有它们的名字（ADR 0020）。
+/// The host does not know what a module is and does not classify it: `url` points to an ES module that exports four functions,
+/// and the kind lives only in the data. Charts, editors, relation graphs and flowcharts are the same node + different urls;
+/// the framework has no names for them (ADR 0020).
 pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
     let style = accrete
         .attrs
@@ -45,7 +45,7 @@ pub fn canvas_(accrete: Canvas, ctx: &Ctx, id: String) -> AnyView {
 
 
 
-/// `source` → (scope, 槽名, inline default). A literal keeps its default; a
+/// `source` → (scope, slot name, inline default). A literal keeps its default; a
 /// slot keeps its address, and the scope says which plane it is read from.
 fn bind_value(a: &impl AccreteOps) -> (Option<(accrete::Scope, String)>, Option<Value>) {
     match a.get_source() {
@@ -57,10 +57,10 @@ fn bind_value(a: &impl AccreteOps) -> (Option<(accrete::Scope, String)>, Option<
     }
 }
 
-/// 空载荷判据（ADR 0012）：宿主为缺失/空槽合成的那个值——`Null` 或零条目
-/// map，即下文 `payload` 的"尚无数据"。空的 data 区 = 不占位：容器收起，
-/// 载荷第一次非空时按节点尺寸撑开。除 `{}`/`Null` 之外的任何值（含空串、
-/// 空数组）都算"有数据"，语义只看数据有没有，不猜内容。
+/// Empty-payload criterion (ADR 0012): the value the host synthesises for a missing/empty slot — `Null` or a zero-entry
+/// map, i.e. "no data yet" for `payload` below. An empty data area = takes no place: the container collapses,
+/// and opens up to the node's size the first time the payload is non-empty. Anything other than `{}`/`Null` (an empty string,
+/// an empty array included) counts as "has data"; the semantics look only at whether there is data, never guessing at content.
 pub(crate) fn payload_is_empty(v: &Value) -> bool {
     match v {
         Value::Null => true,
@@ -69,14 +69,14 @@ pub(crate) fn payload_is_empty(v: &Value) -> bool {
     }
 }
 
-/// 不占位时容器的样式（ADR 0012）。用内联样式而不是 `hide` 类：`.f` 与
-/// `.hide` 同 div 实测互相压制（见 Pitfalls），内联无此歧义。canvas/chart 宿主
-/// 与 layer（ADR 0014）共用。
+/// The container's style while it takes no place (ADR 0012). Inline style rather than the `hide` class: `.f` and
+/// `.hide` on the same div were measured suppressing each other (see Pitfalls), and inline has no such ambiguity. Shared by the canvas/chart host
+/// and layer (ADR 0014).
 pub(crate) const HIDDEN_STYLE: &str = "display: none;";
 
-/// 挂载全逻辑：解析载荷闭包 → import(url) → 契约检查 → mount →
-/// update 订阅 → ResizeObserver → unmount。失败路径一律 warn + 空容器
-/// （fail-loud，对齐 ADR 0003 惯例）。
+/// All of the mounting logic: resolve the payload closure → import(url) → contract check → mount →
+/// update subscription → ResizeObserver → unmount. Every failure path is warn + empty container
+/// (fail-loud, matching the ADR 0003 convention).
 fn mount_module(
     id: &str,
     url: &str,
@@ -87,12 +87,12 @@ fn mount_module(
     options: Option<Value>,
     ctx: &Ctx,
 ) -> AnyView {
-    // 载荷解析：literal default 直用；有槽则读槽内节点（其 source.default
-    // 优先，否则整个节点 JSON），`scope: local` 先看本页的值平面。
-    // 流式喂数据 = 对源槽 set/patch（ADR 0005 指针协议），零新机制。
-    // 空槽/无载荷 = `{}`：模块的 spec 全字段有默认，空 map 是合法
-    // "尚无数据"；喂 null 会让严格 decode 的模块 mount 即拒——而
-    // "先挂空布局、后写数据槽"正是流式标准顺序（e2e 抓到的缺陷）。
+    // Payload resolution: a literal default is used directly; with a slot, read the node in the slot (its source.default
+    // first, otherwise the whole node JSON), and `scope: local` looks at this page's value plane first.
+    // Streaming data = set/patch on the source slot (ADR 0005 pointer protocol), zero new machinery.
+    // Empty slot/no payload = `{}`: every field of a module's spec has a default, so an empty map is a legitimate
+    // "no data yet"; feeding null would make a module with strict decode reject at mount — and
+    // "mount the empty layout first, write the data slot later" is exactly the standard streaming order (a defect caught by e2e).
     let empty = Value::Object(Default::default());
     let inline = inline_default.unwrap_or(Value::Null);
     let payload: Rc<dyn Fn() -> Value> = {
@@ -123,20 +123,20 @@ fn mount_module(
         })
     };
 
-    // 占位随载荷生效（ADR 0012）：空的 data 区 = 不占位。判据同 `payload` 的
-    // "尚无数据"（见 `payload_is_empty`）——这里只是把它从载荷语义延伸到占位
-    // 语义，零新词汇、wire 不变。
-    // 这里只给**构建那一刻**的值（模块挂载前、以及行重建后都由它定）；挂载
-    // 之后的同步在下面 update Effect 里做：可响应式属性（`.style(闭包)`）要求
-    // 闭包 `Send`，而判空必须读槽（`Ctx` 非 Send），所以走 Effect 的命令式写入。
-    // 撑开不重挂：容器从隐藏转为可见、尺寸就位后，由模块自己的
-    // ResizeObserver → resize() 接手重画，import 不重跑、GL 上下文不丢。
+    // Placement follows the payload (ADR 0012): an empty data area = takes no place. The criterion is the same "no
+    // data yet" as `payload` (see `payload_is_empty`) — this only extends it from payload semantics to placement
+    // semantics, zero new vocabulary and the wire is unchanged.
+    // This gives only the value at **the moment of construction** (it decides before the module mounts and again after a row rebuild);
+    // the sync after mounting happens in the update Effect below: a reactive attribute (`.style(closure)`) requires
+    // the closure to be `Send`, while the emptiness test must read a slot (`Ctx` is not Send), hence the imperative write through an Effect.
+    // Opening up does not remount: once the container goes from hidden to visible and the size is in place, the module's own
+    // ResizeObserver → resize() takes over redrawing; import does not rerun and the GL context is not lost.
     let style_now = if payload_is_empty(&payload()) {
         HIDDEN_STYLE.to_string()
     } else {
         style.clone()
     };
-    // 非空时写回容器的尺寸样式：挂载段（update Effect）与载荷看守各持一份。
+    // When non-empty, write the node's size style back to the container: the mounting section (update Effect) and the payload guard each hold one.
     let size_style = style.clone();
     let style_w = style;
 
@@ -144,25 +144,25 @@ fn mount_module(
     let el_id = id.to_string();
     let ctx2 = ctx.clone();
     let url = url.to_string();
-    // 模块私有选项（ADR 0017）：wire Value 原样序列化成 JSON 文本，到 mount 那一跳
-    // 才 `JSON.parse` 成 JS 对象（第四参）。不套 CBOR——它是挂载期一次性配置、不流式，
-    // 模块不必为它背解码器；数据面（data）仍是 CBOR，两条腿分工不同。
-    // 缺省/Null = `{}`：模块自己套默认值，宿主不猜任何键。
+    // Module-private options (ADR 0017): the wire Value is serialised verbatim as JSON text, and only at the mount hop
+    // is it `JSON.parse`d into a JS object (fourth argument). No CBOR — this is one-off configuration at mount time, not streaming,
+    // so modules need not carry a decoder for it; the data plane (data) is still CBOR, the two legs have different jobs.
+    // Absent/Null = `{}`: the module applies its own defaults, the host guesses no keys.
     let options_json = match options {
         None | Some(Value::Null) => "{}".to_string(),
         Some(v) => v.to_string(),
     };
     nr.on_load(move |el| {
-        // on_load 交回的就是宿主自己建的那个 div，类型收窄只可能成功。
+        // on_load hands back the very div the host built, so the type narrowing can only succeed.
         #[allow(clippy::expect_used)]
         let el: web_sys::HtmlElement = el.dyn_into().expect("div is element");
-        // 幂等护栏（原地 rebuild 会重跑 on_load）：状态写在元素属性上。
-        // 1) 标 "true" 且容器里还有模块写进去的内容 → 活着，什么都不做；
-        // 2) 标 "true" 但内容被重建抹掉（tachys 按视图重写宿主子节点，只留
-        //    占位注释）→ 标记清掉 = 当作没挂过，下面的看守会重挂；
-        // 3) 其余 → 装看守（"pending" = 挂载在途，看守只同步样式，不重发）。
-        // splatviewer 这类 CDN 模块 import 慢，行重建必然落在挂载窗口内，
-        // 所以只有它暴露过；3dbrowser 是本地 wasm、毫秒级，从未踩到。
+        // Idempotency guard (an in-place rebuild reruns on_load): the state is written on the element's attribute.
+        // 1) marked "true" and the container still has content the module wrote into it → alive, do nothing;
+        // 2) marked "true" but the content was wiped by a rebuild (tachys rewrites the host's child nodes per view, leaving only a
+        //    placeholder comment) → clear the marker = treat as never mounted, and the guard below remounts;
+        // 3) anything else → install the guard ("pending" = mount in flight, the guard only syncs style, does not re-issue).
+        // CDN modules like splatviewer import slowly, so a row rebuild inevitably lands inside the mount window,
+        // which is why only it ever exposed this; 3dbrowser is local wasm, milliseconds, and never hit it.
         let mounted = el.get_attribute("data-module-mounted");
         if mounted.as_deref() == Some("true") && el.child_element_count() > 0 {
             return;
@@ -171,14 +171,14 @@ fn mount_module(
             el.remove_attribute("data-module-mounted").ok();
         }
 
-        // ADR 0007 的 import + mount 归**首次非空载荷**触发，不挂在 on_load 上
-        // （2026-10-14 用户裁决：组件的库要"用到才加载"——一个绑了槽、数据还
-        // 没到位的 canvas 不许先把 three.js / G2 / wasm 拉下来）。ADR 0012 的
-        // "空载荷不占位"因此从容器样式延伸到模块加载：空载荷 = 零 import。
-        // 本 Effect 是唯一的挂载发起者：读槽 → 同步占位样式 → 载荷非空且宿主
-        // 上还没有挂载标记 → import + mount；之后的变化走既有 update 腿。
-        // 挂载标记仍是唯一状态源，所以 rebuild 重跑 on_load 装出来的第二个
-        // 看守不会重复发起。
+        // ADR 0007's import + mount is triggered by **the first non-empty payload**, not hooked on on_load
+        // (user ruling 2026-10-14: a component's library must be "loaded on use" — a canvas bound to a slot whose data has
+        // not arrived must not pull down three.js / G2 / wasm first). ADR 0012's
+        // "an empty payload takes no place" therefore extends from container style to module loading: empty payload = zero import.
+        // This Effect is the only mount initiator: read the slot → sync the placement style → payload non-empty and the host
+        // has no mount marker yet → import + mount; later changes go through the existing update leg.
+        // The mount marker is still the single source of state, so a second guard installed by a rebuild rerunning on_load
+        // will not initiate twice.
         let el_w = el.clone();
         let id_w = el_id.clone();
         let url_w = url.clone();
@@ -197,9 +197,9 @@ fn mount_module(
                 }
             }
             let p = payload_w();
-            // ADR 0012：占位随载荷生效——空载荷收起容器，非空写回节点尺寸。
-            // 每次运行都写（幂等）。撑开不重挂：尺寸就位后由模块自己的
-            // ResizeObserver → resize() 接手，import 不重跑、GL 上下文不丢。
+            // ADR 0012: placement follows the payload — an empty payload collapses the container, a non-empty one writes the node's size back.
+            // Every run writes (idempotently). Opening up does not remount: once the size is in place, the module's own
+            // ResizeObserver → resize() takes over; import does not rerun and the GL context is not lost.
             let want = if payload_is_empty(&p) {
                 HIDDEN_STYLE.to_string()
             } else {
@@ -217,24 +217,24 @@ fn mount_module(
             let payload0 = Rc::clone(&payload_w);
             let size_style = size_style.clone();
             let opts_json = options_w.clone();
-            // 属性写入失败只可能是元素已脱离文档；标记是幂等护栏，不是数据面。
+            // A failed attribute write can only mean the element left the document; the marker is an idempotency guard, not a data plane.
             #[allow(clippy::expect_used)]
             el.set_attribute("data-module-mounted", "pending")
                 .expect("set mounted marker");
-            // mount 真正推给模块的载荷 = 触发挂载的那份，也必须是下面 update 的
-            // 基线：不能到那一步再重新读一次槽——槽写入若落在 import/mount 这个
-            // 窗口里（append 行与 set 载荷背靠背发出就是常态），重读会把新值当成
-            // 基线，Effect 判定"没变化"→ update 永不触发 → 模块停在挂载时的空
-            // spec 上。症状：宿主标了 mounted、canvas 在，资产却一个都不请求
-            // （本地 wasm 模块的 import 窗口被写者间隔掩盖，CDN 模块必现）。
+            // The payload mount actually pushes to the module = the one that triggered the mount, and it must also be the baseline of
+            // the update below: the slot must not be read again at that point — if a slot write lands inside the import/mount
+            // window (an append row and a set payload sent back to back is the normal case), re-reading would take the new value as the
+            // baseline, the Effect would judge "no change" → update never fires → the module stays on the empty
+            // spec it mounted with. Symptom: the host is marked mounted and the canvas is there, yet not one asset is requested
+            // (the import window of a local wasm module is masked by the writer's interval; a CDN module shows it every time).
             let mounted_payload = p;
             leptos::task::spawn_local(async move {
-                // 初始数据（CBOR 字节）——mount 的 data 参数
+                // Initial data (CBOR bytes) — the data argument of mount
                 let data0 = encode(&mounted_payload);
 
-                // 宿主通道：host.send(event, cborBytes) → 现有动作帧上行。
-                // 闭包持 Rc<Ctx> + id，事件名与解码后的 JSON 一起交给
-                // ctx.send（与表单 submit 同一条 uplink）。
+                // Host channel: host.send(event, cborBytes) → the existing action frame uplink.
+                // The closure holds Rc<Ctx> + id, and hands the event name plus the decoded JSON to
+                // ctx.send (the same uplink as a form submit).
                 let host = js_sys::Object::new();
                 let cb = Closure::<dyn FnMut(String, js_sys::Uint8Array)>::new(
                     {
@@ -254,10 +254,10 @@ fn mount_module(
                     },
                 );
                 let _ = js_sys::Reflect::set(&host, &JsValue::from_str("send"), cb.as_ref());
-                // cb 不 drop（closure 转成 JS 函数后被模块持有，泄漏归模块生命周期管）
-                cb.into_js_value(); // 让所有权交给 JS，宿主不再 retain
+                // cb is not dropped (once the closure becomes a JS function the module holds it, so the leak is the module's lifetime to manage)
+                cb.into_js_value(); // hand ownership to JS, the host no longer retains it
 
-                // 动态 import(url)。任何契约失败 = warn + 空容器（fail-loud，不猜）。
+                // Dynamic import(url). Any contract failure = warn + empty container (fail-loud, no guessing).
                 let module = match import_module(&url).await {
                     Some(m) => m,
                     None => {
@@ -279,12 +279,12 @@ fn mount_module(
                     return;
                 };
 
-                // mount(el, data, host, options) → ctx id（同步或 Promise<ctx>）
-                // options 是 JS 对象（ADR 0017）：挂载期一次性配置，模块自己解释。
+                // mount(el, data, host, options) → ctx id (sync or Promise<ctx>)
+                // options is a JS object (ADR 0017): one-off configuration at mount time, interpreted by the module itself.
                 let opts: JsValue = match js_sys::JSON::parse(&opts_json) {
                     Ok(v) => v,
                     Err(e) => {
-                        // 文本来自 serde_json，正常不会失败；失败当空配置挂载（不挡渲染）。
+                        // The text comes from serde_json and normally cannot fail; on failure mount with an empty configuration (does not block rendering).
                         tracing::warn!("module host {id}: options not JSON: {e:?}");
                         js_sys::Object::new().into()
                     }
@@ -314,13 +314,13 @@ fn mount_module(
                 } else {
                     ret
                 };
-                // 挂载真正成功后才置 "true"（护栏只认它）；此前是 "pending" ——
-                // 进行中的挂载不会被 rebuild 触发的 on_load 重复发起。
+                // Only set "true" once the mount actually succeeds (the guard honours only that); before that it is "pending" —
+                // an in-progress mount is not re-initiated by an on_load triggered by a rebuild.
                 el.set_attribute("data-module-mounted", "true").ok();
 
-                // 数据区变化 → update(cid, cbor)：Effect 订阅源槽，比对载荷。
+                // Data area changes → update(cid, cbor): the Effect subscribes to the source slot and compares payloads.
                 {
-                    // 基线 = 挂载时推给模块的那份，不是此刻重读的槽值（见上）。
+                    // Baseline = the one pushed to the module at mount, not the slot value re-read now (see above).
                     let mut last = mounted_payload;
                     let cid = cid.clone();
                     let update = update.clone();
@@ -338,12 +338,12 @@ fn mount_module(
                             }
                         }
                         let p = payload0();
-                        // ADR 0012：占位随载荷生效——空载荷收起容器，非空写回节点
-                        // 尺寸（`size_style`）。每次运行都写（幂等）：载荷若在挂载
-                        // 完成前就到了，构建那一刻的值还是"空"，而这一跑同时是
-                        // p == last 的情形（进不了下面的 update 分支），它是唯一的
-                        // 同步机会。撑开本身不重挂——尺寸变化由模块自己的
-                        // ResizeObserver → resize() 接手。
+                        // ADR 0012: placement follows the payload — an empty payload collapses the container, a non-empty one writes the node's
+                        // size back (`size_style`). Every run writes (idempotently): if the payload arrived before mounting
+                        // completed, the value at construction time is still "empty", and this run is at the same time
+                        // the p == last case (it cannot enter the update branch below), so it is the only
+                        // chance to sync. Opening up itself does not remount — size changes are taken over by the module's own
+                        // ResizeObserver → resize().
                         let want = if payload_is_empty(&p) {
                             HIDDEN_STYLE.to_string()
                         } else {
@@ -363,8 +363,8 @@ fn mount_module(
                     });
                 }
 
-                // 尺寸归宿主：ResizeObserver 观察容器（css 像素）→ resize(cid, w, h)。
-                // dpr 换算与 canvas.width 设置归模块（见各 index.js）。
+                // Size belongs to the host: ResizeObserver watches the container (css pixels) → resize(cid, w, h).
+                // dpr conversion and setting canvas.width belong to the module (see each index.js).
                 {
                     let cid_ro = cid.clone();
                     let cb = Closure::<dyn FnMut(js_sys::Array, JsValue)>::new(
@@ -397,10 +397,10 @@ fn mount_module(
                         },
                     );
                     let ro = web_sys::ResizeObserver::new(cb.as_ref().unchecked_ref());
-                    // ro 若不可用（旧浏览器）只是不转发尺寸，不影响挂载
+                    // if ro is unavailable (old browser) sizes are simply not forwarded, which does not affect mounting
                     if let Ok(ro) = ro {
                         ro.observe(&el);
-                        cb.forget(); // observer 长期持有 callback
+                        cb.forget(); // the observer holds the callback long-term
                         let unmount = unmount.clone();
                         let ro_disconnect = ro.clone();
                         on_cleanup(move || {
@@ -430,9 +430,9 @@ fn mount_module(
         .into_any()
 }
 
-/// `import(new URL(url, document.baseURI))`——相对 url 也能用（CDN 绝对地址直通）。
-/// URL 解析整个放在 JS 侧完成：`new URL(...)` 返回 URL 对象而非字符串，
-/// Rust 侧 dyn_into::<JsString>() 永远失败（e2e 首跑抓到的缺陷）。
+/// `import(new URL(url, document.baseURI))` — relative urls work too (absolute CDN addresses pass straight through).
+/// URL parsing happens entirely on the JS side: `new URL(...)` returns a URL object rather than a string,
+/// so dyn_into::<JsString>() on the Rust side always fails (a defect caught on the first e2e run).
 async fn import_module(url: &str) -> Option<JsValue> {
     let escaped = url.replace('\\', "\\\\").replace('"', "\\\"");
     let script = format!("import(new URL(\"{escaped}\", document.baseURI).href)");
@@ -453,9 +453,9 @@ async fn import_module(url: &str) -> Option<JsValue> {
         }
     };
     match wasm_bindgen_futures::JsFuture::from(p).await {
-        // 注意：ES module namespace 对象原型链为 null，dyn_into::<Object>()
-        // （instanceof 语义）对它必然失败——保留 JsValue，契约查找走
-        // Reflect::get，对任意接收者有效。
+        // Note: an ES module namespace object has a null prototype chain, so dyn_into::<Object>()
+        // (instanceof semantics) necessarily fails on it — keep the JsValue, and contract lookup goes through
+        // Reflect::get, which works for any receiver.
         Ok(v) => Some(v),
         Err(e) => {
             tracing::warn!(
@@ -467,7 +467,7 @@ async fn import_module(url: &str) -> Option<JsValue> {
     }
 }
 
-/// Value → CBOR 字节（JS Uint8Array → wasm Vec<u8>）；边界传数据不传对象。
+/// Value → CBOR bytes (JS Uint8Array → wasm Vec<u8>); hand data across the boundary, not objects.
 fn encode(v: &Value) -> js_sys::Uint8Array {
     let mut out = Vec::new();
     match ciborium::ser::into_writer(v, &mut out) {

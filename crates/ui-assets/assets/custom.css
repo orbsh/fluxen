@@ -46,9 +46,9 @@
         display: none;
     }
 
-    /* 左图右流：左边常驻关系图，右边消息流。宽度不够时先收缩左边——
-       流那一栏带 620px 的基准宽度且不参与收缩，图这一栏吸收全部压缩；
-       800px 以下把图压到 240px 就不再收，继续窄才允许流自己收窄。 */
+    /* Graph left, stream right: the relation graph lives on the left, the message stream on the right. When the width runs short the left side shrinks first —
+       the stream column carries a 620px basis and does not shrink, so the graph column absorbs all the compression;
+       below 800px the graph is pressed down to 240px and stops shrinking, and only a narrower viewport lets the stream narrow itself. */
     .stage-graph {
         flex: 1 1 40%;
         min-width: 0;
@@ -59,10 +59,10 @@
         min-width: 0;
     }
 
-    /* 贴右边缘的落点（ADR 0034）：落点就是框本身（没有内层 panel 了），所以
-       「常态一条细条、拖拽在飞时展开」这套几何也长在框上。绝对定位在右边缘：
-       宽度一变不推挤邻居（拖拽期间光标下面的内容不许移动），`right: 0` 让它
-       向左长——长在流里会直接长到屏幕外。 */
+    /* The drop target hugging the right edge (ADR 0034): the target is the box itself (there is no inner
+       panel any more), so the "a thin strip at rest, expands while a drag is in flight" geometry grows on the box too.
+       Absolutely positioned at the right edge: a width change pushes no neighbour around (the content
+       under the cursor must not move during a drag), and `right: 0` lets it grow leftwards — in the flow it would grow straight off screen. */
     .--rail {
         position: absolute;
         top: 0;

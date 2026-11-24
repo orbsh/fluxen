@@ -1,7 +1,7 @@
-//! Canvas 的 options 动态袋（ADR 0017）：核心只搬字节，不解释任何键。
+//! Canvas's options dynamic bag (ADR 0017): the core only moves bytes, it interprets no key.
 //!
-//! 三条不变量：往返不丢模块私有词汇、缺省时 wire 上不出现该键、patch 能按
-//! wire 形状寻址到袋里的深层键（与 ADR 0005 的指针词法同一套）。
+//! Three invariants: a round trip loses no module-private vocabulary, the key is absent from the wire when unused, and patch can
+//! address deep keys inside the bag by the wire shape (the same pointer vocabulary as ADR 0005).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use accrete::{Accrete, AccreteOps};
@@ -13,8 +13,8 @@ fn accrete(js: Value) -> Accrete {
 
 #[test]
 fn options_roundtrip_keeps_module_vocabulary() {
-    // 3d-force-graph 的词汇（节点尺寸、力参数、配色）——核心一个都不认识，
-    // 往返只搬字节：这是"变体不进 accrete"的可执行形式。
+    // 3d-force-graph's vocabulary (node sizes, force parameters, colours) — the core knows none of them,
+    // a round trip only moves bytes: this is the executable form of "variants do not enter accrete".
     let src = json!({
         "type": "canvas",
         "url": "/assets/forcegraph/index.js",

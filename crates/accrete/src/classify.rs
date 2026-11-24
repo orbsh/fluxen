@@ -88,7 +88,7 @@ impl PositionAttr {
 }
 
 impl PanelAttr {
-    /// 浮层（`place: anchor`）的排布方向：`direction` 说的那条边决定主轴。
+    /// Layout direction of a floating layer (`place: anchor`): the edge `direction` names decides the main axis.
     pub fn direction_style(&self) -> String {
         match &self.direction {
             Some(Direction::D) => "flex-direction: column".to_string(),

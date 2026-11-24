@@ -9,7 +9,7 @@ use syn::{parse_file, parse_macro_input};
 mod attrs;
 use attrs::Attrs;
 
-/// 遍历 accrete 源码，收集 struct 是否带 `sub` 字段、枚举各变体信息。
+/// Walk the accrete source, collecting whether each struct has a `sub` field and each enum variant's info.
 struct Field {
     name: String,
     r#type: String,
@@ -37,7 +37,7 @@ fn walk(ast: &syn::File) -> HashMap<String, CompInfo> {
                     .variants
                     .iter()
                     .map(|v| {
-                        // 取第一个 field 的类型名
+                        // Take the type name of the first field
                         let ty = v
                             .fields
                             .iter()
@@ -51,7 +51,7 @@ fn walk(ast: &syn::File) -> HashMap<String, CompInfo> {
                                 }
                             })
                             .unwrap_or_default();
-                        // 解析 #[ui_acrete(has_id = "true")]
+                        // Parse #[ui_acrete(has_id = "true")]
                         let has_id = v.attrs.iter().any(|a| {
                             a.path().is_ident("ui_acrete")
                                 && a.parse_args_with(|input: syn::parse::ParseStream| {
@@ -135,7 +135,7 @@ fn gen_dispatch_inner(cfg: &Attrs) -> syn::Result<proc_macro2::TokenStream> {
             .unwrap_or(false);
 
         let call = if f.has_id {
-            // 有 id 的组件：生成回退 id 计数器，传给组件
+            // Components with an id: generate a fallback id counter and pass it to the component
             let counter = Ident::new(&format!("ID_{}", f.name.to_uppercase()), Span::call_site());
             let tag = format!("{}-{{}}", f.name);
             quote! {
@@ -156,7 +156,7 @@ fn gen_dispatch_inner(cfg: &Attrs) -> syn::Result<proc_macro2::TokenStream> {
             quote! { crate::components::#comp(c.clone(), ctx) }
         };
 
-        // 有 sub 的容器由组件内部递归 dispatch，宏只负责分发
+        // Containers with a sub are dispatched recursively inside the component; the macro only dispatches
         let _ = has_sub;
 
         arms.push(quote! {
@@ -165,7 +165,7 @@ fn gen_dispatch_inner(cfg: &Attrs) -> syn::Result<proc_macro2::TokenStream> {
     }
 
     let out = quote! {
-        // HACK: 让 rustc 追踪 accrete 源码变化
+        // HACK: make rustc track changes to the accrete source
         const _: &[u8] = include_bytes!(#path_str);
 
         pub fn dispatch(#object: &#entry, ctx: &crate::Ctx) -> leptos::prelude::AnyView {

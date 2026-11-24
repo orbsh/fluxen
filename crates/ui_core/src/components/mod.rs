@@ -1,5 +1,5 @@
-//! 容器组件与叶子组件入口。宏 `gen_dispatch!` 分派到 `crate::components::*_`，
-//! 故此处 re-export 所有组件函数，使它们在 `crate::components` 命名空间可见。
+//! Entry point for container and leaf components. The `gen_dispatch!` macro dispatches to `crate::components::*_`,
+//! so every component function is re-exported here, making them visible in the `crate::components` namespace.
 pub mod frame;
 pub use frame::frame_;
 pub mod canvas;

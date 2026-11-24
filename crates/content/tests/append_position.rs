@@ -1,15 +1,15 @@
-//! 行的落点：0 = 末尾（默认）；正数从**尾**往内数（+1 = 最后一个之前，+len = 头部）；
-//! 负数从**头**往内数（-1 = 头部，-len = 最后一个之前）。
+//! A row's landing spot: 0 = the end (default); a positive number counts inward from the **tail** (+1 = before the last one, +len = the head);
+//! a negative number counts inward from the **head** (-1 = the head, -len = before the last one).
 //!
-//! 方向是刻意的：索引从**本操作自己的锚定端**往内数——append 锚在尾，正数因此往头走；
-//! 「从头部锚定的插入」正负相反（与它一致，方向相反）。域外**拒收**，不夹取：夹取会把行
-//! 放到调用方没要求的位置，正是静默降级。
+//! The direction is deliberate: the index counts inward from **this operation's own anchor end** — append is anchored at the tail, so positive numbers walk toward the head;
+//! "an insert anchored at the head" has the opposite sign (consistent with it, direction opposite). Out of domain is **refused**, not clamped: clamping would put the row
+//! where the caller did not ask for, which is exactly a silent downgrade.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
 
 use content::{AppendOp, Content, append_index};
 use serde_json::{Value, json};
 
-/// 一帧就是动作列表本身（ADR 0021 决策 6）——这层测试只关心 append 的线上形状。
+/// A frame is the action list itself (ADR 0021 decision 6) — this layer of tests only cares about append's wire shape.
 fn frame(position: i64) -> Value {
     let actions: Vec<Content<Value>> = vec![Content::Append(AppendOp {
         slot: "rows".into(),
@@ -29,7 +29,7 @@ fn decoded_position(value: Value) -> i64 {
 
 #[test]
 fn the_tail_stays_off_the_wire() {
-    // 省缺即 0（末尾），所以位置没有信息时帧里就不该有这个字段。
+    // Absent means 0 (the end), so when the position carries no information the field should not be in the frame.
     let item = &frame(0)[0];
     assert_eq!(item["action"], json!("append"));
     assert!(item.get("position").is_none(), "省缺即末尾，不写");
@@ -47,7 +47,7 @@ fn a_position_that_carries_information_is_written_and_decodes() {
 
 #[test]
 fn the_landing_table() {
-    // len = 4（A B C D）时，每个 position 落在哪个数组下标
+    // With len = 4 (A B C D), which array index each position lands at
     assert_eq!(append_index(4, 0), Some(4), "末尾");
     assert_eq!(append_index(4, 1), Some(3), "最后一个之前");
     assert_eq!(append_index(4, 2), Some(2));

@@ -12,7 +12,7 @@ crate-type = ["rlib"]
 
 # The reference boot: page shell + WS wiring + the JS uplink handle. Rendering
 # lives in `ui-core`; nothing here is a library a consumer depends on (see
-# docs/decisions/0021-external-integration.md, the 归属 section).
+# docs/decisions/0021-external-integration.md, the section on ownership (`## 归属`)).
 [dependencies]
 ui-core = { workspace = true }
 content.workspace = true
