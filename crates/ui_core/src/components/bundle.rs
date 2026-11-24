@@ -141,7 +141,7 @@ pub fn bundle_(accrete: Bundle, ctx: &Ctx) -> AnyView {
         .map(|s| render_children(&ctx, s))
         .unwrap_or_default();
 
-    // 手绘皮肤（ADR 0038 §4）：只有自己声明了 `is-border` 的容器才有这一层。
+    // The sketch skin (ADR 0038 §4): only a container that asked for a border has this layer.
     let layer = rough::border_layer(
         &ctx,
         accrete.attrs.as_ref().and_then(|a| a.class.as_ref()),

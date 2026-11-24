@@ -298,7 +298,7 @@ fn overlay_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView 
         .map(|s| render_children(ctx, s))
         .unwrap_or_default();
 
-    // 手绘皮肤（ADR 0038 §4）：层只有自己声明了 `is-border` 才有。
+    // The sketch skin (ADR 0038 §4): the layer exists only for a node that asked for a border.
     let layer = rough::border_layer(
         ctx,
         accrete.attrs.as_ref().and_then(|a| a.class.as_ref()),

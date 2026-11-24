@@ -1312,14 +1312,17 @@
     }
 }
 
-/* ---- 模态层（ADR 0014）：铺满视口 + 模糊背景 + 挡住背后页面 -------------------
-   几何（position/inset/height/z-index/居中）在 layer.rs 里内联，不写这里——内联本
-   无层叠歧义（ADR 0012 的 display 内联同款；custom 层的定序缺陷已于 PLAN §19 修掉）。
-   这里只放没有竞争者的部分：伪元素模糊/色调，以及把内容压在模糊层之上。
+/* ---- The modal layer (ADR 0014): fill the viewport, blur what is behind it ---------
+   Geometry (position/inset/height/z-index/centring) is inline on the layer host in
+   layer.rs — inline has no cascade ambiguity (the same call as ADR 0012 made for
+   display; the old ordering defect is gone, PLAN §19). What lives here is only the part
+   with no competitor: the pseudo-element's blur and tint, and lifting the content above
+   the blur.
 
-   住在 utilities 而不是 components：这两条规则是**压在内容身上**的效果（`.layer > *`
-   改子元素的定位与层级），跑输 components 就等于没写。它是核心语义，所以不在
-   custom.css——那一层留给页面自己覆盖。 */
+   `utilities`, not `components`: both rules press on the content (`.layer > *` changes a
+   child's position and stacking), so as a `components` rule they would lose and be dead
+   code. It is core semantics, which is also why it is not in `custom.css` — that layer is
+   the page's own. */
 @layer utilities {
     .layer {
         &::before {
@@ -1337,17 +1340,20 @@
     }
 }
 
-/* ---- 手绘线框皮肤（ADR 0038 §3-4） ----------------------------------------------
-   选项 `skin` 由生产者在建页时下发，镜像成 `html[data-skin]`。皮肤是核心的一个状态
-   （和 `.is-*` 那一栏同住 utilities），所以它在核心这一侧：`custom.css` 是页面自己的
-   层，用来覆盖看相，不是核心长出来的地方。
+/* ---- The sketch skin (ADR 0038 §3-4) ----------------------------------------------
+   The producer sets the `skin` option when it builds a page; the option is mirrored onto
+   `html[data-skin]`. A skin is core state (it lives with the `.is-*` family in
+   `utilities`), so it belongs on the core side: `custom.css` is the page's own layer,
+   there to override the look, not where the core grows things.
 
-   只做两件事——圆角归零（形状归画），图层画好之后去掉边的涂色（`data-rough` 是图层
-   打上的记号；空间一直留着，盒子一像素不动）。颜色一概不碰：`--fg` 是 light-dark，
-   纸上的墨与板上的粉笔自动成立。
+   Two jobs only — the radius goes to 0 (the drawing owns the shape), and the painted edge
+   is dropped once the drawing is in place (`data-rough` is the layer's mark; the space
+   stays, so the box does not move a pixel). Colours are not touched at all: `--fg` is
+   `light-dark()`, so ink on paper and chalk on a blackboard follow on their own.
 
-   这一块必须在 utilities：`.is-border` 的 `border: var(--border)` 也在这一层，层序
-   先于特异性，写进 components 的话特异性再高也赢不了。 */
+   This block has to be in `utilities`: `.is-border`'s `border: var(--border)` is declared
+   there, and layer order decides before specificity — in `components` even a more specific
+   selector would lose. */
 @layer utilities {
     html[data-skin="sketch"] {
         --round: 0;
@@ -1358,10 +1364,11 @@
         border-color: transparent;
     }
 
-    /* 图层：绝对定位盖在宿主的 border box 上——`inset` 退一个边框宽度，所以画出来
-       的线正好落在 CSS 边所在的位置。描边允许溢出盒子：手绘的线不该被自己的盒子
-       裁掉，`overflow: visible` 顺带解掉 `.round` 的裁剪（这里圆角已经是 0，没有
-       要裁的东西）。 */
+    /* The layer: absolutely positioned over the host's border box — `inset` is one border
+       width negative, so the drawn line lands exactly where the CSS edge was. The stroke is
+       allowed to spill out of the box: a hand-drawn line should not be cropped by its own
+       box, and `overflow: visible` also undoes `.round`'s clipping (the radius is 0 here,
+       so there is nothing to clip). */
     html[data-skin="sketch"] .is-border {
         position: relative;
         overflow: visible;
@@ -1374,8 +1381,9 @@
         pointer-events: none;
     }
 
-    /* 笔：一条线、无填充，颜色取 `currentColor`（页面给这个盒子的色），粗细与常规
-       模式那条 1px 的边看起来是同一条。这里不写任何具体颜色。 */
+    /* The pen: one stroke, no fill, coloured by `currentColor` (whatever the page gave this
+       box), at a weight that reads as the same line as the 1px edge in normal mode. No
+       concrete colour is written here. */
     html[data-skin="sketch"] .is-border > svg.rough path {
         fill: none;
         stroke: currentColor;
