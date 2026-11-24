@@ -20,7 +20,7 @@ data:
         - nogrow
         format: md
     - type: bundle
-      sink: {slot: login}
+      sink: {dest: login}
       attrs:
         submit: [enter, button]
       children:
@@ -65,8 +65,16 @@ data:
       attrs:
         horizontal: true
       children:
-      - type: input
-        sink: {slot: history}
-      - type: input
-        sink: {slot: echo}
+      - type: bundle
+        sink: {dest: history}
+        attrs: {submit: [enter]}
+        children:
+        - type: input
+          tag: history
+      - type: bundle
+        sink: {dest: echo}
+        attrs: {submit: [enter]}
+        children:
+        - type: input
+          tag: echo
 

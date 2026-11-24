@@ -65,10 +65,10 @@ pub fn impl_accrete_ops(ast: &DeriveInput) -> syn::Result<TokenStream2> {
             fn borrow_attrs_mut(&mut self) -> Option<&mut dyn Classify> {
                 #attrs_mut
             }
-            fn get_source(&self) -> Option<&Bind> {
+            fn get_source(&self) -> Option<&Source> {
                 #get_source
             }
-            fn get_sink(&self) -> Option<&Bind> {
+            fn get_sink(&self) -> Option<&Sink> {
                 #get_sink
             }
         }
@@ -109,13 +109,13 @@ pub fn impl_accrete_ops_variant(ast: &DeriveInput) -> syn::Result<TokenStream2> 
                 }
             }
 
-            fn get_source(&self) -> Option<&Bind> {
+            fn get_source(&self) -> Option<&Source> {
                 match self {
                     #(#name::#r(c) => { c.get_source() }),*
                 }
             }
 
-            fn get_sink(&self) -> Option<&Bind> {
+            fn get_sink(&self) -> Option<&Sink> {
                 match self {
                     #(#name::#r(c) => { c.get_sink() }),*
                 }

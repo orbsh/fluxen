@@ -44,11 +44,11 @@ id 必须走在载荷**里**，不能只挂在旁边：宿主交给客户端的�
 
 ## 4. 一个字段，几种发送方式
 
-字段本身不发。它没有自己的出口——什么时候把值送出去、送到哪里，由它所在的 bundle 决定（ADR 0032 §2）；嵌套正是让一个输入框同时回答两个问题的办法：
+字段本身不发。它没有自己的出口——什么时候把值送出去、送到哪里，由它所在的 bundle 决定（ADR 0032 §2）；字段自己只说两件事：`source`（显示什么）和 `kind`（是哪种字段：`number`、`bool`、`text`、`password`，元素类型和解析同一处声明）。嵌套正是让一个输入框同时回答两个问题的办法：
 
 ```yaml
-bundle (sink: {slot: message}, submit: [enter, button])              # 消息：回车，一次
-  bundle (tag: mention, sink: {slot: mentions}, submit: [change])    # 补全：每次击键
+bundle (sink: {dest: message}, submit: [enter, button])              # 消息：回车，一次
+  bundle (tag: mention, sink: {dest: mentions}, submit: [change])    # 补全：每次击键
     input (tag: q)
 ```
 

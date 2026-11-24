@@ -16,6 +16,43 @@ AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set
 
 只做渲染层——没有事件总线，没有 gateway，没有传输。上游（Prism / Aura realm / 任何生产者）发送 Accrete 操作，Fluxen 负责渲染与操作应用。厚壳原则不变：AI 生成经 schema 校验的结构化 JSON（内容 + 结构），框架掌握样式与渲染确定性。
 
+## 数据绑定
+
+两个方向各一种类型：读是 `Source` —— `{slot?, scope?, path?, default?}`，写是 `Sink` —— `{dest?, scope?, path?}`
+（ADR 0031 拆开的是通道，ADR 0039 拆开的是类型）。两者都描述一个值和一个作用域；不同的是每个方向各自需要说什么。
+
+```yaml
+type: text
+source: {slot: "notice", path: "/title", default: "untitled"}
+```
+
+- `slot` —— 值住在哪个名字下。不写 = 没有槽：只剩 `default` 就是一个常量。
+- `dest` —— 值送到哪里去。和上行帧用的是同一个词（Outflow `{dest, id?, data}`，ADR 0023），所以 sink 和帧对同一个地址说的是同一句话。
+- `scope` —— 谁权威：`remote`（缺省；由 op 写入、重放）、`local`（只在这个页面，随树消亡）、`both`（先落本地，再镜像上行）。
+- `path` —— 指向值内部的 JSON Pointer（ADR 0008）。读侧：显示哪个成员。写侧：这个节点拥有哪个成员，它只写这一个、
+  其余不动，只有 `scope: local` 的写会用到。`"/"` 是根：写在那里的对象按成员合并进已有内容，所以一个控件可以只
+  设置自己的选项，不接管整个槽。
+- `default` —— 只在读侧：没有值时显示什么。写用不到它，sink 也不接受它。
+
+`source` 和 `sink` 是两条通道，不是同一个类型用两次。哪种节点能有它，是设计的一部分 —— `text`、`tiles`
+是读；**字段不写**：`input` 只有 `source` + `kind`（哪种字段：`number`、`bool`、`text`、`password`，
+元素类型和解析同一处声明），`select` 只有 `source` + `options`，两者都由 `tag` 命名。发出去的是外面那层 **bundle**：它把带 tag 的字段打成一个对象，
+拥有出口、时机（`submit: [enter, button, change]`）、次数（`sends`）、善后（`reset`），以及上行携带的 `id`
+（ADR 0032）。那个 `id` 是请求的身份 —— 下发表单的服务端用它匹配答复 —— 而 `tag` 是对方在 `data` 里读到的名字：
+
+```yaml
+type: bundle
+id: "login-42"                       # 这次请求：回来的答复按它匹配
+sink: {dest: "session"}              # 打好的对象送到哪
+attrs: {submit: [enter, button]}     # 什么时候送
+children:
+- {type: input, tag: user, kind: text}
+- {type: input, tag: pass, kind: password}
+```
+
+bundle 可以嵌在 bundle 里：内层按自己的时机打包（比如自动补全用 `change`），外层在自己的时机把全部字段打包 ——
+一个字段，几种发送方式（docs/interaction-patterns.zh-CN.md §4）。
+
 ## 开发工作流（`stage`）
 
 `stage` 是开发网关：WS 镜像 + console REPL + UI 服务器，一条命令跑通整个闭环，不需要任何上游生产者。镜像从不解析载荷——只在 peer 之间路由原始帧。

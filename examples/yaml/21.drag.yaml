@@ -52,11 +52,11 @@ data:
       class:
       - box
       accept: {tag: message}
-    sink: {slot: pin}
+    sink: {dest: pin}
   - type: frame
     id: trash
     attrs:
       class:
       - box
       accept: {tag: note}
-    sink: {slot: archive}
+    sink: {dest: archive}

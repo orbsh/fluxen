@@ -22,12 +22,16 @@
         - is-shadow
         horizontal: true
       children:
-      - type: select
-        attrs:
-          horizontal: true
-        source: {slot: page, scope: local}
-        sink: {slot: page, scope: local}
-        options: {slot: tabs}
+      - type: bundle
+        attrs: {submit: [change]}
+        sink: {dest: page, scope: local}
+        children:
+        - type: select
+          attrs:
+            horizontal: true
+          tag: page
+          source: {slot: page, scope: local}
+          options: {slot: tabs}
     - type: text
       attrs:
         class:
@@ -36,7 +40,7 @@
       source:
         slot: page
         scope: local
-        path: /data
+        path: /data/page
         default: "**（未打开任何页）**"
     - type: tiles
       id: pager

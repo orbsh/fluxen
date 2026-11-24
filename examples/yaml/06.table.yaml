@@ -42,10 +42,14 @@
     type: entry
     id: '853736'
     children:
-    - type: input
-      attrs: {selector: qty}
-      source: {default: '853736', type: text}
-      sink: {slot: s, scope: local}
+    - type: bundle
+      attrs: {selector: qty, submit: [change]}
+      sink: {dest: s, scope: local}
+      children:
+      - type: input
+        tag: qty
+        kind: text
+        source: {default: '853736'}
     - type: text
       attrs: {selector: name}
       source: {default: a1}
@@ -64,10 +68,14 @@
     type: entry
     id: b
     children:
-    - type: input
-      attrs: {selector: qty}
-      source: {default: false, type: bool}
-      sink: {slot: b, scope: local}
+    - type: bundle
+      attrs: {selector: qty, submit: [change]}
+      sink: {dest: b, scope: local}
+      children:
+      - type: input
+        tag: qty
+        kind: bool
+        source: {default: false}
     - type: text
       attrs: {selector: name}
       source: {default: b1}
@@ -86,10 +94,14 @@
     type: entry
     id: n
     children:
-    - type: input
-      attrs: {selector: qty}
-      source: {default: 9, type: number}
-      sink: {slot: n, scope: local}
+    - type: bundle
+      attrs: {selector: qty, submit: [change]}
+      sink: {dest: n, scope: local}
+      children:
+      - type: input
+        tag: qty
+        kind: number
+        source: {default: 9}
     - type: text
       attrs: {selector: name}
       source: {default: c1}

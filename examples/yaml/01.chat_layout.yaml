@@ -37,16 +37,18 @@ data:
           - box
         source:
           default: "**channel**"
-      - type: select
+      - type: bundle
         attrs:
           class:
           - --channel
           - ji-center
           - nogrow
-        sink:
-          slot: channel::select
-          default: "2"
-        options: {slot: channel::list}
+          submit: [change]
+        sink: {dest: channel::select}
+        children:
+        - type: select
+          tag: channel
+          options: {slot: channel::list}
     - type: frame
       attrs:
         class:
@@ -117,6 +119,10 @@ data:
           attrs:
             horizontal: true
           children:
-          - type: input
-            sink: {slot: message}
+          - type: bundle
+            sink: {dest: message}
+            attrs: {submit: [enter]}
+            children:
+            - type: input
+              tag: message
 

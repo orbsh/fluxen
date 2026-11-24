@@ -21,7 +21,7 @@
     source: {slot: login_modal, scope: local}
     children:
     - type: bundle
-      sink: {slot: login}
+      sink: {dest: login}
       attrs:
         submit: [enter, button]
       children:
@@ -42,7 +42,8 @@
           source: {default: ""}
         - type: input
           tag: pass
-          source: {default: "", type: password}
+          kind: password
+          source: {default: ""}
         - type: button
           attrs:
             oneshot: false
@@ -56,7 +57,11 @@
     attrs:
       class: [flex, col, gap]
     children:
-    - type: input
-      source:
-        default: "回车打开登录框"
-      sink: {slot: login_modal, scope: local}
+    - type: bundle
+      attrs: {submit: [enter]}
+      sink: {dest: login_modal, scope: local}
+      children:
+      - type: input
+        tag: open
+        source:
+          default: "回车打开登录框"

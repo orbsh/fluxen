@@ -45,9 +45,10 @@ fn a_grid_round_trips_with_its_header_and_rows() {
                 "type": "entry",
                 "id": "853736",
                 "children": [
-                    {"type": "input", "attrs": {"selector": "qty"},
-                     "source": {"default": 1, "type": "number"},
-                     "sink": {"slot": "853736", "scope": "local"}},
+                    {"type": "bundle", "attrs": {"selector": "qty", "submit": ["change"]},
+                     "sink": {"dest": "853736", "scope": "local"},
+                     "children": [{"type": "input", "tag": "qty", "kind": "number",
+                                   "source": {"default": 1}}]},
                     {"type": "text", "attrs": {"selector": "name"},
                      "source": {"default": "Honeywell 901 Mask Headband Color Box"}},
                     {"type": "text", "attrs": {"selector": "price/retail"},

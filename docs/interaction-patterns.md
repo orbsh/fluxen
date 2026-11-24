@@ -44,11 +44,11 @@ Row identity lives in the data (`data.id`), a reusable layout lives in `rack.ite
 
 ## 4. One field, several ways to send it
 
-A field does not send. It has no exit of its own — its bundle decides when a value leaves and where it goes (ADR 0032 §2), and nesting is what lets one input answer two different questions at once:
+A field does not send. It has no exit of its own — its bundle decides when a value leaves and where it goes (ADR 0032 §2) — and what the field does say about itself is `source` (what it shows) and `kind` (what kind of field it is: `number`, `bool`, `text`, `password`, one declaration for the element and the parse). Nesting is what lets one input answer two different questions at once:
 
 ```yaml
-bundle (sink: {slot: message}, submit: [enter, button])              # the message: Enter, once
-  bundle (tag: mention, sink: {slot: mentions}, submit: [change])    # the suggestions: every keystroke
+bundle (sink: {dest: message}, submit: [enter, button])              # the message: Enter, once
+  bundle (tag: mention, sink: {dest: mentions}, submit: [change])    # the suggestions: every keystroke
     input (tag: q)
 ```
 

@@ -20,25 +20,35 @@ promising a `<form>` in the DOM — the renderer draws a `div`.
 The old walk read each child's `sink.slot` as the field name, which made one
 address mean two things: where a value lands and which field it is. They are not
 the same. `slot` says where a value lands (ADR 0031 §1-2); `tag` says which field
-it is inside a bundle. So a field can keep its own local landing, and two bundles
-can pack fields that share a slot, without the pack changing shape.
+it is inside a bundle. So two bundles can pack fields that share a slot without the
+pack changing shape.
 
-A `tag` is what opts a field into its bundle. **No tag = no uplink.** There used to be a second path:
-a tag-less field sent through its own `sink` on Enter, and cleared itself, both hardcoded in the widget.
-That was a rule about sending living in a field, which is the very thing this ADR moved to the bundle, so
-it is gone: a `sink` on a field now means a **local landing** only (`scope: local`, written as the value
-changes — a switch's click, a filter's keystroke), and a `remote`/`both` sink without a tag is ignored with
-a warning. Clearing went with it, and came back as the bundle's `reset` (§6). The bundle's `id` marks the
-submission (the instance), never the fields.
+A `tag` is what opts a field into its bundle. **No tag = no uplink.** There used to be a second path: a tag-less
+field sent through its own `sink` on Enter, and cleared itself, both hardcoded in the widget. That was a rule
+about sending living in a field, which is the very thing this ADR moved to the bundle, so it is gone. Clearing
+went with it, and came back as the bundle's `reset` (§6). The bundle's `id` marks the submission (the instance),
+never the fields.
 
-**The field's `sink` itself is going, too** (decided 2026-11-24, not implemented). What this section leaves on a
-field is a `Bind` that is no longer an exit, and it still does two jobs an address should not: it carries the
-parse/element type (`ui_core/src/widgets/input.rs` reads `sink.type`, else `source.type`), and it is the local
-landing of a field that no bundle packs (a switch's click, a filter's keystroke). Both have a better home — the
-type belongs to the field, and a local landing to a bundle whose own sink is `local` with `submit: ["change"]` —
-so the field loses the whole field, together with the runtime warning that exists only to deny a shape the schema
-allows. A downstream SDK that refused that dead shape in its own build step (reflux's `_check_uplinks`) drops it
-at the same time, because it was the same rule kept in a second place. Tracked as scratch ticket #470.
+**A field has no `sink` at all** (decided and implemented 2026-11-24). Keeping it for a `local` landing made one
+node answer two questions — "which field is this" and "where does the page state get written" — and it left the
+schema allowing a shape the runtime then had to warn about. What a field keeps is what a field is: `id`, `tag`,
+`attrs`, `source` (what it shows) and `kind` (what kind of field it is: element type and parse, one declaration —
+`number`, `bool`, `text`, `password`; absent means text). The one thing that leaves with `sink` is the field's part
+in an emit: the `id` an outflow carries is the emitting node's, and a field no longer emits.
+
+**Which id a submission carries.** An outflow is `{event, id?, data}` and the `id` is the emitting node's
+(ADR 0010): it marks a *request*, so a server that published that form can match the answer, and two submissions
+of the same form stay apart even when their payloads look alike. The emitter is the bundle now, so the bundle is
+what needs an `id`. Inside the form a value is named by its `tag` — a form does not need ids to tell its own
+fields apart, and the far side reads them by name. The field's `id` stays in the schema, but only as node
+identity: it is the key an item keeps when a field sits in a list (ADR 0031 §4), and what `patch`/`remove`
+address. Nothing about it goes over the wire. `kind` is spelled that way because `type` is already the node's own discriminator on the wire,
+and it is not the read's or the write's: a field has one type. The local landing a field used to own now belongs
+to a bundle whose own sink is `local` with `submit: ["change"]` — one wrapper, the same cost §4 describes, and the
+count and the reset come with it. `Bind` lost `type` in the same move, and `Input`/`Select` refuse unknown keys,
+so a page still carrying the old `sink` hears about it instead of quietly losing the write. A downstream SDK that
+refused that dead shape in its own build step (reflux's `_check_uplinks`) drops it at the same time, because it
+was the same rule kept in a second place. Tracked as scratch ticket #470.
 
 ## 3. Timing lives on the bundle, and it is a list
 
@@ -55,11 +65,19 @@ that wants the whole object live just leaves the inner bundle without `change`.
 
 ## 4. Bundles nest, and the walk stops there
 
-A nested bundle contributes exactly one key to the outer object — its `tag`, or
-its `id` when there is no tag — whose value is its own packed object. The walk
-does not descend into it: the inner bundle's fields are its own, and flattening
-them into the outer object would make the two packs the same object with
-different keys. This is what makes
+A nested bundle contributes exactly one key to the outer object — its `tag` — whose value is its own packed
+object. `tag` here is the same rule a field follows, because a nested bundle *is* an input of the enclosing
+bundle: the thing that packs it names it. Neither of the bundle's other two words may stand in for it. `id` is
+this submission's identity — a server matches the answer by it — so letting it double as a key would move the
+parent's shape whenever someone gave a nested bundle an id, and the parent would appear to change because of a
+fact about replies. `dest` is where the inner bundle's *own* sends go, which is a different question: in the
+autocomplete below the inner group sends to `mentions` while the outer object calls it `mention`, and it must
+be possible to say both. A nested bundle with no `tag` therefore packs nothing into its parent: its fields are
+its own, and it sends them itself if it has a `dest`. (`tag` is read only when nesting — on a top-level bundle
+it says nothing.)
+
+The walk does not descend into a named nested bundle either: the inner bundle's fields are its own, and
+flattening them into the outer object would make the two packs the same object with different keys. This is what makes
 
 ```yaml
 bundle (submit: [enter, button]) > bundle (submit: [change], tag: mention) > input (tag: q)

@@ -1,5 +1,5 @@
 use crate::Ctx;
-use accrete::{Accrete, AccreteOps, Bind, classify::Classify};
+use accrete::{Accrete, AccreteOps, Sink, Source, classify::Classify};
 use leptos::prelude::*;
 use serde_json::Value;
 
@@ -28,7 +28,7 @@ where
 }
 
 /// The primary read channel (ADR 0031 §2: `source` is where a value comes from).
-pub fn source(accrete: &impl AccreteOps) -> Option<&Bind> {
+pub fn source(accrete: &impl AccreteOps) -> Option<&Source> {
     accrete.get_source()
 }
 
@@ -54,7 +54,7 @@ pub fn use_source_list(
 /// Same, for a named second channel (`select.options`, `pages.select`).
 pub fn bind_list(
     ctx: &Ctx,
-    bind: Option<&Bind>,
+    bind: Option<&Source>,
 ) -> Option<std::sync::Arc<Vec<std::sync::Arc<Accrete>>>> {
     bind.and_then(|b| b.slot.as_ref())
         .map(|slot| ctx.slot_for_list(slot).get())
@@ -85,7 +85,7 @@ fn extract(v: Value, path: Option<&String>) -> Option<Value> {
 ///
 /// `tracked == false` is for the initial display of a component that also
 /// emits: subscribing to a slot it writes would rebuild it from its own send.
-pub fn value_of(ctx: &Ctx, bind: Option<&Bind>, tracked: bool) -> Option<Value> {
+pub fn value_of(ctx: &Ctx, bind: Option<&Source>, tracked: bool) -> Option<Value> {
     let b = bind?;
     let Some(slot) = &b.slot else {
         return b.default.clone();
@@ -192,7 +192,7 @@ pub struct BundleState {
     pub remaining: RwSignal<i64>,
     /// Nested bundles, so a reset travels down the same tree a pack travels up.
     pub children: StoredValue<Vec<std::sync::Arc<BundleState>>>,
-    pub sink: Option<Bind>,
+    pub sink: Option<Sink>,
     /// This submission's instance id — not a field name.
     pub id: Option<String>,
     /// Enclosing bundle, for `enter`/`button` bubbling.
@@ -293,13 +293,15 @@ pub fn locked(b: Option<&std::sync::Arc<BundleState>>) -> bool {
     lock_owner(b).is_some_and(|b| !b.unlimited() && b.remaining.get() <= 0)
 }
 
-/// The key a bundle contributes to its parent's object: its `tag`, or its `id`
-/// when there is no tag. Neither = an unnamed group, which packs nothing into
-/// the parent. Empty strings are absent, same rule as `node_id`.
-pub fn bundle_key(tag: &Option<String>, id: &Option<String>) -> Option<String> {
-    tag.clone()
-        .filter(|s| !s.is_empty())
-        .or_else(|| id.clone().filter(|s| !s.is_empty()))
+/// The key a bundle contributes to its parent's object: its `tag`, and only its `tag`. Tag is the name a node
+/// takes in the bundle that packs it — the same rule a field follows (ADR 0032 §4). `id` is not a name: it is
+/// this submission's identity, and letting it double as a key would make the parent's shape move when someone
+/// gave a nested bundle an id for matching replies. `dest` is not a name either: it is where the inner bundle's
+/// own sends go, which is a different fact (the autocomplete in §4 sends to `mentions` while the outer object
+/// calls it `mention`). No tag = an unnamed group, which packs nothing into the parent. Empty strings are
+/// absent, same rule as `node_id`.
+pub fn bundle_key(tag: &Option<String>) -> Option<String> {
+    tag.clone().filter(|s| !s.is_empty())
 }
 
 /// Write this bundle's packed object into its parent's slot, then do the same
@@ -404,5 +406,20 @@ mod tests {
     fn node_id_treats_an_empty_id_as_absent() {
         let n = accrete(json!({"type": "input", "id": ""}));
         assert_eq!(node_id(&n), None);
+    }
+
+    #[test]
+    fn a_nested_bundle_is_named_by_its_tag_and_nothing_else() {
+        use super::bundle_key;
+
+        assert_eq!(bundle_key(&Some("mention".into())), Some("mention".into()));
+        assert_eq!(bundle_key(&Some(String::new())), None);
+        assert_eq!(bundle_key(&None), None);
+        // An id is identity, not a name: it must not decide the parent object's shape.
+        let n = accrete(json!({"type": "bundle", "id": "login-42"}));
+        let Accrete::bundle(b) = &n else {
+            panic!("expected bundle")
+        };
+        assert_eq!(bundle_key(&b.tag), None);
     }
 }

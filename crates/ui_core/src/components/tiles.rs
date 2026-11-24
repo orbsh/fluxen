@@ -14,7 +14,7 @@ use crate::Ctx;
 use crate::ctx::render_accrete;
 use crate::hooks::{self, use_common_css, use_source_id};
 use accrete::classify::Classify;
-use accrete::{Accrete, AccreteOps, Align, Bind, Dir, Field, Header, Scope, Step, Tiles, Wrap};
+use accrete::{Accrete, AccreteOps, Align, Dir, Field, Header, Scope, Source, Step, Tiles, Wrap};
 use leptos::html::*;
 use leptos::leptos_dom::helpers::set_interval_with_handle;
 use leptos::prelude::*;
@@ -467,10 +467,7 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
     // yes; a window whose start names no item = nothing is.
     let in_stage = move |key: &str| -> bool {
         match (start.get(), window) {
-            (Some(s), Some(n)) => index
-                .get()
-                .get(key)
-                .is_some_and(|at| in_window(*at, s, n)),
+            (Some(s), Some(n)) => index.get().get(key).is_some_and(|at| in_window(*at, s, n)),
             (None, Some(_)) => false,
             (_, None) => true,
         }
@@ -481,17 +478,19 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
     if let Some(Step::Slot { slot: name }) = &step {
         // Read the way every other channel is read (ADR 0031 §1): a local assignment wins, and the
         // far side's slot is what is left when there is none.
-        let bind = Bind {
+        let bind = Source {
             slot: Some(name.clone()),
             scope: Scope::Both,
-            ..Bind::default()
+            ..Source::default()
         };
         let ctx2 = ctx.clone();
-        Effect::new(move |_| match staged_key(hooks::value_of(&ctx2, Some(&bind), true)) {
-            Some(k) => on.set(Some(k)),
-            // Nothing written yet: nothing on stage, which is a page area before the first click.
-            None => on.set(None),
-        });
+        Effect::new(
+            move |_| match staged_key(hooks::value_of(&ctx2, Some(&bind), true)) {
+                Some(k) => on.set(Some(k)),
+                // Nothing written yet: nothing on stage, which is a page area before the first click.
+                None => on.set(None),
+            },
+        );
     }
 
     // A clock the node owns, in ms. The floor of 200 is the renderer's: a slower turn is a policy,
@@ -519,7 +518,10 @@ pub fn tiles_(accrete: Tiles, ctx: &Ctx, id: String) -> AnyView {
                 }
                 // The item after the one on stage; nobody on stage means the next item that has
                 // not had a turn. A key that is gone reads the same as nobody — its item left.
-                let next = match on.get_untracked().and_then(|k| ks.iter().position(|x| *x == k)) {
+                let next = match on
+                    .get_untracked()
+                    .and_then(|k| ks.iter().position(|x| *x == k))
+                {
                     Some(pos) => pos + 1,
                     None => shown.get_untracked(),
                 };
@@ -964,7 +966,10 @@ mod tests {
         let c = row(None);
         let mut born = HashMap::new();
 
-        assert_eq!(tile_keys(&[a.clone(), b.clone()], &mut born), vec!["#0", "#1"]);
+        assert_eq!(
+            tile_keys(&[a.clone(), b.clone()], &mut born),
+            vec!["#0", "#1"]
+        );
 
         // `a` is removed: `b` is now first in the list, but it is still the item that arrived
         // second, and it keeps the key it was given.
@@ -1027,7 +1032,9 @@ mod tests {
         assert_eq!(staged_key(Some(json!("home"))), Some("home".into()));
         // The emit wrapper every local write takes (ADR 0010): the payload is the key.
         assert_eq!(
-            staged_key(Some(json!({ "dest": "page", "id": "tabs", "data": "docs" }))),
+            staged_key(Some(
+                json!({ "dest": "page", "id": "tabs", "data": "docs" })
+            )),
             Some("docs".into())
         );
         // Anything else names nothing rather than something arbitrary.

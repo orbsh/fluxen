@@ -168,32 +168,32 @@ impl Ctx {
     /// cannot tell a remote write from an in-page emit (ADR 0010/0011);
     /// `remote` is the existing upward event; `both` does the two.
     /// False when the sink has no address — the caller keeps its own fallback.
-    pub fn emit(&self, sink: &accrete::Bind, id: Option<String>, payload: Value) -> bool {
-        let Some(slot) = sink.slot.clone() else {
+    pub fn emit(&self, sink: &accrete::Sink, id: Option<String>, payload: Value) -> bool {
+        let Some(dest) = sink.dest.clone() else {
             return false;
         };
         if sink.scope.local() {
             match sink.path.as_deref() {
                 // A sink WITH a path writes a value into the local plane, merged at that path (ADR 0031 §2):
                 // the control owns one member of the value and does not have to know the rest of it.
-                Some(path) => self.write_local_at(&slot, path, payload.clone()),
+                Some(path) => self.write_local_at(&dest, path, payload.clone()),
                 // A sink with no path is a message: the plane holds the event and pages read it back with
                 // `path: /data`.
                 None => {
                     let wrapped = to_value(&content::Outflow {
-                        dest: slot.clone(),
+                        dest: dest.clone(),
                         id: id.clone(),
                         data: payload.clone(),
                     })
                     .unwrap_or(Value::Null);
-                    self.slot_for_value(&slot).set(Some(wrapped));
+                    self.slot_for_value(&dest).set(Some(wrapped));
                 }
             }
         }
         if sink.scope.remote() {
             let ctx = self.clone();
             leptos::task::spawn_local(async move {
-                ctx.send(slot, id, payload).await;
+                ctx.send(dest, id, payload).await;
             });
         }
         true
@@ -320,7 +320,9 @@ impl Ctx {
             };
             let mut still: std::collections::HashSet<String> = Default::default();
             for (member, value) in &members {
-                let Some(text) = scalar_text(value) else { continue };
+                let Some(text) = scalar_text(value) else {
+                    continue;
+                };
                 let attr = format!("data-{member}");
                 if root.set_attribute(&attr, &text).is_err() {
                     tracing::warn!("mirror_config: cannot set {attr}");
@@ -388,7 +390,9 @@ fn remove_member(root: &mut Value, member: &str) -> Result<(), String> {
             Ok(())
         }
         Value::Null => Ok(()),
-        _ => Err(format!("the local value is not an object, cannot drop {member:?}")),
+        _ => Err(format!(
+            "the local value is not an object, cannot drop {member:?}"
+        )),
     }
 }
 
@@ -397,16 +401,30 @@ fn pointer_segments(path: &str) -> Result<Vec<String>, String> {
     if !path.starts_with('/') {
         return Err(format!("config path must start with '/': {path:?}"));
     }
+    // "/" is the root itself: no segments. That is how a control writes its own members into the slot
+    // without owning the rest of it (a switch sets `{sketch: true}` and leaves the other options alone).
+    if path == "/" {
+        return Ok(Vec::new());
+    }
     Ok(path[1..]
         .split('/')
         .map(|s| s.replace("~1", "/").replace("~0", "~"))
         .collect())
 }
 
-/// Write the value into the position named by `segs`, growing missing containers as needed. An empty path = whole-value replacement.
+/// Write the value into the position named by `segs`, growing missing containers as needed. An empty path
+/// is the root: two objects merge (a control owns the members it writes and not the slot), anything else
+/// replaces.
 fn write_into(root: &mut Value, segs: &[String], value: Value) -> Result<(), String> {
     let Some((seg, rest)) = segs.split_first() else {
-        *root = value;
+        match (root, value) {
+            (Value::Object(into), Value::Object(from)) => {
+                for (k, v) in from {
+                    into.insert(k, v);
+                }
+            }
+            (slot, value) => *slot = value,
+        }
         return Ok(());
     };
     match root {
@@ -445,14 +463,20 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 if let Err(e) = TMPL
                     .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .register(&x.name, &x.params.iter().map(String::as_str).collect::<Vec<_>>(), &x.data)
+                    .register(
+                        &x.name,
+                        &x.params.iter().map(String::as_str).collect::<Vec<_>>(),
+                        &x.data,
+                    )
                 {
                     tracing::warn!("{e}");
                 }
             }
             Content::Create(x) => {
                 let mut d = x.data.clone();
-                let env = TMPL.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let env = TMPL
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for w in d.expand(&env) {
                     tracing::warn!("{w}");
                 }
@@ -462,7 +486,9 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
             }
             Content::Set(x) => {
                 let mut d = x.data.clone();
-                let env = TMPL.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let env = TMPL
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for w in d.expand(&env) {
                     tracing::warn!("{w}");
                 }
@@ -479,7 +505,9 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
             }
             Content::Append(x) => {
                 let mut d = x.data.clone();
-                let env = TMPL.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let env = TMPL
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for w in d.expand(&env) {
                     tracing::warn!("{w}");
                 }
@@ -494,7 +522,10 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 if let Some(id) = &id {
                     // Row id uniqueness is guarded at the boundary (ADR 0005): a duplicate append is refused,
                     // so keyed render identity is not left for downstream to fight over.
-                    if list.iter().any(|i| i.get_id().as_deref() == Some(id.as_str())) {
+                    if list
+                        .iter()
+                        .any(|i| i.get_id().as_deref() == Some(id.as_str()))
+                    {
                         tracing::warn!(
                             "append rejected: event {:?} already has row id {:?}",
                             x.slot,
@@ -565,7 +596,10 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                     r
                 } else {
                     let slot = ctx.slot_for_data(&x.slot);
-                    match slot.get_untracked().map(|a| std::sync::Arc::unwrap_or_clone(a)) {
+                    match slot
+                        .get_untracked()
+                        .map(|a| std::sync::Arc::unwrap_or_clone(a))
+                    {
                         Some(mut d) => {
                             let r = apply_patch(&mut d, x);
                             if r.is_ok() {
@@ -621,10 +655,11 @@ mod slots {
     fn collect(accrete: &Accrete, out: &mut HashSet<String>) {
         // Both channels address a slot; which plane it lives in does not matter
         // to the cycle check, only that the read follows the slot.
-        for b in [accrete.get_source(), accrete.get_sink()].into_iter().flatten() {
-            if let Some(slot) = &b.slot {
-                out.insert(slot.clone());
-            }
+        if let Some(slot) = accrete.get_source().and_then(|b| b.slot.as_ref()) {
+            out.insert(slot.clone());
+        }
+        if let Some(dest) = accrete.get_sink().and_then(|b| b.dest.as_ref()) {
+            out.insert(dest.clone());
         }
         if let Some(children) = accrete.borrow_children() {
             for c in children {
@@ -756,7 +791,11 @@ mod config_tests {
         let local = json!({"sketch": true});
         let members = merge_members(Some(&remote), Some(&local));
         assert_eq!(members["sketch"], json!(true));
-        assert_eq!(members["density"], json!("compact"), "an untouched member is still the far side's");
+        assert_eq!(
+            members["density"],
+            json!("compact"),
+            "an untouched member is still the far side's"
+        );
     }
 
     #[test]
@@ -779,8 +818,15 @@ mod config_tests {
     fn a_null_member_drops_the_pages_choice() {
         let mut acc = json!({"sketch": true, "density": "compact"});
         remove_member(&mut acc, "sketch").unwrap();
-        assert_eq!(acc, json!({"density": "compact"}), "the far side decides that member again");
-        assert!(remove_member(&mut Value::Null, "sketch").is_ok(), "dropping what is not there is not an error");
+        assert_eq!(
+            acc,
+            json!({"density": "compact"}),
+            "the far side decides that member again"
+        );
+        assert!(
+            remove_member(&mut Value::Null, "sketch").is_ok(),
+            "dropping what is not there is not an error"
+        );
     }
 
     #[test]

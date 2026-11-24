@@ -44,8 +44,12 @@ data:
           children: null
         - type: text
           source: {default: lv 3}
-  - type: input
-    sink: {slot: message}
+  - type: bundle
+    sink: {dest: message}
+    attrs: {submit: [enter]}
+    children:
+    - type: input
+      tag: message
   - type: button
-    sink: {slot: ok, default: Count}
+    sink: {dest: ok}
 

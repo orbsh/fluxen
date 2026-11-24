@@ -42,10 +42,14 @@
     type: entry
     id: '853736'
     children:
-    - type: input
-      attrs: {selector: qty}
-      source: {default: 1, type: number}
-      sink: {slot: '853736', scope: local}
+    - type: bundle
+      attrs: {selector: qty, submit: [change]}
+      sink: {dest: '853736', scope: local}
+      children:
+      - type: input
+        tag: qty
+        kind: number
+        source: {default: 1}
     - type: image
       attrs: {selector: image, desc: '853736', height: 2em}
       source:
@@ -65,10 +69,14 @@
     type: entry
     id: '56459'
     children:
-    - type: input
-      attrs: {selector: qty}
-      source: {default: 1, type: number}
-      sink: {slot: '56459', scope: local}
+    - type: bundle
+      attrs: {selector: qty, submit: [change]}
+      sink: {dest: '56459', scope: local}
+      children:
+      - type: input
+        tag: qty
+        kind: number
+        source: {default: 1}
     - type: image
       attrs: {selector: image, desc: '56459', height: 2em}
       source:
@@ -88,10 +96,14 @@
     type: entry
     id: '934900'
     children:
-    - type: input
-      attrs: {selector: qty}
-      source: {default: 1, type: number}
-      sink: {slot: '934900', scope: local}
+    - type: bundle
+      attrs: {selector: qty, submit: [change]}
+      sink: {dest: '934900', scope: local}
+      children:
+      - type: input
+        tag: qty
+        kind: number
+        source: {default: 1}
     - type: image
       attrs: {selector: image, desc: '934900', height: 2em}
       source:

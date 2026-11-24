@@ -8,17 +8,13 @@ use leptos::prelude::*;
 use serde_json::Value;
 use std::sync::Arc;
 
-/// A field's initial value: `source.default` (what it shows) then
-/// `sink.default`, typed by whichever channel names a type.
+/// A field's initial value: `source.default` (what it shows), in the shape the field's own `kind` names.
 fn field_default(node: &Accrete) -> Value {
-    let kind = node
-        .get_sink()
-        .and_then(|b| b.r#type.clone())
-        .or_else(|| node.get_source().and_then(|b| b.r#type.clone()));
-    let default = node
-        .get_source()
-        .and_then(|b| b.default.clone())
-        .or_else(|| node.get_sink().and_then(|b| b.default.clone()));
+    let kind = match node {
+        Accrete::input(i) => i.kind.clone(),
+        _ => None,
+    };
+    let default = node.get_source().and_then(|b| b.default.clone());
     // serde_json has an infallible constructor for every JSON scalar, so the
     // default never needs a `to_value(..).unwrap()` round trip.
     match kind {
@@ -46,7 +42,7 @@ fn field_default(node: &Accrete) -> Value {
 fn collect(node: &Accrete, out: &mut Vec<Field>) {
     match node {
         Accrete::bundle(b) => {
-            if let Some(name) = bundle_key(&b.tag, &b.id)
+            if let Some(name) = bundle_key(&b.tag)
                 && !out.iter().any(|f| f.name == name)
             {
                 // The value arrives from the child's own pack, through the
@@ -115,8 +111,8 @@ pub fn bundle_(accrete: Bundle, ctx: &Ctx) -> AnyView {
 
     // A nested bundle's packed object lands in the parent's slot for its key.
     let parent = ctx.bundle.clone();
-    let mirror = bundle_key(&accrete.tag, &accrete.id)
-        .and_then(|key| parent.as_ref().and_then(|p| p.field(&key)));
+    let mirror =
+        bundle_key(&accrete.tag).and_then(|key| parent.as_ref().and_then(|p| p.field(&key)));
 
     let attrs = accrete.attrs.clone().unwrap_or_default();
     let sends = attrs.sends;
@@ -165,4 +161,58 @@ pub fn bundle_(accrete: Bundle, ctx: &Ctx) -> AnyView {
         .child(children)
         .child(layer)
         .into_any()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::collect;
+    use accrete::Accrete;
+    use serde_json::json;
+
+    /// The names an outer bundle would pack: `collect` walks the outer's children, exactly as `bundle_` does.
+    fn names(v: serde_json::Value) -> Vec<String> {
+        let a: Accrete = serde_json::from_value(v).expect("valid accrete");
+        let Accrete::bundle(outer) = &a else {
+            panic!("expected bundle")
+        };
+        let mut out = Vec::new();
+        for c in outer.children.as_deref().unwrap_or_default() {
+            collect(c, &mut out);
+        }
+        out.into_iter().map(|f| f.name).collect()
+    }
+
+    #[test]
+    fn a_tagged_nested_bundle_is_one_key_and_the_walk_stops() {
+        // The outer object keeps the group as one object (ADR 0032 §4), it does not flatten the inner fields.
+        assert_eq!(
+            names(json!({
+                "type": "bundle",
+                "children": [{
+                    "type": "bundle",
+                    "tag": "mention",
+                    "children": [{"type": "input", "tag": "q"}]
+                }]
+            })),
+            vec!["mention".to_string()]
+        );
+    }
+
+    #[test]
+    fn an_untagged_nested_bundle_packs_nothing_into_its_parent() {
+        // `id` is identity and `dest` is where the inner sends, so neither names it here: without a `tag` the
+        // group is its own, and the parent's object does not move because someone gave it an id.
+        assert!(
+            names(json!({
+                "type": "bundle",
+                "children": [{
+                    "type": "bundle",
+                    "id": "login-42",
+                    "sink": {"dest": "notes", "scope": "local"},
+                    "children": [{"type": "input", "tag": "q"}]
+                }]
+            }))
+            .is_empty()
+        );
+    }
 }

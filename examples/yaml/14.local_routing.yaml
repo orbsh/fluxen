@@ -23,7 +23,7 @@
         source:
           slot: chan
           scope: local
-          path: /data
+          path: /data/chan
           default: "**未选频道**"
     - type: frame
       attrs:
@@ -34,10 +34,14 @@
         - round
         horizontal: true
       children:
-      - type: select
-        source: {slot: chan, scope: local}
-        sink: {slot: chan, scope: local}
-        options: {slot: menu}
+      - type: bundle
+        attrs: {submit: [change]}
+        sink: {dest: chan, scope: local}
+        children:
+        - type: select
+          tag: chan
+          source: {slot: chan, scope: local}
+          options: {slot: menu}
 - action: append
   slot: menu
   data:

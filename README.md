@@ -21,6 +21,53 @@ bundle) is a documented contract, not folklore: [docs/external-integration.md](d
 (English) · [中文](docs/external-integration.zh-CN.md). The rule it states: the renderer never adapts
 to a host — the host supplies a transport and a boot and speaks the renderer's wire.
 
+## Data binding
+
+Two types, one per direction: a read is a `Source` — `{slot?, scope?, path?, default?}` — and a write is a
+`Sink` — `{dest?, scope?, path?}` (ADR 0031 split the channels, ADR 0039 the type). Both name one value and one
+scope; what differs is what each direction has to say about it.
+
+```yaml
+type: text
+source: {slot: "notice", path: "/title", default: "untitled"}
+```
+
+- `slot` — the name a value lives under. Absent = no slot: `default` alone is a constant.
+- `dest` — where a value goes. It is the same word the outflow carries (`{dest, id?, data}`, ADR 0023), so a
+  sink and a frame say the same thing about one address.
+- `scope` — who is authoritative: `remote` (default; written by ops, replayed), `local` (this page only, dies
+  with the tree), `both` (local now, mirrored up).
+- `path` — a JSON Pointer into the value, so the shape belongs to the producer and a node picks one field out of
+  it (ADR 0008). Read side: which member to show. Write side: which member this node owns — it writes that one
+  and leaves the rest alone, which only a `scope: local` write uses. `"/"` means the root: an object written
+  there merges into what is already there, member by member, which is how a control sets its own options
+  without owning the rest of the slot.
+- `default` — read side only: what to show when there is no value. A write has no use for it, and a sink does
+  not accept it.
+
+`source` and `sink` are two channels, not one type called twice. Which nodes may hold one is the design —
+`text` and `tiles` read; **a field does not write**: an `input` keeps `source` + `kind` (what kind of field:
+`number`, `bool`, `text`, `password` — element type and parse in one place) and a `select` keeps `source` +
+`options`, and both are named by `tag`. What
+sends is the enclosing **bundle**: it packs its tagged fields into one object and owns the exit, the timing
+(`submit: [enter, button, change]`), the budget (`sends`), the aftermath (`reset`), and the `id` the outflow
+carries (ADR 0032). That `id` is the request identity — a server that published the form matches the answer by
+it — while `tag` is what the far side reads inside `data`:
+
+```yaml
+type: bundle
+id: "login-42"                       # the request: what comes back is matched by this
+sink: {dest: "session"}              # where the packed object goes
+attrs: {submit: [enter, button]}     # when it goes
+children:
+- {type: input, tag: user, kind: text}
+- {type: input, tag: pass, kind: password}
+```
+
+A bundle may sit inside another bundle: the inner one packs on its own trigger (say `change`, for a completion
+box), the outer one packs everything when its own trigger fires — one field, several ways to send it
+(docs/interaction-patterns.md §4).
+
 ## Dev workflow (`stage`)
 
 `stage` is the dev gateway: a WS mirror + console REPL + UI server, so the
