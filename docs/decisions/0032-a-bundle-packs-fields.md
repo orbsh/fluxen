@@ -31,6 +31,15 @@ changes — a switch's click, a filter's keystroke), and a `remote`/`both` sink 
 a warning. Clearing went with it, and came back as the bundle's `reset` (§6). The bundle's `id` marks the
 submission (the instance), never the fields.
 
+**The field's `sink` itself is going, too** (decided 2026-11-24, not implemented). What this section leaves on a
+field is a `Bind` that is no longer an exit, and it still does two jobs an address should not: it carries the
+parse/element type (`ui_core/src/widgets/input.rs` reads `sink.type`, else `source.type`), and it is the local
+landing of a field that no bundle packs (a switch's click, a filter's keystroke). Both have a better home — the
+type belongs to the field, and a local landing to a bundle whose own sink is `local` with `submit: ["change"]` —
+so the field loses the whole field, together with the runtime warning that exists only to deny a shape the schema
+allows. A downstream SDK that refused that dead shape in its own build step (reflux's `_check_uplinks`) drops it
+at the same time, because it was the same rule kept in a second place. Tracked as scratch ticket #470.
+
 ## 3. Timing lives on the bundle, and it is a list
 
 When to send is one question per submission, so it belongs where the exit is.
