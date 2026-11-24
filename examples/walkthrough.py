@@ -3,7 +3,7 @@
 
 Steps (each waits for one Enter; --auto runs unattended, --delay paces the text):
   1  send 00.main.yaml      the two-column shell (left graph, right stream), with the
-                            page's skin set to `sketch` first: every border in the
+                            page's `sketch` option set first: every border in the
                             walkthrough is hand-drawn (ADR 0038)
   2  append the ONE message row (13 children, every child bound to a slot) and
                             seed the six text slots
@@ -675,11 +675,12 @@ def main():
         )
 
     step.wait("send 00.main.yaml")
-    # Hand-drawn borders (ADR 0038 §3): this demo uses the drawn edge by default. The option
-    # travels on the far side — the producer decides at page build, nothing local overrides it —
-    # so the whole performance, every frame after this one included, is sketched. No switch to
-    # press.
-    print(f"    skin → {mirror.send('- action: config\n  data: {skin: sketch}\n')}")
+    # Hand-drawn borders (ADR 0038 §3): this demo starts sketched. `sketch` is one member of the object
+    # that lives in the page's option slot, sent with the page — a value like any other, so a page that
+    # wants a switch owns the same member from its side (a bool field whose sink names the path).
+    print(
+        f"    sketch → {mirror.send('- action: set\n  slot: __CONFIG__\n  data:\n    type: frame\n    source:\n      default: {sketch: true}\n')}"
+    )
     print(f"    send → {push_file('00.main.yaml')}")
 
     step.wait("the whole message arrives (one box: intro / line / radar / summary / review table / car / shoe / editor / graph, every child bound to a slot)")

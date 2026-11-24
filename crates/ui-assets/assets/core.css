@@ -1342,7 +1342,7 @@
 
 /* ---- The sketch skin (ADR 0038 §3-4) ----------------------------------------------
    The producer sets the `skin` option when it builds a page; the option is mirrored onto
-   `html[data-skin]`. A skin is core state (it lives with the `.is-*` family in
+   `html[data-<member>]` of the page's option slot. A skin is core state (it lives with the `.is-*` family in
    `utilities`), so it belongs on the core side: `custom.css` is the page's own layer,
    there to override the look, not where the core grows things.
 
@@ -1355,12 +1355,12 @@
    there, and layer order decides before specificity — in `components` even a more specific
    selector would lose. */
 @layer utilities {
-    html[data-skin="sketch"] {
+    html[data-sketch="true"] {
         --round: 0;
         --input-round: 0;
     }
 
-    html[data-skin="sketch"] .is-border[data-rough="ready"] {
+    html[data-sketch="true"] .is-border[data-rough="ready"] {
         border-color: transparent;
     }
 
@@ -1369,12 +1369,12 @@
        allowed to spill out of the box: a hand-drawn line should not be cropped by its own
        box, and `overflow: visible` also undoes `.round`'s clipping (the radius is 0 here,
        so there is nothing to clip). */
-    html[data-skin="sketch"] .is-border {
+    html[data-sketch="true"] .is-border {
         position: relative;
         overflow: visible;
     }
 
-    html[data-skin="sketch"] .is-border > svg.rough {
+    html[data-sketch="true"] .is-border > svg.rough {
         position: absolute;
         inset: calc(-1 * var(--border-width));
         overflow: visible;
@@ -1384,7 +1384,7 @@
     /* The pen: one stroke, no fill, coloured by `currentColor` (whatever the page gave this
        box), at a weight that reads as the same line as the 1px edge in normal mode. No
        concrete colour is written here. */
-    html[data-skin="sketch"] .is-border > svg.rough path {
+    html[data-sketch="true"] .is-border > svg.rough path {
         fill: none;
         stroke: currentColor;
         stroke-width: 1.5;

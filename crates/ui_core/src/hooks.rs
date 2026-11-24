@@ -104,10 +104,14 @@ pub fn value_of(ctx: &Ctx, bind: Option<&Bind>, tracked: bool) -> Option<Value> 
             ctx.slot_for_value(s).get_untracked()
         }
     };
+    // The local plane decides first — MEMBER by member: a page that chose one member has not chosen the
+    // others, so a path that misses here is not "no value", it is "the far side still decides this one"
+    // (ADR 0038 §2 revised: options are ordinary values, and their precedence is the ordinary one).
     if b.scope.local()
         && let Some(v) = read_val(slot)
+        && let Some(v) = extract(v, b.path.as_ref())
     {
-        return extract(v, b.path.as_ref());
+        return Some(v);
     }
     if b.scope.remote()
         && let Some(node) = read_data(slot)
@@ -115,6 +119,13 @@ pub fn value_of(ctx: &Ctx, bind: Option<&Bind>, tracked: bool) -> Option<Value> 
         return match b.path.as_ref() {
             Some(p) => match node.get_at(p) {
                 Ok(v) => Some(v),
+                // The node's wire shape is one place a path can land; its PAYLOAD (`source.default`) is the
+                // other, and it is where a slot's value actually lives (ADR 0012). Options are read this way:
+                // the far side sends one node whose payload is the option object, and a page reads `/sketch`.
+                Err(_) => node
+                    .get_source()
+                    .and_then(|s| s.default.clone())
+                    .and_then(|d| extract(d, Some(&p.to_string()))),
                 Err(e) => {
                     tracing::warn!("source {slot:?} path {p:?}: {e}");
                     None

@@ -94,7 +94,9 @@ pub fn sketch_layer(ctx: &Ctx, seed: u64) -> AnyView {
     let ctx = ctx.clone();
     view! {
         {move || {
-            let sketch = matches!(ctx.config_get("skin"), Some(Value::String(s)) if s == "sketch");
+            // The page's options are ordinary values now (ADR 0038 §2 revised): `sketch` is a bool a control
+            // can own, and the far side's `true` is what the producer sends when it builds the page.
+            let sketch = matches!(ctx.config_get("sketch"), Some(Value::Bool(true)));
             sketch.then(|| view! { <RoughBorder seed=seed/> })
         }}
     }

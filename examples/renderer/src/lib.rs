@@ -32,12 +32,22 @@ pub fn mount() -> Result<(), String> {
     let mut token = None;
     let mut codec_type = CodecType::Cbor;
     let mut path = "/channel".to_owned();
+    // The slot this page's options live in (ADR 0038 §2 revised): `data-config` names it, absent means the
+    // default, and an empty attribute says the page has no options at all.
+    let mut config_slot = Some(ui_core::ctx::DEFAULT_CONFIG_SLOT.to_owned());
 
     if let Ok(Some(ele)) = doc.query_selector("#main") {
         if let Some(h) = ele.get_attribute("data-host") {
             host = h;
         } else {
             host = loc.host().map_err(|_| "document.location has no host")?;
+        }
+
+        // The page's option slot (ADR 0038 §2 revised): `data-config` names it. Absent = the default name,
+        // an empty attribute = this page has no options at all (no slot, no mirrored attributes).
+        if let Some(c) = ele.get_attribute("data-config") {
+            let name = c.trim();
+            config_slot = (!name.is_empty()).then(|| name.to_owned());
         }
 
         // Page-level config: the framework pins its channel path and encoding on `#main` (the host may not use `/channel`,
@@ -103,6 +113,7 @@ pub fn mount() -> Result<(), String> {
         // Must be assembled inside the Leptos runtime: `Ctx::new` uses Executor::spawn_local, and calling
         // it before mount_to panics ("before a global executor was initialized").
         let ctx = Ctx::new(transport, codec);
+        ctx.set_config_slot(config_slot);
         // Mirror page options onto the document root (ADR 0038 §3): things like `skin` are sent down when the producer builds the page,
         // and CSS only looks at `html[data-<name>]`. One line of assembly; a host swapping the boot does the same one line.
         ctx.mirror_config();

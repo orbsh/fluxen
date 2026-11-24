@@ -52,6 +52,28 @@
     .stage-graph {
         flex: 1 1 40%;
         min-width: 0;
+        /* The corner switch is a float over the graph (ADR 0030): the graph's edge is space nothing else
+           uses, and the panel's own geometry is relative to this box. */
+        position: relative;
+    }
+
+    /* Pinned to the graph's bottom-right corner: the graph's edges are space nothing else uses, and the
+       bottom is the one corner the component's own buttons leave alone. `position: absolute` has to be said
+       from this layer: `.popup` is `position: relative` in `components`, and the page's layer wins. */
+    .stage-corner {
+        position: absolute;
+        right: 0.5rem;
+        bottom: 0.5rem;
+        z-index: 20;
+    }
+
+    /* The card opens up and to the left, staying inside the graph: `core.css` puts `.body` below the trigger
+       (`top: 100%`) and flush left (`left: 0`), which from this corner would leave the box. */
+    .stage-corner > .body {
+        top: auto;
+        bottom: 100%;
+        left: auto;
+        right: 0;
     }
 
     .stage-stream {

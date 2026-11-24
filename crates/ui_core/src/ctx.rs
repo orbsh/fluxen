@@ -33,23 +33,10 @@ pub type DataSlot = RwSignal<Option<std::sync::Arc<Accrete>>>;
 /// it lives on a plane separate from data (Accrete).
 pub type ValueSlot = RwSignal<Option<Value>>;
 
-/// The two halves of a page option (ADR 0038 §2): `local` is the page's own choice, `remote` is the default given by the far side.
-/// The effective value prefers local and falls back to remote — the same rule as reading `both` (ADR 0031 §1).
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct ConfigValue {
-    pub local: Option<Value>,
-    pub remote: Option<Value>,
-}
-
-impl ConfigValue {
-    /// Effective value: the page's if it has chosen, otherwise the far side's; both halves empty = the component's own default.
-    pub fn effective(&self) -> Option<&Value> {
-        self.local.as_ref().or(self.remote.as_ref())
-    }
-}
-
-/// A slot for one option: a per-key signal, writing one option does not notify subscribers of other options.
-pub type ConfigSlot = RwSignal<ConfigValue>;
+/// The slot a page's options live in unless `#main` names another (ADR 0038 §2, revised): ONE slot holding
+/// one object whose members are the options. An option is not a kind of thing — it is a value, read through
+/// the ordinary planes with the ordinary `path`, which is why nothing below it needs machinery of its own.
+pub const DEFAULT_CONFIG_SLOT: &str = "__CONFIG__";
 
 #[derive(Clone)]
 pub struct Ctx {
@@ -60,9 +47,10 @@ pub struct Ctx {
     pub list: RwSignal<HashMap<String, ListSlot>>,
     /// local plane: named Value slots shared by where `kind: local` events land and by their subscription.
     pub vals: RwSignal<HashMap<String, ValueSlot>>,
-    /// Page options (ADR 0038 §2): a namespace of their own, one signal per option, local/remote halves.
-    /// It is not a member of the slot plane — slot names are the application's, and mixing them in would make "which names are configuration" unanswerable.
-    pub config: RwSignal<HashMap<String, ConfigSlot>>,
+    /// The name of the slot this page's options live in (ADR 0038 §2, revised); `None` when the page asked
+    /// for none (`#main[data-config=""]`). Options are not a plane of their own: the slot is a slot, the object
+    /// in it is a value, and the page's own half is the local plane every other control already writes.
+    pub config: RwSignal<Option<String>>,
     /// Drag session (ADR 0034): `Some` means "a drag is in flight", and what it holds is that source frame node
     /// itself — the cargo is its own subtree, so there is no second parallel structure (a copy and the original would sooner or later
     /// disagree). This is the only cross-component transient state in the renderer: source and drop target sit apart with other nodes between them, and a local signal
@@ -104,7 +92,7 @@ impl Ctx {
         let data = RwSignal::new(HashMap::new());
         let list = RwSignal::new(HashMap::new());
         let vals = RwSignal::new(HashMap::new());
-        let config = RwSignal::new(HashMap::new());
+        let config = RwSignal::new(Some(DEFAULT_CONFIG_SLOT.to_string()));
         let drag = RwSignal::new(None);
 
         // Read loop: transport.on() -> frame signal
@@ -185,13 +173,22 @@ impl Ctx {
             return false;
         };
         if sink.scope.local() {
-            let wrapped = to_value(&content::Outflow {
-                dest: slot.clone(),
-                id: id.clone(),
-                data: payload.clone(),
-            })
-            .unwrap_or(Value::Null);
-            self.slot_for_value(&slot).set(Some(wrapped));
+            match sink.path.as_deref() {
+                // A sink WITH a path writes a value into the local plane, merged at that path (ADR 0031 §2):
+                // the control owns one member of the value and does not have to know the rest of it.
+                Some(path) => self.write_local_at(&slot, path, payload.clone()),
+                // A sink with no path is a message: the plane holds the event and pages read it back with
+                // `path: /data`.
+                None => {
+                    let wrapped = to_value(&content::Outflow {
+                        dest: slot.clone(),
+                        id: id.clone(),
+                        data: payload.clone(),
+                    })
+                    .unwrap_or(Value::Null);
+                    self.slot_for_value(&slot).set(Some(wrapped));
+                }
+            }
         }
         if sink.scope.remote() {
             let ctx = self.clone();
@@ -258,60 +255,53 @@ impl Ctx {
             .unwrap_or(slot)
     }
 
-    /// Get (or create on first use) the slot of an option (same semantics as slot_for_value — per-key signal, built under the root owner).
-    /// Reading an option that has not appeared yet creates a slot for it: without a slot there is nothing to subscribe to, and "never written" and "does not exist" are
-    /// the same state to begin with here, differing only in whether the value is empty.
-    pub fn config_slot(&self, name: &str) -> ConfigSlot {
-        if let Some(s) = self.config.get_untracked().get(name).copied() {
-            return s;
+    /// The slot this page's options live in, if the page has any.
+    pub fn config_slot(&self) -> Option<String> {
+        self.config.get_untracked()
+    }
+
+    /// Point the page's options at another slot — `#main[data-config]` — or turn them off.
+    pub fn set_config_slot(&self, name: Option<String>) {
+        self.config.set(name);
+    }
+
+    /// One option's effective value: the page's own half first, the far side's after it, decided member by
+    /// member (ADR 0031 §1 read through the two ordinary planes). A control that owns `sketch` therefore does
+    /// not darken `density`: the far side's members stay readable while the page has not touched them.
+    pub fn config_get(&self, member: &str) -> Option<Value> {
+        let slot = self.config.get_untracked()?;
+        self.config_members(&slot).remove(member)
+    }
+
+    /// A sink that names a `path` writes INTO the local plane at that path, merging (ADR 0031 §2): several
+    /// controls can own several members of one value, and none of them has to know the others. A sink with no
+    /// path keeps the event shape (`{dest, id, data}`) — that is what a slot used as a message channel carries,
+    /// and pages read it back with `path: /data`.
+    pub fn write_local_at(&self, slot: &str, path: &str, value: Value) {
+        let segs = match pointer_segments(path) {
+            Ok(segs) => segs,
+            Err(e) => {
+                tracing::warn!("local write into {slot:?} skipped: {e}");
+                return;
+            }
+        };
+        let sig = self.slot_for_value(slot);
+        let mut acc = sig.get_untracked().unwrap_or(Value::Null);
+        // A null at one segment removes that member: "the page stops choosing this", which hands the member
+        // back to the far side on the next read.
+        let result = match (value.is_null(), segs.as_slice()) {
+            (true, [one]) => remove_member(&mut acc, one),
+            _ => write_into(&mut acc, &segs, value),
+        };
+        match result {
+            Ok(()) => sig.set(Some(acc)),
+            Err(e) => tracing::warn!("local write {path:?} into {slot:?} skipped: {e}"),
         }
-        let slot = self.owner.with(|| RwSignal::new(ConfigValue::default()));
-        let key = name.to_string();
-        self.config.update(|m| {
-            m.entry(key).or_insert(slot);
-        });
-        self.config
-            .get_untracked()
-            .get(name)
-            .copied()
-            .unwrap_or(slot)
     }
 
-    /// The effective option value (local preferred, remote fallback). Reading subscribes to this one option — other options changing does not rerun.
-    pub fn config_get(&self, name: &str) -> Option<Value> {
-        self.config_slot(name).get().effective().cloned()
-    }
-
-    /// The page's own write form (ADR 0038 §2): the first pointer segment is the option name, the rest is written into that option's `local`
-    /// half; an option-level `null` clears the local half, handing the option back to the far side. A write creates the containers along the path —
-    /// a write has a path, so there is no such thing as "hitting the wrong target" (the rejection semantics of `patch` are another matter).
-    pub fn set_config(&self, path: &str, value: Value) -> Result<(), String> {
-        let segs = pointer_segments(path)?;
-        let Some((name, rest)) = segs.split_first() else {
-            return Err(format!("config path names no option: {path:?}"));
-        };
-        let slot = self.config_slot(name);
-        let cur = slot.get_untracked();
-        let local = if rest.is_empty() && value.is_null() {
-            None
-        } else {
-            let mut acc = cur.local.clone().unwrap_or(Value::Null);
-            write_into(&mut acc, rest, value)?;
-            Some(acc)
-        };
-        let next = ConfigValue {
-            local,
-            remote: cur.remote.clone(),
-        };
-        if next != cur {
-            slot.set(next);
-        }
-        Ok(())
-    }
-
-    /// Mirror every option onto the document root as `data-<name>` (ADR 0038 §3): one effect per option,
-    /// a write sets the attribute, a clear removes it, and other options are not rewritten along with it. The option name goes into the attribute name as is (`skin` →
-    /// `data-skin`), so CSS needs only one selector.
+    /// Mirror the option slot onto the document root as `data-<member>` (ADR 0038 §3): one effect for the slot,
+    /// one attribute per scalar member of the effective value. A member that goes away takes its attribute with
+    /// it, and an attribute this never wrote is never touched.
     pub fn mirror_config(&self) {
         let Some(root) = web_sys::window()
             .and_then(|w| w.document())
@@ -320,57 +310,86 @@ impl Ctx {
             tracing::warn!("mirror_config: no document root to mirror onto");
             return;
         };
-        // An effect only grows when the key set changes: options already attached keep following values with their own.
-        let seen: std::rc::Rc<std::cell::RefCell<std::collections::HashSet<String>>> =
-            Default::default();
         let ctx = self.clone();
-        let owner = self.owner.clone();
+        let written: std::rc::Rc<std::cell::RefCell<std::collections::HashSet<String>>> =
+            Default::default();
         Effect::new(move |_| {
-            for name in ctx.config.get().keys().cloned().collect::<Vec<_>>() {
-                if !seen.borrow_mut().insert(name.clone()) {
+            let members = match ctx.config.get() {
+                Some(slot) => ctx.config_members(&slot),
+                None => Default::default(),
+            };
+            let mut still: std::collections::HashSet<String> = Default::default();
+            for (member, value) in &members {
+                let Some(text) = scalar_text(value) else { continue };
+                let attr = format!("data-{member}");
+                if root.set_attribute(&attr, &text).is_err() {
+                    tracing::warn!("mirror_config: cannot set {attr}");
                     continue;
                 }
-                let slot = ctx.config_slot(&name);
-                let el = root.clone();
-                let attr = format!("data-{name}");
-                owner.with(|| {
-                    let el = el.clone();
-                    let attr = attr.clone();
-                    Effect::new(move |_| {
-                        // Subscribe to this one option only
-                        let v = slot.get().effective().cloned();
-                        match v {
-                            Some(v) => {
-                                let text = match &v {
-                                    Value::String(s) => s.clone(),
-                                    other => other.to_string(),
-                                };
-                                if el.set_attribute(&attr, &text).is_err() {
-                                    tracing::warn!("mirror_config: cannot set {attr}");
-                                }
-                            }
-                            None => {
-                                el.remove_attribute(&attr).ok();
-                            }
-                        }
-                    });
-                });
+                still.insert(attr);
             }
+            let gone: Vec<String> = written
+                .borrow()
+                .iter()
+                .filter(|attr| !still.contains(*attr))
+                .cloned()
+                .collect();
+            for attr in gone {
+                root.remove_attribute(&attr).ok();
+            }
+            *written.borrow_mut() = still;
         });
+    }
+
+    /// The effective option object: the far side's members, written over by the page's own.
+    fn config_members(&self, slot: &str) -> std::collections::BTreeMap<String, Value> {
+        // The far side's object is the slot's PAYLOAD — `source.default` of the node that carries it, which is
+        // how every other slot value is carried (ADR 0012: an absent payload is the empty value).
+        let remote = self
+            .slot_for_data(slot)
+            .get()
+            .and_then(|node| node.get_source().and_then(|s| s.default.clone()));
+        let local = self.slot_for_value(slot).get();
+        merge_members(remote.as_ref(), local.as_ref())
     }
 }
 
-/// One member of a frame lands in the remote half: `null` clears it, and an unchanged value returns None (no write, no notification).
-fn merge_remote(cur: &ConfigValue, incoming: &Value) -> Option<ConfigValue> {
-    let next = ConfigValue {
-        local: cur.local.clone(),
-        remote: if incoming.is_null() {
-            None
-        } else {
-            Some(incoming.clone())
-        },
-    };
-    (next != *cur).then_some(next)
+/// The effective options: the far side's members, written over by the page's own (ADR 0038 §2 revised).
+/// Per member, not per object — a page that chose `sketch` has said nothing about `density`.
+fn merge_members(
+    remote: Option<&Value>,
+    local: Option<&Value>,
+) -> std::collections::BTreeMap<String, Value> {
+    let mut members = std::collections::BTreeMap::new();
+    for src in [remote, local].into_iter().flatten() {
+        if let Value::Object(map) = src {
+            for (k, v) in map {
+                members.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    members
+}
+
+/// A scalar as an attribute value; an object or an array has no one text, so it is not mirrored.
+fn scalar_text(v: &Value) -> Option<String> {
+    match v {
+        Value::String(s) => Some(s.clone()),
+        Value::Null | Value::Object(_) | Value::Array(_) => None,
+        other => Some(other.to_string()),
+    }
+}
+
+/// Drop one member of a local object: the write that says "the page stops choosing this".
+fn remove_member(root: &mut Value, member: &str) -> Result<(), String> {
+    match root {
+        Value::Object(map) => {
+            map.remove(member);
+            Ok(())
+        }
+        Value::Null => Ok(()),
+        _ => Err(format!("the local value is not an object, cannot drop {member:?}")),
+    }
 }
 
 /// JSON Pointer (RFC 6901) segments, with `~1`/`~0` unescaped — the same syntax as `Accrete::with_pointer`.
@@ -562,18 +581,6 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                     tracing::warn!("patch {x:?} skipped: {e}");
                 }
             }
-            Content::Config(x) => {
-                // Page options (ADR 0038 §2): merged per member, and only the remote half is written — a frame never overwrites
-                // the page's own choice (the priority ADR 0031 §1 sets for `both`).
-                for (name, v) in &x.data {
-                    let slot = ctx.config_slot(name);
-                    let cur = slot.get_untracked();
-                    if let Some(next) = merge_remote(&cur, v) {
-                        tracing::info!("config {name:?} = {:.120?}", v);
-                        slot.set(next);
-                    }
-                }
-            }
             Content::Empty => {}
         }
     }
@@ -739,59 +746,41 @@ pub fn render_children(ctx: &Ctx, subs: &[Accrete]) -> Vec<AnyView> {
 
 #[cfg(test)]
 mod config_tests {
-    use super::{ConfigValue, merge_remote, pointer_segments, write_into};
+    use super::{merge_members, pointer_segments, remove_member, scalar_text, write_into};
     use serde_json::{Value, json};
 
-    fn remote(v: Value) -> ConfigValue {
-        ConfigValue {
-            local: None,
-            remote: Some(v),
-        }
+    /// One control owns one member; the far side keeps the members the page never touched.
+    #[test]
+    fn local_members_win_one_at_a_time() {
+        let remote = json!({"sketch": false, "density": "compact"});
+        let local = json!({"sketch": true});
+        let members = merge_members(Some(&remote), Some(&local));
+        assert_eq!(members["sketch"], json!(true));
+        assert_eq!(members["density"], json!("compact"), "an untouched member is still the far side's");
     }
 
     #[test]
-    fn a_new_member_lands_in_the_remote_half() {
-        let next = merge_remote(&ConfigValue::default(), &json!("sketch")).unwrap();
-        assert_eq!(next.remote, Some(json!("sketch")));
-        assert_eq!(next.local, None);
+    fn a_page_that_chose_nothing_reads_the_far_side() {
+        let remote = json!({"sketch": true});
+        assert_eq!(merge_members(Some(&remote), None)["sketch"], json!(true));
+        assert!(merge_members(None, None).is_empty());
+    }
+
+    /// The write a control makes is a merge: `{sketch: true}` written after `{density: ...}` adds a member,
+    /// it does not replace the object.
+    #[test]
+    fn a_path_write_merges_into_the_local_object() {
+        let mut acc = json!({"density": "compact"});
+        write_into(&mut acc, &pointer_segments("/sketch").unwrap(), json!(true)).unwrap();
+        assert_eq!(acc, json!({"density": "compact", "sketch": true}));
     }
 
     #[test]
-    fn an_equal_member_is_not_written() {
-        let cur = remote(json!("sketch"));
-        assert_eq!(merge_remote(&cur, &json!("sketch")), None);
-    }
-
-    #[test]
-    fn null_clears_the_remote_half_and_keeps_the_local_one() {
-        let cur = ConfigValue {
-            local: Some(json!("normal")),
-            remote: Some(json!("sketch")),
-        };
-        let next = merge_remote(&cur, &Value::Null).unwrap();
-        assert_eq!(next.remote, None);
-        assert_eq!(next.local, Some(json!("normal")));
-    }
-
-    #[test]
-    fn clearing_an_absent_half_writes_nothing() {
-        let cur = ConfigValue {
-            local: Some(json!("normal")),
-            remote: None,
-        };
-        assert_eq!(merge_remote(&cur, &Value::Null), None);
-    }
-
-    #[test]
-    fn local_wins_and_remote_is_the_fallback() {
-        let both = ConfigValue {
-            local: Some(json!("normal")),
-            remote: Some(json!("sketch")),
-        };
-        assert_eq!(both.effective(), Some(&json!("normal")));
-        let only_remote = remote(json!("sketch"));
-        assert_eq!(only_remote.effective(), Some(&json!("sketch")));
-        assert_eq!(ConfigValue::default().effective(), None);
+    fn a_null_member_drops_the_pages_choice() {
+        let mut acc = json!({"sketch": true, "density": "compact"});
+        remove_member(&mut acc, "sketch").unwrap();
+        assert_eq!(acc, json!({"density": "compact"}), "the far side decides that member again");
+        assert!(remove_member(&mut Value::Null, "sketch").is_ok(), "dropping what is not there is not an error");
     }
 
     #[test]
@@ -811,7 +800,7 @@ mod config_tests {
 
     #[test]
     fn a_path_without_a_leading_slash_is_refused() {
-        assert!(pointer_segments("skin").is_err());
+        assert!(pointer_segments("sketch").is_err());
     }
 
     #[test]
@@ -821,5 +810,14 @@ mod config_tests {
             vec!["a/b".to_string(), "c~d".to_string()]
         );
     }
-}
 
+    /// A CSS attribute is one text: a bool or a number has one, an object does not.
+    #[test]
+    fn only_scalars_are_mirrored() {
+        assert_eq!(scalar_text(&json!(true)).as_deref(), Some("true"));
+        assert_eq!(scalar_text(&json!("chalk")).as_deref(), Some("chalk"));
+        assert_eq!(scalar_text(&json!(3)), Some("3".to_string()));
+        assert_eq!(scalar_text(&json!({"a": 1})), None);
+        assert_eq!(scalar_text(&Value::Null), None);
+    }
+}
