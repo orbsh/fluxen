@@ -103,6 +103,9 @@ pub fn mount() -> Result<(), String> {
         // 必须在 Leptos 的运行期里装配：`Ctx::new` 用 Executor::spawn_local，早于
         // mount_to 调用它会 panic（"before a global executor was initialized"）。
         let ctx = Ctx::new(transport, codec);
+        // 页面选项镜像到文档根（ADR 0038 §3）：`skin` 之类由生产者建页时下发，
+        // CSS 只认 `html[data-<名字>]`。一行装配，宿主换 boot 时同样一行。
+        ctx.mirror_config();
         publish_page_send(ctx.clone());
         // 响应式根：仅当 layout 变化时重建
         move || {
