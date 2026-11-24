@@ -1,7 +1,5 @@
 use crate::Ctx;
-use crate::hooks::{
-    enter_pressed, field_changed, node_id, use_common_css, value_of,
-};
+use crate::hooks::{enter_pressed, field_changed, locked, node_id, use_common_css, value_of};
 use accrete::{AccreteOps, Input, JsType};
 use leptos::ev;
 use leptos::html::*;
@@ -27,7 +25,11 @@ fn target_value(kind: &Option<JsType>, target: Option<web_sys::EventTarget>) -> 
     };
     if let Some(i) = t.dyn_ref::<web_sys::HtmlInputElement>() {
         if matches!(kind, Some(JsType::bool)) {
-            return if i.checked() { "true".into() } else { "false".into() };
+            return if i.checked() {
+                "true".into()
+            } else {
+                "false".into()
+            };
         }
         return i.value();
     }
@@ -37,15 +39,32 @@ fn target_value(kind: &Option<JsType>, target: Option<web_sys::EventTarget>) -> 
     String::new()
 }
 
-/// Clear the element imperatively (browser value-attribute dirty semantics):
-/// typing dirties the default value, so attribute updates no longer reset what
-/// is displayed, and this node lives for the whole session.
-fn clear_target(target: Option<web_sys::EventTarget>) {
-    let Some(t) = target else { return };
-    if let Some(i) = t.dyn_ref::<web_sys::HtmlInputElement>() {
-        i.set_value("");
-    } else if let Some(a) = t.dyn_ref::<web_sys::HtmlTextAreaElement>() {
-        a.set_value("");
+/// The text an element shows for a value — the same spelling the `value` binding uses.
+fn as_text(v: &Value) -> String {
+    match v {
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        v => v.as_str().unwrap_or("").to_string(),
+    }
+}
+
+#[cfg(test)]
+mod parse_tests {
+    use super::parse;
+    use accrete::JsType;
+    use serde_json::json;
+
+    /// The declared type decides the JSON the bundle packs — a field that says `number` sends a number,
+    /// and one that says nothing sends what was typed (a "42" in a text field stays text).
+    #[test]
+    fn the_declared_type_is_what_lands_in_the_object() {
+        assert_eq!(parse(&Some(JsType::number), "42"), json!(42.0));
+        assert_eq!(parse(&Some(JsType::number), "4.5"), json!(4.5));
+        assert_eq!(parse(&Some(JsType::number), ""), json!(0.0));
+        assert_eq!(parse(&Some(JsType::bool), "true"), json!(true));
+        assert_eq!(parse(&Some(JsType::bool), "false"), json!(false));
+        assert_eq!(parse(&None, "42"), json!("42"));
+        assert_eq!(parse(&Some(JsType::text), "42"), json!("42"));
     }
 }
 
@@ -68,7 +87,6 @@ fn on_input(
     id: Option<String>,
     ctx: Ctx,
 ) -> impl Fn(web_sys::Event) + 'static {
-    let is_switch = matches!(kind, Some(JsType::bool));
     move |event: web_sys::Event| {
         let parsed = parse(&kind, &target_value(&kind, event.target()));
         slot.set(parsed.clone());
@@ -77,27 +95,23 @@ fn on_input(
             field_changed(&ctx, ctx.bundle.as_ref());
             return;
         }
-        // A switch has no Enter to press, so its change IS its exit (a text field keeps Enter: typing must
-        // not send per keystroke).
-        if is_switch
-            && let Some(sink) = &sink
+        // No tag: all a sink can still do is land locally, and it lands as the value changes — a switch's
+        // click, a filter's keystroke. A switch has no Enter to press; an uplink is the bundle's business.
+        if let Some(sink) = &sink
+            && matches!(sink.scope, accrete::Scope::Local)
         {
             ctx.emit(sink, id.clone(), parsed);
         }
     }
 }
 
-/// Enter. The nearest enclosing bundle that declares `enter` sends it; a field
-/// with no bundle keeps its own exit (the sink, as before). In a multiline field
-/// Enter is the submit and Shift+Enter is the newline — otherwise `submit:
-/// [enter]` would be dead on the very field a chat box uses.
+/// Enter. The nearest enclosing bundle that declares `enter` sends it; a field with no tag has no exit
+/// here at all (ADR 0032 §2 revised — an uplink is a bundle's business, and clearing is `reset`'s). In a
+/// multiline field Enter is the submit and Shift+Enter is the newline — otherwise `submit: [enter]` would
+/// be dead on the very field a chat box uses.
 fn on_key(
     multiline: bool,
     field: Option<RwSignal<Value>>,
-    sink: Option<accrete::Bind>,
-    id: Option<String>,
-    kind: Option<JsType>,
-    slot: RwSignal<Value>,
     ctx: Ctx,
 ) -> impl Fn(web_sys::KeyboardEvent) + 'static {
     move |ev: web_sys::KeyboardEvent| {
@@ -109,21 +123,7 @@ fn on_key(
         }
         if field.is_some() {
             enter_pressed(&ctx, ctx.bundle.as_ref());
-            return;
         }
-        let Some(sink) = sink.clone() else {
-            return;
-        };
-        let val = slot.get_untracked();
-        // An empty Enter does not fire (same rule the old input/textarea had).
-        if val.as_str().is_some_and(|s| s.trim().is_empty()) {
-            return;
-        }
-        slot.set(default_option_jskind(&kind));
-        clear_target(ev.target());
-        // One exit (ADR 0031): the scope decides page-local, uplink, or both;
-        // `id` = this field's own id (ADR 0010).
-        ctx.emit(&sink, id.clone(), val);
     }
 }
 
@@ -173,6 +173,24 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     };
     let slot = RwSignal::new(initial);
 
+    // A tag-less field has no uplink (ADR 0032 §2 revised): the bundle owns the exit, so a `remote`/`both`
+    // sink on a field nobody packs would send into nothing. Say so once and keep the write local.
+    if field.is_none()
+        && let Some(sink) = &sink
+        && !matches!(sink.scope, accrete::Scope::Local)
+    {
+        tracing::warn!(
+            "input {:?}: a sink without a tag has no uplink — wrap the field in a bundle (ADR 0032 §2)",
+            accrete.id
+        );
+    }
+
+    // A field's display follows the bundle's copy, so `reset: clear`/`default` shows up in the box. Writing an
+    // equal value notifies nobody, so following the very signal this input writes costs no loop.
+    if let Some(sig) = field {
+        Effect::new(move |_| slot.set(sig.get()));
+    }
+
     // Writing a switch is idempotent (checked = value), so following the slot costs no loop: the write lands in
     // the same place the read comes from and an equal value notifies nobody.
     if is_switch {
@@ -181,6 +199,43 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
         Effect::new(move |_| {
             if let Some(v) = value_of(&ctx2, src.as_ref(), true) {
                 slot.set(Value::Bool(v.as_bool().unwrap_or(false)));
+            }
+        });
+    }
+
+    // A bundle that has used up its `sends` disables every field under it (ADR 0032 §5): the count says
+    // "no more", and a box nobody can use should not take a click. `disabled` is presence, not value, so an
+    // absent attribute is how "not locked" is spelled.
+    let locked_ctx = ctx.clone();
+    let is_locked = move || locked(locked_ctx.bundle.as_ref()).then_some("");
+
+    // The element keeps its own text once someone types in it, and a binding that writes the same string it
+    // wrote last time is skipped — so a reset (`clear`/`default`) would change the signal and leave the box
+    // full. This pushes the signal onto the element whenever they disagree, which is idempotent for the
+    // ordinary case (`slot` == element) and the only way a reset becomes visible.
+    let node_el = NodeRef::<leptos::html::Input>::new();
+    let node_area = NodeRef::<leptos::html::Textarea>::new();
+    {
+        let slot = slot;
+        let switch = is_switch;
+        Effect::new(move |_| {
+            let want = as_text(&slot.get());
+            if let Some(el) = node_el.get_untracked() {
+                // A checkbox shows `checked`, not `value`, and it has the same memory problem: a reset that
+                // writes `false` onto a box the reader ticked would otherwise only reach the signal.
+                if switch {
+                    let on = slot.get().as_bool().unwrap_or(false);
+                    if el.checked() != on {
+                        el.set_checked(on);
+                    }
+                } else if el.value() != want {
+                    el.set_value(&want);
+                }
+            }
+            if let Some(el) = node_area.get_untracked() {
+                if el.value() != want {
+                    el.set_value(&want);
+                }
             }
         });
     }
@@ -196,8 +251,8 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     };
 
     if accrete.multiline {
-        // A textarea shows its value as content; the display is a snapshot and
-        // a send clears the element imperatively (clear_target).
+        // A textarea shows its value as content; the display is a snapshot of the signal, which now
+        // follows the bundle, so a reset shows up without touching the element by hand.
         let text = match slot.get_untracked() {
             Value::Number(n) => n.to_string(),
             Value::Bool(b) => b.to_string(),
@@ -205,6 +260,8 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
         };
         let base = textarea()
             .class(css.as_str())
+            .attr("disabled", is_locked)
+            .node_ref(node_area)
             .child(text)
             .on(
                 ev::input,
@@ -217,10 +274,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
                     ctx.clone(),
                 ),
             )
-            .on(
-                ev::keydown,
-                on_key(true, field, sink, node_id, kind, slot, ctx.clone()),
-            );
+            .on(ev::keydown, on_key(true, field, ctx.clone()));
         return match placeholder {
             Some(ph) => base.placeholder(ph).into_any(),
             None => base.into_any(),
@@ -244,6 +298,8 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let base = input()
         .class(css.as_str())
         .r#type(ty)
+        .attr("disabled", is_locked)
+        .node_ref(node_el)
         .on(
             ev::input,
             on_input(
@@ -255,10 +311,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
                 ctx.clone(),
             ),
         )
-        .on(
-            ev::keydown,
-            on_key(false, field, sink, node_id, kind.clone(), slot, ctx.clone()),
-        );
+        .on(ev::keydown, on_key(false, field, ctx.clone()));
     match (&kind, placeholder) {
         (Some(JsType::bool), Some(ph)) => base.checked(checked).placeholder(ph).into_any(),
         (Some(JsType::bool), None) => base.checked(checked).into_any(),
