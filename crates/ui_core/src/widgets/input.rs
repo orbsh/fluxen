@@ -17,11 +17,18 @@ fn default_option_jskind(v: &Option<JsType>) -> Value {
 
 /// The text of an `<input>` or a `<textarea>` target: multiline is a layout of
 /// this field, not another node (ADR 0032), so both elements land here.
-fn target_value(target: Option<web_sys::EventTarget>) -> String {
+///
+/// A `type: bool` field is a checkbox, and a checkbox keeps its state in `checked()`, never in `value()`
+/// (a box with no `value` attribute reports the string `"on"`, which parsed as a bool is always false —
+/// a skin toggle written that way could only ever turn things off).
+fn target_value(kind: &Option<JsType>, target: Option<web_sys::EventTarget>) -> String {
     let Some(t) = target else {
         return String::new();
     };
     if let Some(i) = t.dyn_ref::<web_sys::HtmlInputElement>() {
+        if matches!(kind, Some(JsType::bool)) {
+            return if i.checked() { "true".into() } else { "false".into() };
+        }
         return i.value();
     }
     if let Some(a) = t.dyn_ref::<web_sys::HtmlTextAreaElement>() {
@@ -57,14 +64,25 @@ fn on_input(
     kind: Option<JsType>,
     slot: RwSignal<Value>,
     field: Option<RwSignal<Value>>,
+    sink: Option<accrete::Bind>,
+    id: Option<String>,
     ctx: Ctx,
 ) -> impl Fn(web_sys::Event) + 'static {
+    let is_switch = matches!(kind, Some(JsType::bool));
     move |event: web_sys::Event| {
-        let parsed = parse(&kind, &target_value(event.target()));
+        let parsed = parse(&kind, &target_value(&kind, event.target()));
         slot.set(parsed.clone());
         if let Some(sig) = field {
             sig.set(parsed);
             field_changed(&ctx, ctx.bundle.as_ref());
+            return;
+        }
+        // A switch has no Enter to press, so its change IS its exit (a text field keeps Enter: typing must
+        // not send per keystroke).
+        if is_switch
+            && let Some(sink) = &sink
+        {
+            ctx.emit(sink, id.clone(), parsed);
         }
     }
 }
@@ -139,14 +157,33 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     // Initial value: the bundle's copy, else the source literal. A field does
     // not subscribe to the slot it writes (a self read/write loop restores what
     // was just sent).
+    let is_switch = matches!(kind, Some(JsType::bool));
     let initial = match field {
         Some(sig) => sig.get_untracked(),
+        // A switch shows the state it is SET to, including the one the far side set: its value is its display,
+        // which a text field's is not (that is why a field otherwise takes its literal and never reads its own
+        // slot — typing would be undone by the echo of what was just sent).
+        None if is_switch => {
+            value_of(&ctx, accrete.get_source(), false).unwrap_or(Value::Bool(false))
+        }
         None => accrete
             .get_source()
             .and_then(|b| b.default.clone())
             .unwrap_or_else(|| default_option_jskind(&kind)),
     };
     let slot = RwSignal::new(initial);
+
+    // Writing a switch is idempotent (checked = value), so following the slot costs no loop: the write lands in
+    // the same place the read comes from and an equal value notifies nobody.
+    if is_switch {
+        let src = accrete.get_source().cloned();
+        let ctx2 = ctx.clone();
+        Effect::new(move |_| {
+            if let Some(v) = value_of(&ctx2, src.as_ref(), true) {
+                slot.set(Value::Bool(v.as_bool().unwrap_or(false)));
+            }
+        });
+    }
 
     let placeholder = value_of(&ctx, accrete.placeholder.as_ref(), false)
         .and_then(|d| d.as_str().map(String::from));
@@ -171,7 +208,14 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
             .child(text)
             .on(
                 ev::input,
-                on_input(kind.clone(), slot, field, ctx.clone()),
+                on_input(
+                    kind.clone(),
+                    slot,
+                    field,
+                    sink.clone(),
+                    node_id.clone(),
+                    ctx.clone(),
+                ),
             )
             .on(
                 ev::keydown,
@@ -200,7 +244,17 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let base = input()
         .class(css.as_str())
         .r#type(ty)
-        .on(ev::input, on_input(kind.clone(), slot, field, ctx.clone()))
+        .on(
+            ev::input,
+            on_input(
+                kind.clone(),
+                slot,
+                field,
+                sink.clone(),
+                node_id.clone(),
+                ctx.clone(),
+            ),
+        )
         .on(
             ev::keydown,
             on_key(false, field, sink, node_id, kind.clone(), slot, ctx.clone()),

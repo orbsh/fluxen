@@ -2,15 +2,15 @@
 #
 # The screen has a fixed two columns, no menu, no tabs, no routing:
 #   left column  a persistent 3D force-directed graph (the native `forcegraph` component), for structure, relations and state;
-#   right column  a single message stream (rack + the chat data slot), for reading, input and actions.
+#   right column  a single message stream (tiles + the chat data slot), for reading, input and actions.
 # When width runs short, shrink the left graph first (see .stage-graph / .stage-stream in custom.css).
 #
-# Difference from the old layout: previously "chat" was one page among pages, with a channel select on the left —
-# the channel list was addressed by category, and a category is a one-off judgement made once and never revised. The graph is addressed by relation, so
-# the navigation elements come from the graph on the left; tabs / pages / channel are all gone.
+# Difference from the older layout: "chat" used to be one page among pages, with a channel select on the
+# left, and a channel list is addressed by category — a judgement made once and never revised. The graph is
+# addressed by relation, so the navigation elements come from the graph; tabs / pages / channel are gone.
 #
-# Further frames keep feeding the graph data (whole snapshots, diffed by id): this file only lays down the crate layer,
-# so the left column has something to show on the very first screen.
+# Further frames keep feeding the graph data (whole snapshots, diffed by id): this file only lays down the
+# crate layer, so the left column has something to show on the very first screen.
 - action: create
   slot: ""
   data:
@@ -34,6 +34,50 @@
         style:
           fit_padding_px: 56
         source: {slot: graph}
+      # ---- the corner switch (ADR 0030, `place: anchor`) ----------------------
+      # The graph's own buttons live inside the component, at the top edge; this one is a page node that
+      # floats over the bottom-right corner — empty in the component's own layout. `place: anchor` means children[0] is the trigger and children[1] the card; Esc
+      # and a click outside close it. The checkbox owns `sketch` from the page's side (ADR 0038 §2).
+      - type: panel
+        attrs:
+          class:
+          - stage-corner
+          place: anchor
+        children:
+        - type: text
+          attrs:
+            class:
+            - box
+            - is-border
+            - round
+            - pad-sm
+            - text-sm
+            - is-pointer
+            - is-highlight
+          source: {default: wireframe}
+        - type: frame
+          attrs:
+            class:
+            - box
+            - is-border
+            - round
+            - is-shadow
+            - pad-sm
+            - gap
+            - text-sm
+            horizontal: true
+          children:
+          - type: text
+            attrs:
+              class:
+              - nogrow
+            source: {default: drawn borders}
+          - type: input
+            attrs:
+              class:
+              - nogrow
+            source: {slot: __CONFIG__, path: /sketch, scope: both, type: bool}
+            sink: {slot: __CONFIG__, scope: local, path: /sketch}
     # ---- right column: message stream ---------------------------------------
     - type: frame
       attrs:
@@ -62,7 +106,7 @@
             - is-border
             - round
             - is-shadow
-            selector: ask
+          selector: ask
         - type: frame
           attrs:
             class:
