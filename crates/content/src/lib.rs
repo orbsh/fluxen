@@ -45,14 +45,6 @@ pub enum Content<T> {
     #[serde(rename = "patch")]
     Patch(PatchOp),
 
-    /// Remote write into the vals plane (ADR 0011): inject one `local` event
-    /// as if the page had emitted it. The payload shape is the ADR 0010
-    /// `Outflow`, so subscribers cannot tell a remote write from an in-page
-    /// emit. Write is whole-value; the renderer short-circuits equal values
-    /// (the write/read loop guard).
-    #[serde(rename = "inject")]
-    Inject(InjectOp),
-
     #[serde(rename = "empty")]
     #[default]
     Empty,
@@ -130,34 +122,6 @@ pub struct PatchOp {
     pub path: String,
     pub op: PatchKind,
     pub value: Value,
-}
-
-/// Remote vals-plane write (ADR 0011). Field names mirror `Outflow` — `slot`
-/// selects the channel, the rest is its payload — so the slot ends up holding
-/// exactly what an in-page `Local` emit would write. Not generic over `T`:
-/// the vals plane's currency is a bare `Value` (ADR 0008 — event data is not
-/// display form), unlike every other plane.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct InjectOp {
-    pub slot: String,
-    /// 另起的名字（缺省 = 槽名）。目标仍是 `slot`；`name` 只在"这次写入要冒充另一个名字"时写。
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    pub data: Value,
-}
-
-impl InjectOp {
-    /// The wrapper the slot receives. `name` defaults to the slot name — the
-    /// same rule `BindVariant::Local` follows (the slot is the channel).
-    pub fn outflow(&self) -> Outflow {
-        Outflow {
-            dest: self.name.clone().unwrap_or_else(|| self.slot.clone()),
-            id: self.id.clone(),
-            data: self.data.clone(),
-        }
-    }
 }
 
 /// Registration of a stamp definition (ADR 0037). `data` is the node tree itself — a
