@@ -34,7 +34,7 @@
 
 3. `attrs` 统一用 `FrameAttr`（`class`/`selector`/`horizontal`/`grid`），所以原来
    `placeholder` 撑不起的 grid 布局现在一条路都通。
-4. 淡入淡出改由 CSS 一次性动画承担（`main.css` 里的 `.fade-in-and-out`）：元素随
+4. 淡入淡出改由 CSS 一次性动画承担（`core.css` 里的 `.fade-in-and-out`）：元素随
    槽值重建，动画自己重播，不再需要 JS 去找 id 加类再删类。
 
 ## 迁移
@@ -48,5 +48,5 @@
 - **隐藏耦合要记住**：`use_common_css`（`hooks.rs:12`）按类型名决定默认是否加
   `col`，表里原本写的是 `"Case"`。改名时这张字符串表必须同步，否则所有 frame
   都不再默认纵排——布局会整体散掉，而编译器不会提醒。
-- DOM 里的 class 从 `case`/`placeholder` 变成 `frame`。`main.css` 里没有这两
+- DOM 里的 class 从 `case`/`placeholder` 变成 `frame`。`core.css` 里没有这两
   个类的样式（`.f`/`.g`/`.col` 管布局），所以没有样式回退。

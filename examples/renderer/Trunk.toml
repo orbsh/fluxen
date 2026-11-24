@@ -10,8 +10,8 @@ backend = "http://localhost:3000/assets/mermaid.min.js"
 rewrite = "/assets/mermaid.min.js"
 
 [[proxy]]
-backend = "http://localhost:3000/assets/main.css"
-rewrite = "/assets/main.css"
+backend = "http://localhost:3000/assets/core.css"
+rewrite = "/assets/core.css"
 
 [[proxy]]
 backend = "http://localhost:3000/assets/custom.css"

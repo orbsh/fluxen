@@ -7,7 +7,7 @@
 
 What ships, and what deliberately does not:
 
-- **the four core files** — the JS glue, its wasm, `assets/main.css`, `assets/custom.css`. That is
+- **the four core files** — the JS glue, its wasm, `assets/core.css`, `assets/custom.css`. That is
   everything a host page needs; the hashed names are trunk's and stay the only names (a `fluxen.js`
   alias would be a second name for the same bytes, and another 2.4 MB in every release).
 - **not** `assets/3dbrowser` (28 MB), `assets/splatviewer` (48 MB), `assets/monaco` (6.6 MB),
@@ -40,7 +40,7 @@ import tarfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = ROOT / "examples" / "renderer" / "dist"
 OUT = ROOT / "dist-release"
-CSS = ("assets/main.css", "assets/custom.css")
+CSS = ("assets/core.css", "assets/custom.css")
 
 
 def sh(*args: str, cwd: pathlib.Path = ROOT) -> str:

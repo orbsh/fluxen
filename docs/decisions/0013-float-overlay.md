@@ -31,7 +31,7 @@ PositionAttr 摆位置做不到——背景既没被遮，交互也没被挡住�
 2. **overlay 的形式**：`float.rs` 在 overlay 模式加 `overlay` 类，几何（`position:
    fixed; inset: 0; z-index: 100` + flex 居中）**内联**在宿主 div 上；CSS 只负责
    `::before` 的模糊与色调、以及把内容压在模糊层之上。几何必须内联的原因是一条
-   实测的层级缺陷：custom 层实际排在最前——main.css 第 1 行的
+   实测的层级缺陷：custom 层实际排在最前——core.css 第 1 行的
    `@import url("custom.css") layer(custom)` 先于第 3 行的 `@layer theme, base,
    layout, element, custom, style;` 出现 `custom`，而层序由首次出现决定，于是写在
    custom 层里的 `position` 会输给 element 层的 `.float{position:absolute}`（同一

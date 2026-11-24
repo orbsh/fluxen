@@ -3,5 +3,5 @@
 
 use manganis::Asset;
 
-pub const MAIN_CSS: Asset = manganis::asset!("/assets/main.css");
+pub const CORE_CSS: Asset = manganis::asset!("/assets/core.css");
 pub const CUSTOM_CSS: Asset = manganis::asset!("/assets/custom.css");
