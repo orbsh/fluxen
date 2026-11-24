@@ -141,7 +141,8 @@ SHOE_SIZE = ("640px", "420px")
 # {code, lang} — "the code as a parameter".
 CODE_SIZE = ("100%", "280px")
 PATCH_CODE = """pub fn render(nodes: &[Node]) -> Frame {
-    // 改两笔再按 Ctrl/Cmd+S：整段代码连同语言 id 会从同一条上行通道回上去
+    // edit a couple of lines, press Ctrl/Cmd+S: the snippet and its language id go back up
+    // the same uplink
     nodes.iter().map(Node::draw).collect()
 }
 """
@@ -246,13 +247,13 @@ GRAPH_SEED = {
 
 # (beat label, node ids that arrive with it)
 GRAPH_REVEAL = (
-    ("分析引言", ("g2chart", "fold")),
-    ("图表落位", ("svg", "mermaid")),
-    ("复核表与表单", ("popup", "portal")),
-    ("泼溅车", ("3dbrowser", "splatviewer")),
-    ("鞋的网格模型", ("monaco",)),
-    ("代码编辑器", ("trunk", "binaryen", "tokio")),
-    ("关系图段落", ()),
+    ("analysis intro", ("g2chart", "fold")),
+    ("charts land", ("svg", "mermaid")),
+    ("review table and form", ("popup", "portal")),
+    ("splat car", ("3dbrowser", "splatviewer")),
+    ("shoe mesh", ("monaco",)),
+    ("code editor", ("trunk", "binaryen", "tokio")),
+    ("graph paragraph", ()),
 )
 
 def graph_payload(revealed):
@@ -301,35 +302,35 @@ TAIL_DAYS = [
     ("10-01", 3.20, 3.28, 4.03),
     ("10-02", 3.39, 3.20, 4.00),
 ]
-DEPTS = ("研发部", "市场部", "运营部")
+DEPTS = ("R&D", "Marketing", "Operations")
 
-ANALYTICS_TEXT = """先看一组模拟数据：11 个人、3 个部门，每人每天按各自的维度打分——研发部 5 项（出勤纪律、工作质量、工作量投入、协作沟通、学习成长），市场部 6 项（另加创新性），运营部 7 项（再加客户意识），0–5 分，连续 30 天。下面第一张图是三个部门的日均分走势，第二张把每个部门的每个人叠在同一个坐标系里比形状（三张雷达分别是 5 / 6 / 7 轴，轴数跟着数据走）；再附一张复核表，可以逐人改分并提交。"""
+ANALYTICS_TEXT = """Start with a set of simulated numbers: 11 people, 3 departments, each person scoring on their own set of dimensions every day for 30 days — R&D on 5 (attendance, quality of work, effort, collaboration, learning and growth), Marketing on 6 (plus innovation), Operations on 7 (plus customer awareness), 0-5 each. The first chart below is each department's daily average; the second overlays every person in a department in one coordinate system so the shapes can be compared (the three radars have 5 / 6 / 7 axes — the axis count follows the data). Then a review table you can edit person by person and submit."""
 
-SUMMARY_TEXT = """总结：近 30 天三个部门的平均分整体稳中有升；研发部波动最大（3.20–4.07），市场部次之，运营部最平稳且收在高位，末尾两天三个部门同步回落。"""
+SUMMARY_TEXT = """Summary: over the last 30 days the three departments' averages held steady or rose slightly; R&D swung widest (3.20-4.07), Marketing second, Operations the steadiest and ending high — and all three slipped together over the final two days."""
 
-CAR_TEXT = """先从体量大的看起。这台车不是网格模型——它没有面片、没有 UV、也没有贴图，而是几十万个高斯椭球按位置、尺度和朝向堆出来的（学术名字叫 3D Gaussian Splatting）。
+CAR_TEXT = """Start with the big one. This car is not a mesh — no polygons, no UVs, no textures. It is a few hundred thousand Gaussian ellipsoids stacked by position, scale and orientation (the academic name is 3D Gaussian Splatting).
 
-可以把它想成一团"会发光的雾"：每个点自带颜色、透明度和方向，渲染时按视线方向排序，再把每个椭球投影到屏幕上混合成图像——不是先还原成三角形再算光照。好处很直接：它保留的是真实拍摄的观感。钣金的反射、车窗的厚度、边缘那圈高光，都会一次性带过来，不用人工建模、也不用猜材质参数。代价同样明确：文件大、要按视角排序、没法像网格那样随手改拓扑或者绑骨骼做动画。所以它现在的定位更像"把真实场景搬进浏览器"，而不是替代游戏里的网格资产。
+Think of it as a cloud of glowing fog: every point carries its own colour, opacity and direction; at render time the points are sorted by view direction and each ellipsoid is projected onto the screen and blended into the image — not reconstructed into triangles and then lit. The payoff is immediate: what it keeps is how the real thing looked when captured. The reflection in the panels, the thickness of the glass, the rim of highlights — all arrive at once, with no modelling and no guessing at material parameters. The cost is just as clear: big files, per-view sorting, and no way to retopologise it or rig it for animation the way a mesh allows. So today it is "put a real scene in a browser", not a replacement for a game's mesh assets.
 
-这台车可以拖动围着转，滚轮拉近看细节。你注意到的远近层次是它自带的——这也是这类重建看起来比低模"实"的原因。"""
+Drag to spin it around, scroll to move in. The depth you notice is part of the capture — which is also why this kind of reconstruction reads as more solid than a low-poly asset."""
 
-SHOE_TEXT = """换一件小的。这两件东西的共同点是——都不是靠参数表说服人，而是靠"看起来、转起来是什么样"。所以文字我只给必要的部分，剩下的直接给你一个能转的三维模型。
+SHOE_TEXT = """Now something small. What these two items share is that neither convinces you with a spec sheet — both are about how they look and move. So the words carry only what is necessary and the rest arrives as a model you can spin.
 
-这双鞋解决的问题不是"让你跑得更快"，而是"跑完之后脚还能要"。一双鞋的价值很少体现在某一次能多跑两秒，更多体现在明天你还愿不愿意出门。中底是上下两层的密度配方：上层软，负责落地那一下的缓冲；下层偏硬，负责把力还给你。踩下去先被吃掉大半冲击，再把你推回地面，所以它不像纯软底那样"踩得深、起不来"。系带做的是快拉式，一只手一次收紧，戴手套也操作得了；鞋面是一整片针织，没有拼接缝线，长距离之后不会在脚背和脚趾外侧磨出硬边。鞋楦偏中性，前掌留了大概一个拇指的余量，宽脚也塞得进去。
+The problem this shoe solves is not "run faster" but "still have feet afterwards". A shoe's value rarely shows up in shaving two seconds off one run; it shows up in whether you want to go out again tomorrow. The midsole is a two-layer density recipe: the upper layer is soft and takes the landing, the lower is firmer and gives the force back. Step down and most of the impact is absorbed, then you are pushed off the ground again — which is why it is not a purely soft sole that sinks and never returns. The lacing is a quick pull: one hand, one tighten, workable in gloves. The upper is a single knit with no stitched seams, so nothing grinds at the top of the foot or outside the toes over distance. The last is neutral with about a thumb's width up front, so a wide foot fits.
 
-下面就是这个模型：左键拖动绕它转一圈，看侧墙的支撑结构和鞋底的纹路；右键拖动是平移，滚轮缩放。"""
+Here is the model: left-drag to orbit it and look at the sidewall structure and the outsole pattern; right-drag pans, the wheel zooms."""
 
-PATCH_TEXT = """最后一步换个方向：前面都在"看"，这一段是"改"。下面这块编辑器是 Monaco——VS Code 用的那个编辑器内核。代码不是嵌在页面里的：它和上面两件商品一样是随消息下来的一个参数，写进数据槽，编辑器订阅这个槽。
+PATCH_TEXT = """Last step, a different direction: everything so far has been looking — this one is changing. The editor below is Monaco, the core VS Code runs on. The code is not embedded in the page: like the two products above, it travels with the message as a parameter into a data slot, and the editor subscribes to that slot.
 
-这意味着两件事。一是库的下载由载荷到达决定——编辑器这一段文字先到，Monaco 那四点几兆的库要等代码真的送上来才拉，所以"消息里有编辑器"不等于"首屏多下四兆"。二是上行同一条腿：改两笔、按 Ctrl/Cmd+S，整段代码连同语言 id 会沿复核表提交走的那条通道回给生产者，生产者据此回写文件或发起评审。
+Two consequences. First, the library download is decided by the payload arriving: this paragraph gets there first, and Monaco's four-odd-megabyte are pulled only once the code is actually sent — so "a message with an editor in it" is not "four megabytes on first paint". Second, the uplink is the same leg: edit a couple of lines, press Ctrl/Cmd+S, and the whole snippet plus its language id goes back to the producer on the channel the review table submits on, so the producer writes the file or opens a review with it.
 
-试着改一行——比如把 collect() 换成别的东西——然后按 Ctrl/Cmd+S，看 stage 控制台的 `<-` 块。"""
+Try a line — swap collect() for something else — then press Ctrl/Cmd+S and watch the `<-` block in the stage console."""
 
-GRAPH_TEXT = """最后看一眼左边那张图——它一直在这儿，只是你没注意到。这一页的布局从第一秒就是这个形态：左边一张常驻的关系图，右边一条流。没有菜单，没有标签页，也没有频道列表。原来的界面把"去哪儿"交给分类，而分类是写完就不改的一次性判断；这里把"去哪儿"交给关系，关系是当下的——"和这件事相连的还有谁"，树状菜单天然答不了。
+GRAPH_TEXT = """One last look at the graph on the left — it has been here the whole time. This page has had this shape since its first second: a permanent relationship graph on the left, a stream on the right. No menu, no tabs, no channel list. The old interface handed "where do I go" to categories, and a category is a one-time judgement written once and never revised; here "where do I go" is handed to relations, and relations are current — "who else is connected to this" is a question a tree-shaped menu cannot answer.
 
-图里是这套东西自己：圆点是 crate / 组件 / 外部模块，线是"谁渲染谁、谁挂载谁"，点越大、线越粗，表示它在链条上的位置越重。有两处值得看一眼。第一，它不是外包给某个 JS 图库的：渲染、力布局、相机、拾取全在这套 wasm 里，所以旋钮进的是 DSL 的类型化字段（节点尺寸、边的宽度、力参数），不是透传给别人的黑盒配置——也因此没有 three.js 那 1.4 MB。第二，图是长出来的：刚才送的那几份整份快照按节点 id 求差量，组件一批批加进来，已经站好的点不会重排；最后一下是一次距焦——相机飞向那几个节点，别的没消失，只是退到后面。搜索落地时就是这么动的。
+The graph is this thing itself: dots are crates / components / external modules, lines are "who renders whom, who mounts whom", and bigger dots and thicker lines mean more weight in the chain. Two things are worth a look. First, it is not outsourced to a JS graph library: rendering, force layout, camera and picking all live in this wasm, so the knobs are typed fields of a DSL (node size, edge width, force parameters) rather than a black-box config passed through to someone else — which is also why there is no 1.4 MB of three.js. Second, the graph grows: the whole-snapshot frames sent earlier are diffed by node id, components arrive in batches, and the points already settled do not reshuffle; the last move is a focus — the camera flies to a few nodes and the rest do not disappear, they fall back. That is how search lands.
 
-左键拖动转视角，滚轮缩放，点一个节点会往上回一条事件。"""
+Left-drag turns the view, the wheel zooms, and clicking a node sends an event back up."""
 
 
 def text_node(slot):
@@ -361,7 +362,7 @@ def pin_tile(slot, title):
             {
                 "type": "text",
                 "attrs": {"class": ["box", "is-border", "round", "nogrow"]},
-                "source": {"default": f"≡ 把「{title}」拖到右边"},
+                "source": {"default": f"≡ drag \"{title}\" to the right"},
             }
         ],
     }
@@ -395,7 +396,8 @@ def canvas_node(url, slot, width, height, options=None):
         "attrs": {"width": width, "height": height},
         "source": {"slot": slot},
     }
-    # 模块私有配置走 Canvas.options（ADR 0017）：核心只搬字节，模块自己解释。
+    # A module's private settings ride Canvas.options (ADR 0017): the core moves bytes,
+    # the module interprets them.
     if options is not None:
         node["options"] = options
     return node
@@ -423,8 +425,9 @@ def frame_message():
             "type": "frame",
             "children": [
                 text_node(ANALYTICS),
-                # 气泡内部的一枚可拖单元（ADR 0034）：段落是内容，这一格是动作。
-                pin_tile(ANALYTICS, "分析引言"),
+                # One draggable cell inside the bubble (ADR 0034): the paragraphs are content,
+                # this cell is an action.
+                pin_tile(ANALYTICS, "analysis intro"),
                 chart_band([chart_node("dept-trend", TREND)], TREND_BAND),
                 chart_band(
                     [chart_node("radar-rd", RADARS[0]),
@@ -495,11 +498,11 @@ def frame_review_form():
     """
 
     fields = [
-        {"key": "score", "title": "复核项", "width": "8rem"},
-        {"key": "name", "title": "姓名"},
-        {"key": "dept", "title": "部门"},
-        {"key": "avg", "title": "日均分", "width": "6rem", "align": "end"},
-        {"key": "note", "title": "备注"},
+        {"key": "score", "title": "item", "width": "8rem"},
+        {"key": "name", "title": "name"},
+        {"key": "dept", "title": "dept"},
+        {"key": "avg", "title": "daily avg", "width": "6rem", "align": "end"},
+        {"key": "note", "title": "note"},
     ]
 
     def cell(name, text):
@@ -543,7 +546,8 @@ def frame_review_form():
                     "type": "text",
                     "attrs": {"format": "md"},
                     "source": {"default":
-                        "复核（第一列可改，三种字段各一；点提交后整张复核表随 `review` 上行，stage 控制台可见）"},
+                        "Review (the first column is editable, one field of each kind; on "
+                        "submit the whole table goes up as `review` and shows in the stage console)"},
                 },
                 {
                     "type": "frame",
@@ -563,7 +567,7 @@ def frame_review_form():
                 {
                     "type": "button",
                     "attrs": {"oneshot": False},
-                    "source": {"default": "提交复核"},
+                    "source": {"default": "submit review"},
                     "sink": {},
                 },
             ],
@@ -571,9 +575,9 @@ def frame_review_form():
     }
     return [
         form,
-        row("zw", "number", "4.13", "张伟", "研发部", "4.13", "后半月走低"),
-        row("cj", "bool", False, "陈静", "市场部", "4.24", "波动最大"),
-        row("sy", "text", "已复核", "孙悦", "运营部", "4.28", "收在高位"),
+        row("zw", "number", "4.13", "Zhang Wei", "R&D", "4.13", "slow in the second half"),
+        row("cj", "bool", False, "Chen Jing", "Marketing", "4.24", "widest swing"),
+        row("sy", "text", "reviewed", "Sun Yue", "Operations", "4.28", "ends high"),
     ]
 
 
@@ -627,7 +631,7 @@ class Step:
             time.sleep(0.3)
         else:
             try:
-                input("    ↵ 回车继续 … ")
+                input("    ↵ Enter to continue … ")
             except EOFError:
                 print("    (stdin closed — switching to --auto)")
                 self.auto = True
@@ -649,7 +653,7 @@ def main():
 
     mirror = Mirror(args.host, args.port)
     step = Step(args.auto)
-    print("fluxen walkthrough — 打开 UI（如 http://localhost:3002?codec=json）后开始。")
+    print("fluxen walkthrough — open the UI (e.g. http://localhost:3002?codec=json) and we start.")
 
     def push_file(fname):
         return mirror.send(open(f"examples/yaml/{fname}", encoding="utf-8").read())
@@ -664,33 +668,35 @@ def main():
         revealed.update(ids)
         snapshot = graph_payload(revealed)
         print(
-            f"    graph ← {label}：{len(snapshot['nodes'])} 点 / {len(snapshot['links'])} 线 → "
+            f"    graph ← {label}: {len(snapshot['nodes'])} nodes / {len(snapshot['links'])} links → "
             f"{send_json(mirror, frame_set_payload(GRAPH_SLOT, snapshot))}"
         )
 
-    step.wait("发送 00.main.yaml")
+    step.wait("send 00.main.yaml")
     print(f"    send → {push_file('00.main.yaml')}")
 
-    step.wait("整条消息入场（一个 box：引言 / 折线 / 雷达 / 摘要 / 复核表 / 车 / 鞋 / 编辑器 / 关系图，全部绑槽）")
+    step.wait("the whole message arrives (one box: intro / line / radar / summary / review table / car / shoe / editor / graph, every child bound to a slot)")
     print(f"    append row → {send_json(mirror, frame_message())}")
     for slot in (ANALYTICS, SUMMARY, SAY_CAR, SAY_SHOE, SAY_PATCH, SAY_GRAPH):
         print(f"    seed slot  → {send_json(mirror, frame_seed_text(slot))}")
 
-    step.wait("打字机：分析引言")
-    type_out(mirror, ANALYTICS, ANALYTICS_TEXT, delay, "引言")
-    grow("分析引言")
+    step.wait("typewriter: the analytics intro")
+    type_out(mirror, ANALYTICS, ANALYTICS_TEXT, delay, "intro")
+    grow("analysis intro")
 
     step.wait(
-        "气泡里那枚「≡ 把「分析引言」拖到右边」是一个单元，不是装饰：按住它拖到窗口右边缘"
-        "那条窄轨（拖拽在飞时它自己展开），松手 → stage 控制台出现 `<- pin`，带落点 id 和 "
-        "{id, tag}（货物是那个框自己的子树）；同一件货往别处拖什么也不会发生（那条轨只收 snippet）"
+        "That \"≡ drag analysis intro to the right\" cell is an element, not decoration: hold it "
+        "and drag it to the narrow rail at the window's right edge (the rail opens while a drag "
+        "is in flight); let go → the stage console shows `<- pin` with the drop id and {id, tag} "
+        "(the cargo is that box's own subtree); the same cargo dragged anywhere else does "
+        "nothing (that rail only takes snippets)"
     )
 
-    step.wait("两个图表入场（发 00.radar.yaml 的 set 帧：折线 spec + 三个雷达 spec）")
+    step.wait("both chart bands arrive (send 00.radar.yaml's set frames: the line spec + three radar specs)")
     print(f"    send chart data → {mirror.send(chart_data())}")
-    grow("图表落位")
+    grow("charts land")
 
-    step.wait(f"逐日 patch 追加后 {len(TAIL_DAYS)} 天（折线长到 30 天）")
+    step.wait(f"one patch per day, {len(TAIL_DAYS)} days (the line grows to 30 days)")
     for i, (day, rd, mkt, ops) in enumerate(TAIL_DAYS, start=1):
         body = [
             frame_patch(TREND, TREND_DATA, {"day": day, "avg": v, "dept": d})
@@ -699,57 +705,58 @@ def main():
         print(f"    [{i}/{len(TAIL_DAYS)}] {day} → {send_json(mirror, body)}")
         time.sleep(0.12)
 
-    step.wait("打字机：摘要")
-    type_out(mirror, SUMMARY, SUMMARY_TEXT, delay, "摘要")
+    step.wait("typewriter: the summary")
+    type_out(mirror, SUMMARY, SUMMARY_TEXT, delay, "summary")
 
-    step.wait("复核表 + 表单入场（append 进这一行里的 review 槽；行是 review_rows 里的 entry）")
+    step.wait("the review table + form arrive (appended into this row's review slot; the row is the entry in review_rows)")
     print(f"    append form + rows → {send_json(mirror, frame_review_form())}")
-    grow("复核表与表单")
+    grow("review table and form")
 
-    step.wait("打字机：第一件商品（泼溅车）")
-    type_out(mirror, SAY_CAR, CAR_TEXT, delay, "车")
+    step.wait("typewriter: the first product (the splat car)")
+    type_out(mirror, SAY_CAR, CAR_TEXT, delay, "car")
 
-    step.wait("泼溅车入场（载荷写进槽，载荷到达时把 box 撑开那一段）")
+    step.wait("the splat car arrives (the payload lands in the slot and opens the box as it gets there)")
     print(
         "    set payload → "
         f"{send_json(mirror, frame_set_payload(CAR_SLOT, {'assets': {'scene': TRUCK_URL}, 'camera': TRUCK_CAMERA}))}"
     )
-    grow("泼溅车")
+    grow("splat car")
 
-    step.wait("打字机：第二件商品（鞋）")
-    type_out(mirror, SAY_SHOE, SHOE_TEXT, delay, "鞋")
+    step.wait("typewriter: the second product (the shoe)")
+    type_out(mirror, SAY_SHOE, SHOE_TEXT, delay, "shoe")
 
-    step.wait("鞋的网格模型入场（载荷写进槽）")
+    step.wait("the shoe mesh arrives (the payload lands in the slot)")
     print(
         f"    set payload → {send_json(mirror, frame_set_payload(SHOE_SLOT, {'assets': {'shoe': SHOE_URL}}))}"
     )
-    grow("鞋的网格模型")
+    grow("shoe mesh")
 
-    step.wait("打字机：待审的那段代码的说明")
-    type_out(mirror, SAY_PATCH, PATCH_TEXT, delay, "代码说明")
+    step.wait("typewriter: the note about the code under review")
+    type_out(mirror, SAY_PATCH, PATCH_TEXT, delay, "code note")
 
-    step.wait("编辑器入场（代码作为参数写进槽；Monaco 在载荷到达时才拉——ADR 0015）")
+    step.wait("the editor arrives (the code lands in the slot as a parameter; Monaco is pulled when the payload gets there — ADR 0015)")
     print(
         "    set payload → "
         f"{send_json(mirror, frame_set_payload(CODE_SLOT, {'code': PATCH_CODE, 'lang': 'rust'}))}"
     )
-    grow("代码编辑器")
+    grow("code editor")
 
-    step.wait("在编辑器里改两笔、按 Ctrl/Cmd+S：stage 控制台出现 `<-` submit + 本节点 id + {code, lang}")
+    step.wait("edit a couple of lines and press Ctrl/Cmd+S: the stage console shows `<-` submit + this node's id + {code, lang}")
 
-    step.wait("打字机：最后一段——关系图（这套东西自己长成一张图）")
-    type_out(mirror, SAY_GRAPH, GRAPH_TEXT, delay, "关系图")
-    grow("关系图段落")
+    step.wait("typewriter: the last paragraph — the graph (this thing growing itself into a picture)")
+    type_out(mirror, SAY_GRAPH, GRAPH_TEXT, delay, "graph")
+    grow("graph paragraph")
 
-    step.wait("左图距焦：把发「搜索」那一下的等价物打出来——相机飞向 accrete/content/transport 这一簇")
+    step.wait("focus the graph: the equivalent of a search — the camera flies to the accrete/content/transport cluster")
     focus_payload = graph_payload(revealed)
     focus_payload["focus"] = {"ids": ["accrete", "content", "transport"], "seq": 1}
     print(f"    set payload → {send_json(mirror, frame_set_payload(GRAPH_SLOT, focus_payload))}")
     time.sleep(1.2)
 
     print(
-        "\n完成。左边是常驻的关系图（可拖动旋转、滚轮缩放、点节点回事件），右边是消息流；"
-        "折线 30 天，复核表可提交，编辑器可回传代码。"
+        "\nDone. On the left is the permanent graph (drag to turn, wheel to zoom, click a node to send"
+        " an event up); on the right the message stream, the line at 30 days, a review table you can"
+        " submit, and an editor that hands code back."
     )
 
 

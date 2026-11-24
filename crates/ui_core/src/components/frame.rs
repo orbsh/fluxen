@@ -248,8 +248,9 @@ pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
     // id before the merge (ADR 0027 keeps its behaviour). The class token above
     // stays — it is what CSS addressed — but a class is not addressable by id.
     let dom_id = accrete.id.clone();
-    // 手绘皮肤（ADR 0038 §4）：帧自己声明了 `is-border` 才有这一层，且只在
-    // `config.skin = sketch` 时挂上——常规模式没有元素、没有 observer。
+    // The sketch skin (ADR 0038 §4): only a frame that asked for a border has this layer,
+    // and only while `config.skin = sketch` — in normal mode there is no element and no
+    // observer.
     let sketch = {
         let class = attrs.class.clone();
         let id = accrete.id.clone();
