@@ -1311,3 +1311,29 @@
         }
     }
 }
+
+/* ---- 模态层（ADR 0014）：铺满视口 + 模糊背景 + 挡住背后页面 -------------------
+   几何（position/inset/height/z-index/居中）在 layer.rs 里内联，不写这里——内联本
+   无层叠歧义（ADR 0012 的 display 内联同款；custom 层的定序缺陷已于 PLAN §19 修掉）。
+   这里只放没有竞争者的部分：伪元素模糊/色调，以及把内容压在模糊层之上。
+
+   住在 utilities 而不是 components：这两条规则是**压在内容身上**的效果（`.layer > *`
+   改子元素的定位与层级），跑输 components 就等于没写。它是核心语义，所以不在
+   custom.css——那一层留给页面自己覆盖。 */
+@layer utilities {
+    .layer {
+        &::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-color: oklch(from var(--primary) l c h / 0.35);
+            backdrop-filter: blur(6px);
+        }
+
+        & > * {
+            position: relative;
+            z-index: 1;
+        }
+    }
+}
+

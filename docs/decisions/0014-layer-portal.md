@@ -33,8 +33,8 @@ transform / filter / contain 就会被困住；而"打开模态的是某条消�
 4. **几何内联、遮罩走 CSS**：几何（`position: fixed; inset: 0; height: 100vh;
    z-index`）内联在 layer 宿主上（同 ADR 0012 的 display 内联；本机 headless
    chromium 上 `fixed` + `inset: 0` 的高度不撑开，见 PLAN §16）；模糊/色调走
-   custom.css 的 `::before`——层级定序缺陷已于 2026-10-10 修掉（PLAN §19），
-   CSS 这条路现在真的通。
+   `core.css` 的 `.layer::before`（utilities 层——它是核心语义，不放在 custom.css
+   那一层；层级定序缺陷已于 2026-10-10 修掉，PLAN §19），CSS 这条路现在真的通。
 5. **dismiss 是本页瞬时状态**：点 layer 自身（`e.target === e.currentTarget`，即
    模糊区而非模态内容）时**清空所绑的槽**——显示与否本来就是"槽空否"一条规则，
    清空即关，不新造第二个掩蔽状态；槽空了，下次写入必是新值，"同值不写"
