@@ -128,9 +128,18 @@
           attrs:
             horizontal: true
           children:
-          - type: input
+          # One field, one bundle (ADR 0032): the bundle owns the exit, the timing and what the field
+          # becomes afterwards — `reset: clear` is why the box is empty again after Enter. A field has no
+          # uplink of its own any more, so the box without this wrapper would send nothing.
+          - type: bundle
             id: test
             sink: {slot: message}
+            attrs:
+              submit: [enter]
+              reset: clear
+            children:
+            - type: input
+              tag: message
     # ---- right rail: the drop target for drags (ADR 0034) -------------------
     # Drag a unit from a bubble over here and it becomes a pin. The drop target hugs the right edge of the window, a thin strip normally,
     # expanding while a drag is in flight; `--rail` makes it grow leftwards, otherwise it grows off-screen (custom.css).

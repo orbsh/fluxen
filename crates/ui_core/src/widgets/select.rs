@@ -1,7 +1,7 @@
 use crate::Ctx;
 use crate::ctx::render_accrete;
 use crate::hooks::{
-    field_changed, use_common_css, use_source_list, use_source_untracked, use_target,
+    field_changed, locked, use_common_css, use_source_list, use_source_untracked, use_target,
 };
 use accrete::{AccreteOps, Select, classify::Classify};
 use leptos::html::*;
@@ -13,7 +13,7 @@ use serde_json::{Value, to_value};
 ///
 /// A `tag` makes it a field of the enclosing bundle (ADR 0032): the choice lands
 /// in the bundle's signal and the bundle owns the exit and the timing. No tag =
-/// the select keeps its own exit, as before.
+/// no uplink (ADR 0032 §2 revised): a `local` sink still lands the choice on the page, and that is all.
 pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["select", "flex"];
@@ -30,15 +30,22 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     // emits must not subscribe to the slot its own send writes).
     let initial = match field {
         Some(sig) => sig.get_untracked(),
-        None => use_source_untracked(&ctx, &accrete)
-            .unwrap_or_else(|| Value::String(String::new())),
+        None => {
+            use_source_untracked(&ctx, &accrete).unwrap_or_else(|| Value::String(String::new()))
+        }
     };
-    let current = RwSignal::new(
-        initial
-            .as_str()
-            .map(String::from)
-            .unwrap_or_default(),
-    );
+    let current = RwSignal::new(initial.as_str().map(String::from).unwrap_or_default());
+
+    // The shown choice follows the bundle's copy, so a reset shows up here too (same rule as `input_`).
+    if let Some(sig) = field {
+        Effect::new(move |_| {
+            current.set(sig.get().as_str().map(String::from).unwrap_or_default());
+        });
+    }
+
+    // A bundle that used up its `sends` disables the select with its fields.
+    let locked_ctx = ctx.clone();
+    let is_locked = move || locked(locked_ctx.bundle.as_ref()).then_some("");
 
     move || -> AnyView {
         let option = use_source_list(&ctx, &accrete).unwrap_or_default();
@@ -65,7 +72,11 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
                                 field_changed(&click_ctx, click_ctx.bundle.as_ref());
                             }
                             None => {
-                                if let Some(emit) = use_target(click_ctx.clone(), &b) {
+                                // Without a tag the only landing left is local (ADR 0032 §2 revised).
+                                let local = b
+                                    .get_sink()
+                                    .is_some_and(|s| matches!(s.scope, accrete::Scope::Local));
+                                if local && let Some(emit) = use_target(click_ctx.clone(), &b) {
                                     emit(v.clone());
                                 }
                             }
@@ -80,6 +91,7 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
         });
         div()
             .class(css.as_str())
+            .attr("disabled", is_locked.clone())
             .child(Vec::from_iter(children))
             .into_any()
     }

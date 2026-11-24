@@ -36,7 +36,8 @@
 - [x] 28 — 页面选项就是槽：`#main[data-config]` 指定槽名（默认 `__CONFIG__`），选项对象是节点的载荷（`source.default`）；`sink` 带 `path` 写进 local 面并按成员合并，读侧按成员回落；`config` op / `Ctx.config` / `set_config` / 每个选项一个 signal 全部退役 — ADR 0038 §2 — 2026-11-24
 - [x] 29 — 皮肤：`config.skin` 镜像到 `<html data-*>` + roughr 实时画边（frame / panel / bundle；帧自己声明 `is-border` 才挂）— ADR 0038 §3-4 — 2026-11-24
 - [x] 30 — 开关落在控件本身：`bool` 字段读自己写的槽、change 即出口（文本字段仍以 Enter 为出口），复选框读 `checked()` 而非 `value()`；示例把它放进图的右下角（`panel place: anchor` 浮层，卡片向上开，占图的空边角），shell 不加任何栏 — ADR 0030、0038 §2、§5 — 2026-11-24
-- [ ] 31 — 皮肤的边角：`select` 的稳定子树、`button` 的类名、input 保持 CSS 边（void 元素装不下子节点）— ADR 0038 §4 — 待做
+- [x] 31 — 字段没有自己的上行：无 tag 的 sink 只剩本地落地（remote/both 报警告），清空改由 bundle 的 `reset: keep|clear|default` 决定；`sends: n` 每发一次减一、为 0 锁定（字段 disabled、拒发），缺省/-1 无限 — ADR 0032 §2、§6、§7 — 2026-11-24
+- [ ] 32 — 皮肤的边角：`select` 的稳定子树、`button` 的类名、input 保持 CSS 边（void 元素装不下子节点）— ADR 0038 §4 — 待做
 
 ## 开着
 

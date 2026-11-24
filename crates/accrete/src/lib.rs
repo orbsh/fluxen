@@ -530,6 +530,23 @@ fn submit_is_default(s: &SubmitSet) -> bool {
     s.modes() == [SubmitMode::Enter]
 }
 
+/// What a bundle's fields become after it sends (ADR 0032 §4). One word, three exclusive values:
+/// `keep` (absent — what a field always did), `clear` (the empty value of its own shape) and
+/// `default` (the value `source.default` gave it at build time).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum ResetMode {
+    #[default]
+    Keep,
+    Clear,
+    Default,
+}
+
+fn reset_is_default(r: &ResetMode) -> bool {
+    matches!(r, ResetMode::Keep)
+}
+
 fn is_false(b: &bool) -> bool {
     !*b
 }
@@ -545,12 +562,20 @@ pub struct BundleAttr {
     /// When to send. Absent = `[enter]`.
     #[serde(default, skip_serializing_if = "submit_is_default")]
     pub submit: SubmitSet,
+    /// What the fields become after a send. Absent = `keep`.
+    #[serde(default, skip_serializing_if = "reset_is_default")]
+    pub reset: ResetMode,
+    /// How many sends this bundle has: absent or `-1` = unlimited, `0` = locked from the start. Each send
+    /// takes one; at zero the bundle's fields are disabled and it refuses to send (ADR 0032 §5).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sends: Option<i64>,
 }
 
 /// A bundle packs a group of fields into one object and sends it (ADR 0032).
-/// It owns the exit for its fields (`sink`) and when they leave (`attrs.submit`)
-/// — nothing else. `id` marks this submission (the instance), not the fields:
-/// fields are named by their own `tag`.
+/// It owns the exit for its fields (`sink`), when they leave (`attrs.submit`), what they become
+/// afterwards (`attrs.reset`) and how many times they may (`attrs.sends`) — the field itself owns
+/// nothing but its value. `id` marks this submission (the instance), not the fields: fields are
+/// named by their own `tag`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
@@ -1119,9 +1144,9 @@ impl Accrete {
                     let idx: usize = seg
                         .parse()
                         .map_err(|_| format!("bad array index {seg:?} at {path:?}"))?;
-                    arr.into_iter().nth(idx).ok_or_else(|| {
-                        format!("pointer miss: {path:?} (no index {idx})")
-                    })?
+                    arr.into_iter()
+                        .nth(idx)
+                        .ok_or_else(|| format!("pointer miss: {path:?} (no index {idx})"))?
                 }
                 _ => return Err(format!("pointer miss: {path:?} (hit non-container)")),
             };
@@ -1157,18 +1182,15 @@ impl Accrete {
         let mut cur = &mut root;
         for seg in &segs[..segs.len().saturating_sub(1)] {
             cur = match cur {
-                Value::Object(map) => {
-                    map.get_mut(seg.as_str()).ok_or_else(|| {
-                        format!("pointer miss: {path:?} (no key {seg:?})")
-                    })?
-                }
+                Value::Object(map) => map
+                    .get_mut(seg.as_str())
+                    .ok_or_else(|| format!("pointer miss: {path:?} (no key {seg:?})"))?,
                 Value::Array(arr) => {
                     let idx: usize = seg
                         .parse()
                         .map_err(|_| format!("bad array index {seg:?} at {path:?}"))?;
-                    arr.get_mut(idx).ok_or_else(|| {
-                        format!("pointer miss: {path:?} (no index {idx})")
-                    })?
+                    arr.get_mut(idx)
+                        .ok_or_else(|| format!("pointer miss: {path:?} (no index {idx})"))?
                 }
                 _ => return Err(format!("pointer miss: {path:?} (hit non-container)")),
             };
@@ -1216,22 +1238,20 @@ impl Accrete {
     /// string concatenation or array push. Other shapes are an error —
     /// the streaming-accumulator job of the retired positional merge.
     pub fn append_at(&mut self, path: &str, value: Value) -> Result<(), String> {
-        self.with_pointer(path, |mut old| {
-            match old {
-                Value::String(ref mut s) => match value {
-                    Value::String(t) => {
-                        s.push_str(&t);
-                        Some(Value::String(std::mem::take(s)))
-                    }
-                    other => Some(Value::String(other.to_string())),
-                },
-                Value::Array(mut a) => {
-                    a.push(value);
-                    Some(Value::Array(a))
+        self.with_pointer(path, |mut old| match old {
+            Value::String(ref mut s) => match value {
+                Value::String(t) => {
+                    s.push_str(&t);
+                    Some(Value::String(std::mem::take(s)))
                 }
-                Value::Null => Some(value),
-                _ => None,
+                other => Some(Value::String(other.to_string())),
+            },
+            Value::Array(mut a) => {
+                a.push(value);
+                Some(Value::Array(a))
             }
+            Value::Null => Some(value),
+            _ => None,
         })
     }
 }

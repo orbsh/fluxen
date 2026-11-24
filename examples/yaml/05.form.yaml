@@ -5,6 +5,9 @@ data:
   sink: {slot: confirm}
   attrs:
     submit: [enter, button]
+    # Two sends and no more (ADR 0032 §5): each one takes a count off, and at zero the fields are
+    # disabled and the button stops sending. Absent (or -1) is unlimited, which is the usual case.
+    sends: 2
     class:
     - gap
     - gap-md

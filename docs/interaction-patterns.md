@@ -42,7 +42,23 @@ Rows share one list; what distinguishes them is a value the row carries — a `s
 
 Row identity lives in the data (`data.id`), a reusable layout lives in `rack.item` (ADR 0020), and arrangement lives in `attrs.view` (ADR 0024). The application decides what a row is and what it holds; the renderer decides how those rows are arranged and how they enter and leave.
 
-## 4. What a frame deliberately does not carry
+## 4. One field, several ways to send it
+
+A field does not send. It has no exit of its own — its bundle decides when a value leaves and where it goes (ADR 0032 §2), and nesting is what lets one input answer two different questions at once:
+
+```yaml
+bundle (sink: {slot: message}, submit: [enter, button])              # the message: Enter, once
+  bundle (tag: mention, sink: {slot: mentions}, submit: [change])    # the suggestions: every keystroke
+    input (tag: q)
+```
+
+The inner bundle packs on every keystroke and sends the mention outward for autocompletion; the outer one packs on Enter and sends the message. Neither knows the other exists, and the input did not need a mode switch — it needed two bundles around it. Timing resolves to the nearest bundle that declares it (ADR 0032 §3), so a change never reaches the outer bundle and a send never multiplies: if the inner declared `enter` too, Enter would go to the inner only.
+
+Clearing follows the same geography: the bundle that sent decides for every field it packed, the nested ones included (ADR 0032 §6), so the outer bundle's `reset: clear` is what empties the box when the message leaves — the inner one, which keeps its value on each keystroke by design, never has to be told.
+
+The cost is stated plainly, because it is the price of the choice: **every input that leaves the page sits inside a bundle** — one chat box is `bundle > input`, with the field's `tag` as the key. What that buys is one rule instead of two ("the bundle is the exit") and one place where sending is decided, which is also where the rest of it lives: how many sends are left (`attrs.sends`), what the fields become afterwards (`attrs.reset`), and any check that has to run on the way out. A widget that grew its own sink would need each of those re-invented beside it.
+
+## 5. What a frame deliberately does not carry
 
 - **How long a row stays, whether it fades, whether the list pins to the newest row.** Those are the renderer's vocabulary (ADR 0024); the application only sends rows.
 - **Type names like "notice", "banner", "chat bubble".** They are combinations of values, not types (ADR 0024 §8).
@@ -50,7 +66,7 @@ Row identity lives in the data (`data.id`), a reusable layout lives in `rack.ite
 
 So "does the person see the message they sent" is answered by: yes, because the application sent that row the moment they sent it — not because a client guessed.
 
-## 5. What this asks of an application
+## 6. What this asks of an application
 
 1. Write the fact first, speak the drawing after — otherwise the drawing claims something without ground.
 2. Speak the drawing BEFORE working — otherwise a slow call looks like "nothing happened after I sent it", and a failed one looks like "I sent it and it vanished".

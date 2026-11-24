@@ -54,6 +54,7 @@ fn collect(node: &Accrete, out: &mut Vec<Field>) {
                 out.push(Field {
                     name,
                     sig: RwSignal::new(Value::Object(serde_json::Map::new())),
+                    initial: Value::Object(serde_json::Map::new()),
                 });
             }
         }
@@ -61,9 +62,11 @@ fn collect(node: &Accrete, out: &mut Vec<Field>) {
             if let Some(tag) = i.tag.as_ref().filter(|t| !t.is_empty())
                 && !out.iter().any(|f| &f.name == tag)
             {
+                let initial = field_default(node);
                 out.push(Field {
                     name: tag.clone(),
-                    sig: RwSignal::new(field_default(node)),
+                    sig: RwSignal::new(initial.clone()),
+                    initial,
                 });
             }
         }
@@ -71,9 +74,11 @@ fn collect(node: &Accrete, out: &mut Vec<Field>) {
             if let Some(tag) = s.tag.as_ref().filter(|t| !t.is_empty())
                 && !out.iter().any(|f| &f.name == tag)
             {
+                let initial = field_default(node);
                 out.push(Field {
                     name: tag.clone(),
-                    sig: RwSignal::new(field_default(node)),
+                    sig: RwSignal::new(initial.clone()),
+                    initial,
                 });
             }
         }
@@ -113,18 +118,26 @@ pub fn bundle_(accrete: Bundle, ctx: &Ctx) -> AnyView {
     let mirror = bundle_key(&accrete.tag, &accrete.id)
         .and_then(|key| parent.as_ref().and_then(|p| p.field(&key)));
 
+    let attrs = accrete.attrs.clone().unwrap_or_default();
+    let sends = attrs.sends;
     let state = Arc::new(BundleState {
         fields,
-        modes: accrete
-            .attrs
-            .as_ref()
-            .map(|a| a.submit.clone())
-            .unwrap_or_default(),
+        modes: attrs.submit.clone(),
+        reset: attrs.reset,
+        sends,
+        // `-1` and "nothing said" are the same thing: no count to take from.
+        remaining: RwSignal::new(sends.filter(|n| *n >= 0).unwrap_or(-1)),
+        children: StoredValue::new(Vec::new()),
         sink: accrete.get_sink().cloned(),
         id: node_id,
-        parent,
+        parent: parent.clone(),
         mirror,
     });
+    // A nested bundle joins its parent's list, so a reset can travel down the tree a pack travels up.
+    if let Some(p) = &parent {
+        p.children
+            .update_value(|kids| kids.push(std::sync::Arc::clone(&state)));
+    }
     // Publish the initial object: an outer bundle must be able to pack this one
     // before anything was typed in it.
     refresh(&state);

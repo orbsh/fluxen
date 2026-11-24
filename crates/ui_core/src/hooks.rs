@@ -152,10 +152,7 @@ pub fn use_source_untracked(ctx: &Ctx, accrete: &impl AccreteOps) -> Option<Valu
 
 /// The write channel (ADR 0031 §2: `sink` is where a value goes). None = the
 /// node does not write anywhere, so the caller keeps its local-only behaviour.
-pub fn use_target<'a>(
-    ctx: Ctx,
-    accrete: &impl AccreteOps,
-) -> Option<impl Fn(Value)> {
+pub fn use_target<'a>(ctx: Ctx, accrete: &impl AccreteOps) -> Option<impl Fn(Value)> {
     let sink = accrete.get_sink().cloned()?;
     let id = node_id(accrete);
     Some(move |val| {
@@ -170,10 +167,12 @@ pub(crate) fn node_id(accrete: &impl AccreteOps) -> Option<String> {
     accrete.get_id().clone().filter(|s| !s.is_empty())
 }
 
-/// One packed field: the `tag` the bundle keys it by, and the signal holding it.
+/// One packed field: the `tag` the bundle keys it by, the signal holding it, and the value it
+/// started with (`reset: default` restores exactly this).
 pub struct Field {
     pub name: String,
     pub sig: RwSignal<Value>,
+    pub initial: Value,
 }
 
 /// What a bundle hands down to its fields (ADR 0032): the keys it packs, when
@@ -185,6 +184,14 @@ pub struct BundleState {
     /// Keys in walk order, so a pack is deterministic.
     pub fields: Vec<Field>,
     pub modes: accrete::SubmitSet,
+    /// What the fields become after a send (ADR 0032 §4).
+    pub reset: accrete::ResetMode,
+    /// How many sends were granted: `None` or `-1` = unlimited, `n` = n more allowed.
+    pub sends: Option<i64>,
+    /// Sends left. Starts at `sends`; each send takes one; zero locks the bundle.
+    pub remaining: RwSignal<i64>,
+    /// Nested bundles, so a reset travels down the same tree a pack travels up.
+    pub children: StoredValue<Vec<std::sync::Arc<BundleState>>>,
     pub sink: Option<Bind>,
     /// This submission's instance id — not a field name.
     pub id: Option<String>,
@@ -209,6 +216,81 @@ impl BundleState {
         }
         Value::Object(m)
     }
+
+    /// Sends left; `-1` (or no `sends`) is unlimited.
+    pub fn unlimited(&self) -> bool {
+        self.sends.map_or(true, |n| n < 0)
+    }
+
+    /// One send happened: take one off, if there is anything to take.
+    fn count_send(&self) {
+        if self.unlimited() {
+            return;
+        }
+        let left = self.remaining.get_untracked();
+        if left > 0 {
+            self.remaining.set(left - 1);
+        }
+    }
+
+    /// After a send: this bundle's `reset` governs **every field it packed**, nested bundles included — a
+    /// submission is one object, so the aftermath is one decision. A nested bundle that sends on its own
+    /// applies its own mode, over its own subtree only (it never reaches up).
+    fn reset_fields(&self) {
+        if !matches!(self.reset, accrete::ResetMode::Keep) {
+            self.reset_subtree(self.reset);
+            refresh_inner(self);
+        }
+    }
+
+    /// Post-order, so a child's cleared pack lands in the parent's slot for it before the parent refreshes.
+    fn reset_subtree(&self, mode: accrete::ResetMode) {
+        for f in &self.fields {
+            let next = match mode {
+                accrete::ResetMode::Clear => empty_like(&f.initial),
+                accrete::ResetMode::Default => f.initial.clone(),
+                accrete::ResetMode::Keep => f.sig.get_untracked(),
+            };
+            f.sig.set(next);
+        }
+        self.children.with_value(|kids| {
+            for k in kids {
+                k.reset_subtree(mode);
+            }
+        });
+        refresh_inner(self);
+    }
+}
+
+/// The empty value of the same shape: what `reset: clear` writes. A string becomes `""`, a number `0`,
+/// a bool `false`, an object `{}` — the shape stays what the field is, only its content goes.
+pub fn empty_like(like: &Value) -> Value {
+    match like {
+        Value::String(_) => Value::String(String::new()),
+        Value::Number(_) => Value::from(0.0),
+        Value::Bool(_) => Value::Bool(false),
+        Value::Array(_) => Value::Array(Vec::new()),
+        Value::Object(_) => Value::Object(serde_json::Map::new()),
+        Value::Null => Value::Null,
+    }
+}
+
+/// The bundle that owns the send count for this ctx: the nearest one that declares `sends`.
+pub fn lock_owner(b: Option<&std::sync::Arc<BundleState>>) -> Option<std::sync::Arc<BundleState>> {
+    let mut cur = b.cloned();
+    while let Some(b) = cur {
+        if b.sends.is_some() {
+            return Some(b);
+        }
+        cur = b.parent.clone();
+    }
+    None
+}
+
+/// Used up? A bundle that declared `sends` and has none left is locked: its fields are disabled and
+/// `submit` refuses (the count is the page's own guard, not a permission — the far side still decides).
+pub fn locked(b: Option<&std::sync::Arc<BundleState>>) -> bool {
+    lock_owner(b).is_some_and(|b| !b.unlimited() && b.remaining.get() <= 0)
 }
 
 /// The key a bundle contributes to its parent's object: its `tag`, or its `id`
@@ -223,11 +305,15 @@ pub fn bundle_key(tag: &Option<String>, id: &Option<String>) -> Option<String> {
 /// Write this bundle's packed object into its parent's slot, then do the same
 /// up the chain: an outer pack reads the inner one, so the inner lands first.
 pub fn refresh(b: &std::sync::Arc<BundleState>) {
+    refresh_inner(b);
+}
+
+fn refresh_inner(b: &BundleState) {
     if let Some(m) = &b.mirror {
         m.set(b.pack());
     }
     if let Some(p) = &b.parent {
-        refresh(p);
+        refresh_inner(p);
     }
 }
 
@@ -235,10 +321,17 @@ pub fn refresh(b: &std::sync::Arc<BundleState>) {
 /// fields it claimed (ADR 0032). Refresh first so enclosing objects are current
 /// even when the outer bundle never sends.
 pub fn submit(ctx: &Ctx, b: &std::sync::Arc<BundleState>) {
+    if locked(Some(b)) {
+        return;
+    }
     refresh(b);
     if let Some(sink) = &b.sink {
         ctx.emit(sink, b.id.clone(), b.pack());
+        // One send happened, so one comes off. Reset after the count, so a bundle granted `sends: 1`
+        // sends once and is locked while its fields are already back to their starting value.
+        b.count_send();
     }
+    b.reset_fields();
 }
 
 /// The nearest enclosing bundle that declares `mode`. Nearest wins so one
@@ -282,6 +375,17 @@ mod tests {
 
     fn accrete(v: Value) -> Accrete {
         serde_json::from_value(v).expect("valid accrete")
+    }
+
+    #[test]
+    fn clear_keeps_the_shape_and_drops_the_content() {
+        use super::empty_like;
+        use serde_json::json;
+        assert_eq!(empty_like(&json!("typed")), json!(""));
+        assert_eq!(empty_like(&json!(42)), json!(0.0));
+        assert_eq!(empty_like(&json!(true)), json!(false));
+        assert_eq!(empty_like(&json!({"a": 1})), json!({}));
+        assert_eq!(empty_like(&json!([1, 2])), json!([]));
     }
 
     #[test]
