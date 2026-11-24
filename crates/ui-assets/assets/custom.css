@@ -42,26 +42,6 @@
         border-radius: 2rem;
     }
 
-    /* 模态层（ADR 0014）：铺满视口 + 模糊背景 + 挡住背后页面。几何
-       （position/inset/height/z-index/居中）在 layer.rs 里内联，不写这里——内联
-       本无层叠歧义（ADR 0012 的 display 内联同款；custom 层的定序缺陷已于
-       PLAN §19 修掉）。这里只放没有竞争者的部分：伪元素模糊/色调，以及把内容
-       压在模糊层之上。 */
-    .layer {
-        &::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background-color: oklch(from var(--primary) l c h / 0.35);
-            backdrop-filter: blur(6px);
-        }
-
-        & > * {
-            position: relative;
-            z-index: 1;
-        }
-    }
-
     .hide {
         display: none;
     }
