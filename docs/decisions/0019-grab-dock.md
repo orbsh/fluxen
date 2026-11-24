@@ -106,7 +106,7 @@ ADR 0008 §5 立过一条：「组件内瞬态交互（hover/focus/drag）：无
   自己的拖拽状态就是这条设计的反面。
 - web-sys 的两个 feature 进了 workspace（`DragEvent`／`DataTransfer`，后者不带就取不到
   `dataTransfer`，Firefox 也不会起拖）。
-- 源那边没有样式（它只是包装），样式全在落点：`main.css` 的 `.dock*` 四条规则。
+- 源那边没有样式（它只是包装），样式全在落点：`core.css` 的 `.dock*` 四条规则。
 - 回归样本：`examples/yaml/21.drag.yaml`（两行 grab 当行根 + 两个 dock：一个 reveal 收
   `message` 发 `pin`，一个 reserved 只收 `note`）。`cargo test -p accrete` 覆盖
   两侧的 wire 形状（含默认值不进 wire、闭枚举拒绝域外值）；`cargo check -p ui-core`

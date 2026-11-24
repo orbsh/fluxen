@@ -97,7 +97,7 @@ python3 scripts/ui_dist.py --no-build # 装配已有的 examples/renderer/dist
 打 `v*` tag 时 CI 跑同一个脚本（`.github/workflows/ui-release.yml`），发布：
 
 - `manifest.json` —— `entry.js`／`entry.wasm`，以及每个文件的 sha256 与大小
-- 它点名的四件（`ui_leptos-<hash>.js`、`…_bg.wasm`、`assets/main.css`、`assets/custom.css`）
+- 它点名的四件（`ui_leptos-<hash>.js`、`…_bg.wasm`、`assets/core.css`、`assets/custom.css`）
 - `SHA256SUMS`，以及 `fluxen-ui-<tag>.tar.gz`（同样四件 + manifest）
 
 按 tag 取用（例如 `https://github.com/orbsh/fluxen/releases/download/v0.1.0/manifest.json`），把四件

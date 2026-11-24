@@ -123,7 +123,7 @@ python3 scripts/ui_dist.py --no-build # assemble an existing examples/renderer/d
 A `v*` tag runs the same script in CI (`.github/workflows/ui-release.yml`) and publishes:
 
 - `manifest.json` — `entry.js` / `entry.wasm`, plus sha256 and size for every file
-- the four files it names (`ui_leptos-<hash>.js`, `…_bg.wasm`, `assets/main.css`, `assets/custom.css`)
+- the four files it names (`ui_leptos-<hash>.js`, `…_bg.wasm`, `assets/core.css`, `assets/custom.css`)
 - `SHA256SUMS`, and `fluxen-ui-<tag>.tar.gz` (the same four plus the manifest)
 
 Fetch by tag — e.g. `https://github.com/orbsh/fluxen/releases/download/v0.1.0/manifest.json` — copy

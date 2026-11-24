@@ -186,8 +186,8 @@ mod tests {
             Some("ui_leptos-abc_bg.wasm".into())
         );
         assert_eq!(
-            normalize_asset_path("/assets/main.css"),
-            Some("assets/main.css".into())
+            normalize_asset_path("/assets/core.css"),
+            Some("assets/core.css".into())
         );
     }
 
