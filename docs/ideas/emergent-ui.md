@@ -10,7 +10,7 @@ Its companion is `islands.md`: islands answer *who owns which region*, this note
 
 - Any block at any moment: `set` / `patch` on a named slot, `append` / `remove` by row identity, `create` for the root. Slot granularity is exactly what "one block appears" needs.
 - **`pages` (ADR 0010) is the keep-alive switcher, and both semantics are per container** — `display="render"` mounts only the selected row and its state goes with the unmount; `display="dom"` keeps every row in the DOM and flips a `hide` class on the others. The producer picks which, per container, which is the "optional" a per-component solution cannot give.
-- The server-driven flip is wired end to end: `inject` writes the vals plane (ADR 0011) → a `Local` bind reads that slot (`hooks.rs::resolve_bind`) → `pages`' select effect sets the key → only the class closure re-runs, so no row is rebuilt. One `inject` buys a tab switch with zero state loss and no client code.
+- The in-page flip is wired end to end: a `select`'s `sink {scope: local}` writes the vals plane → a `Local` bind reads that slot (`hooks.rs::value_of`) → the container's step effect sets the key → only the class closure re-runs, so no row is rebuilt. One click buys a tab switch with zero state loss and no server round trip. The far side can still name a cursor with `set` (it is the fallback of a `both` read), but it cannot outrank the page's own click — `inject`, which could, is gone (ADR 0038).
 - `rack` rows are keyed (`tachys::view::keyed::keyed`, key = row id), which is the renderer's own proof that DOM identity can survive a data write.
 - `fold` is the opposite by design: closed renders no children at all (`fold.rs`, `if s { render children } else { div() }`), so a fold body losing state is the contract. Memory-cheap is why it exists; making it keep-alive would be a different container or an opt-in, not a change to the default.
 - Overlays for the non-blocking case: `float` / `layer` / `portal`; drag: `grab` / `dock`; identity: the auth gate draws the login surface in place of the page, which is emergent UI the framework already owns.
@@ -25,7 +25,7 @@ Its companion is `islands.md`: islands answer *who owns which region*, this note
 ## Viewport, in three layers
 
 - **Presentation only** — stack vs side by side, what to deemphasise — belongs to CSS in the shell. `custom.css` already carries `@media (max-width: 1000px)` and `(max-width: 720px)`, and `.hide` sits in the custom layer so it beats `.f`. No wire involved.
-- **Which block is shown** — discrete, structural — belongs to a `pages` select slot. The client may flip it in-page (local bind + an emit), or the server may flip it with one `inject`. Viewport is only an input to that decision, and the client is the one holding it.
+- **Which block is shown** — discrete, structural — belongs to a `pages` select slot. The client flips it in-page (local bind + an emit); the far side can pre-set a cursor with `set`, which the page's own choice then outranks (ADR 0031 §1). Viewport is only an input to that decision, and the client is the one holding it.
 - **The server must know in order to build a different tree** — a page that does not exist on this device, data trimmed per device — is the only case that needs an uplink. It does not exist today; it would be one host event sent on a threshold crossing, never a frame per resize.
 
 ## "The server holds the client's state, like a game"
@@ -47,10 +47,10 @@ That is already the model: the server holds the page tree and the slots, the cli
 
 ## A first experiment, with no new types
 
-One page drawing `pages(display="dom")` with two panes — one holding an `input`, one holding a `chart` — its `select` bound to a local slot, flipped by an `inject` from the server and by an in-page emit from the client. What to measure: does the hidden input keep its text after a round trip; does the chart keep its GL context and its animation phase; what does keeping both panes mounted cost in memory and in frame size. That single page decides whether the keep-alive path is usable or merely present.
+One page drawing `pages(display="dom")` with two panes — one holding an `input`, one holding a `chart` — its `select` bound to a local slot, flipped by an in-page emit from the client and pre-set by one `set` from the server. What to measure: does the hidden input keep its text after a round trip; does the chart keep its GL context and its animation phase; what does keeping both panes mounted cost in memory and in frame size. That single page decides whether the keep-alive path is usable or merely present.
 
 ## Open
 
 - Does the general case need its own name, or is `pages` already the shape? Its rows are any Accrete node and its key is any string, so the type may be sufficient and only the word reads wrong (a deck is not a page list). The name is the user's to pick.
 - `fold`: stay memory-cheap by design, or gain a keep option? Two containers with a keep flag would duplicate one switch.
-- Should a route turn be allowed to stop writing the `routes` slot and flip a key instead? That is where kept routes land, and it is a reflux contract change (page turn → `inject` plus a path marker), not a fluxen type.
+- Should a route turn be allowed to stop writing the `routes` slot and flip a key instead? That is where kept routes land, and it is a reflux contract change (page turn → a local slot write plus a path marker), not a fluxen type.

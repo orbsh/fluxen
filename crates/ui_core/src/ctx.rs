@@ -385,21 +385,6 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                     tracing::warn!("patch {x:?} skipped: {e}");
                 }
             }
-            Content::Inject(x) => {
-                // 远程注入 vals 槽（ADR 0011）：写必整值；同值短路——写读环
-                // （生产端把收到的值回显回来）在第一跳终止，代价是连通知也
-                // 不发（值槽本是电平语义，ADR 0008 §4）。形状取自
-                // `InjectOp::outflow`：与浏览器自发 emit 写的是同一个对象，
-                // 订阅方分不出这次切换是谁写的。
-                let v = to_value(x.outflow()).unwrap_or(Value::Null);
-                let slot = ctx.slot_for_value(&x.slot);
-                if !inject_writes(slot.get_untracked().as_ref(), &v) {
-                    tracing::debug!("inject {:?}: same value, skipped", x.slot);
-                } else {
-                    tracing::info!("inject {:?} = {:.120?}", x.slot, v);
-                    slot.set(Some(v));
-                }
-            }
             Content::Empty => {}
         }
     }
@@ -412,14 +397,6 @@ fn apply_patch(target: &mut Accrete, p: &content::PatchOp) -> Result<(), String>
         PatchKind::Append => target.append_at(&p.path, p.value.clone()),
     }
 }
-
-/// inject 是否落写（ADR 0011 §2）：同值不写——写读环（生产端把收到的值回显
-/// 回来）在第一跳终止；值槽本是电平语义，同值两次写订阅方看到的值不变，
-/// 这里连通知也不发。抽成纯函数以便单测（真正的写路径要反应式运行时）。
-fn inject_writes(current: Option<&Value>, incoming: &Value) -> bool {
-    current != Some(incoming)
-}
-
 
 /// Slot references, and the cycle they would close.
 ///
@@ -569,30 +546,4 @@ pub fn render_accrete(ctx: &Ctx, accrete: &Accrete) -> AnyView {
 /// 渲染一组子 accrete。
 pub fn render_children(ctx: &Ctx, subs: &[Accrete]) -> Vec<AnyView> {
     subs.iter().map(|b| render_accrete(ctx, b)).collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::inject_writes;
-    use serde_json::json;
-
-    #[test]
-    fn inject_writes_when_the_slot_is_empty() {
-        assert!(inject_writes(None, &json!("about")));
-    }
-
-    #[test]
-    fn inject_skips_an_equal_value() {
-        let cur = json!({"dest": "page", "data": "about"});
-        assert!(!inject_writes(Some(&cur), &cur));
-    }
-
-    #[test]
-    fn inject_writes_a_changed_value() {
-        let cur = json!({"dest": "page", "data": "about"});
-        assert!(inject_writes(
-            Some(&cur),
-            &json!({"dest": "page", "data": "home"})
-        ));
-    }
 }

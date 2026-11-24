@@ -39,8 +39,8 @@ Above it nothing knows where bytes come from; below it nothing knows Accrete.
 
 ## 2. The wire
 
-Downstream, a frame **is** the action list — the eight actions (`create` / `set` / `append` /
-`remove` / `patch` / `inject` / `tmpl` / `empty`) as an ordered array. There is no envelope on this
+Downstream, a frame **is** the action list — the seven actions (`create` / `set` / `append` /
+`remove` / `patch` / `tmpl` / `empty`) as an ordered array. There is no envelope on this
 side (ADR 0021 decision 6). `content` keeps only the actions and `Outflow`, and a host keeps an
 envelope only when it has more than one kind of frame to categorise — prism does (`connected`,
 `init.error`, `echo.result`); `stage` and reflux have a single verb each, so neither has one.
@@ -98,7 +98,6 @@ directions pass through one seam: everything below is `ui-core` plus the transpo
    | `append` | list slot `slot` | row id read from `data.id`; duplicate ids rejected; `position` counts from the tail (0 = end) |
    | `remove` | list slot `slot` | by row id |
    | `patch` | layout root, one list row, or a data slot | JSON Pointer (RFC 6901) into the node's WIRE shape; `slot: ""` = root, `id` set = that row, else the named slot |
-   | `inject` | vals slot | local plane; an equal value short-circuits |
 
    These writes read untracked and then `set`: dispatch runs inside the effect that consumes the
    frame, so a tracked read would subscribe that effect to the slots it is about to write.
@@ -155,8 +154,8 @@ appending does not remount the rows above it.
    future: gloo's sink suspends while the socket is still connecting and wakes when it opens, so an
    emit fired before `open` is not lost.
 3. **`Local` never leaves the page.** The same `Outflow`-shaped object is written into that `vals`
-   slot, so a subscriber cannot tell a local emit from a remote `inject` (ADR 0010, 0011) — which is
-   how the whole chain can be exercised with no socket at all.
+   slot, so a local emit and an uplink frame carry one shape (ADR 0010) — which is how the whole
+   chain can be exercised with no socket at all.
 4. **The page's own handle.** The boot publishes `window.fluxen.send(name, data)`; it funnels into
    the same `Ctx::send`. A page script and a component share one uplink and one frame shape.
 5. **What the host receives** is `Outflow` and nothing else: `id` is the emitter, `data` is

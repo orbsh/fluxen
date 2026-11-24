@@ -35,8 +35,8 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
 
 ## 2. 线上格式
 
-下行，一帧**就是**动作列表——`create` / `set` / `append` / `remove` / `patch` / `inject` / `tmpl` /
-`empty` 八个动作按序组成的数组。渲染器这一侧没有信封（ADR 0021 决策 6）：`content` 只剩动作与
+下行，一帧**就是**动作列表——`create` / `set` / `append` / `remove` / `patch` / `tmpl` / `empty`
+七个动作按序组成的数组。渲染器这一侧没有信封（ADR 0021 决策 6）：`content` 只剩动作与
 `Outflow`；宿主只有在「帧不止一类」时才需要信封——prism 有（`connected`、`init.error`、
 `echo.result`），`stage` 与 reflux 各只有一个动词，所以都没有。
 
@@ -85,7 +85,6 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
    | `append` | 列表槽 `slot` | 行身份取自 `data.id`；重复 id 拒收；`position` 从尾往内数（0 = 末尾） |
    | `remove` | 列表槽 `slot` | 按行 id |
    | `patch` | 布局根、某一行、或数据槽 | 对节点的**线上形状**打 JSON Pointer（RFC 6901）；`slot: ""` 是根，带 `id` 是那一行，其余是具名槽 |
-   | `inject` | vals 槽 | 本地平面；同值短路（它的 `slot` 是通道，`name?` 是另起的名字，缺省 = 槽名） |
 
    **一个词一个意思。** 树里的地址叫 `slot`——`create` 用 `slot: ""` 指向根，其余都写槽名（或带 `id`
    指向某个列表槽里的一行）。上行不是槽（`Outflow.dest`，以及节点 `kind: dest` 绑定里的 `dest`）——
@@ -135,8 +134,8 @@ data: { type: text, bind: { value: { kind: default, default: "hello" } } }
    `content::Outflow { dest, id?, data }`，用页面构建时钉住的编码（JSON → text 帧，CBOR → 二进制
    帧）编码后发出。`send` 是 future：socket 尚在连接时 gloo 的 sink 挂起、open 时唤醒，所以抢在
    `open` 之前的发射不会丢。
-3. **`Local` 不出页面。** 同一个 `Outflow` 形状的对象被写进那个 `vals` 槽，订阅方分不出这是本地
-   emit 还是远端 `inject`（ADR 0010、0011）——整条链因此可以在没有 socket 的情况下演练。
+3. **`Local` 不出页面。** 同一个 `Outflow` 形状的对象被写进那个 `vals` 槽，本地 emit 与上行帧因此
+   共一种形状（ADR 0010）——整条链可以在没有 socket 的情况下演练。
 4. **页面自己的把手。** boot 发布 `window.fluxen.send(name, data)`，它汇入同一个 `Ctx::send`。
    页面脚本与组件共用一条上行、一种帧形状。
 5. **宿主收到的只有** `Outflow`：`id` 是发射者，`data` 自由，完全属于产出它的那个组件。渲染器
