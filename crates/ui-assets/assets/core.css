@@ -1337,3 +1337,50 @@
     }
 }
 
+/* ---- 手绘线框皮肤（ADR 0038 §3-4） ----------------------------------------------
+   选项 `skin` 由生产者在建页时下发，镜像成 `html[data-skin]`。皮肤是核心的一个状态
+   （和 `.is-*` 那一栏同住 utilities），所以它在核心这一侧：`custom.css` 是页面自己的
+   层，用来覆盖看相，不是核心长出来的地方。
+
+   只做两件事——圆角归零（形状归画），图层画好之后去掉边的涂色（`data-rough` 是图层
+   打上的记号；空间一直留着，盒子一像素不动）。颜色一概不碰：`--fg` 是 light-dark，
+   纸上的墨与板上的粉笔自动成立。
+
+   这一块必须在 utilities：`.is-border` 的 `border: var(--border)` 也在这一层，层序
+   先于特异性，写进 components 的话特异性再高也赢不了。 */
+@layer utilities {
+    html[data-skin="sketch"] {
+        --round: 0;
+        --input-round: 0;
+    }
+
+    html[data-skin="sketch"] .is-border[data-rough="ready"] {
+        border-color: transparent;
+    }
+
+    /* 图层：绝对定位盖在宿主的 border box 上——`inset` 退一个边框宽度，所以画出来
+       的线正好落在 CSS 边所在的位置。描边允许溢出盒子：手绘的线不该被自己的盒子
+       裁掉，`overflow: visible` 顺带解掉 `.round` 的裁剪（这里圆角已经是 0，没有
+       要裁的东西）。 */
+    html[data-skin="sketch"] .is-border {
+        position: relative;
+        overflow: visible;
+    }
+
+    html[data-skin="sketch"] .is-border > svg.rough {
+        position: absolute;
+        inset: calc(-1 * var(--border-width));
+        overflow: visible;
+        pointer-events: none;
+    }
+
+    /* 笔：一条线、无填充，颜色取 `currentColor`（页面给这个盒子的色），粗细与常规
+       模式那条 1px 的边看起来是同一条。这里不写任何具体颜色。 */
+    html[data-skin="sketch"] .is-border > svg.rough path {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+}

@@ -1,6 +1,7 @@
 use crate::Ctx;
 use crate::ctx::render_children;
 use crate::hooks::{BundleState, Field, bundle_key, node_id, refresh, use_common_css};
+use crate::rough;
 use accrete::{Accrete, AccreteOps, Bundle, JsType};
 use leptos::html::*;
 use leptos::prelude::*;
@@ -140,5 +141,15 @@ pub fn bundle_(accrete: Bundle, ctx: &Ctx) -> AnyView {
         .map(|s| render_children(&ctx, s))
         .unwrap_or_default();
 
-    div().class(css.as_str()).child(children).into_any()
+    // 手绘皮肤（ADR 0038 §4）：只有自己声明了 `is-border` 的容器才有这一层。
+    let layer = rough::border_layer(
+        &ctx,
+        accrete.attrs.as_ref().and_then(|a| a.class.as_ref()),
+        accrete.id.as_deref(),
+    );
+    div()
+        .class(css.as_str())
+        .child(children)
+        .child(layer)
+        .into_any()
 }
