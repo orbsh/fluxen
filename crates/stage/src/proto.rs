@@ -87,12 +87,15 @@ fn has_retired_key(v: &serde_yaml::Value) -> bool {
     }
 }
 
-/// A read-only node carrying `sink:` — serde would silently drop that key (nodes other than `Bind` take no unknown fields,
-/// but there is no `deny_unknown_fields`, because once the internally tagged enum arms are tightened, schemars expands every arm
+/// A node without a write channel carrying `sink:` — serde would silently drop that key (most node structs take no unknown
+/// fields, but there is no `deny_unknown_fields`, because once the internally tagged enum arms are tightened, schemars expands every arm
 /// inline and the named types under `$defs` disappear with it, leaving the SDK generator to number them by order). So the "took a channel
 /// it does not support" error is reported loudly here, rather than inside serde.
+///
+/// `input` and `select` are not in the list: they no longer have the field at all and refuse it in serde (ADR 0032 §2), so this
+/// check would never see them get that far.
 fn illegal_channel(v: &serde_yaml::Value) -> Option<String> {
-    const WRITERS: &[&str] = &["input", "select", "button", "bundle", "frame"];
+    const WRITERS: &[&str] = &["button", "bundle", "frame"];
     match v {
         serde_yaml::Value::Mapping(m) => {
             let kind = m.get("type").and_then(|t| t.as_str());
@@ -284,11 +287,18 @@ mod tests {
 
     #[test]
     fn a_read_only_node_may_not_write() {
-        let bad = y("type: text\nsink: {slot: x}\nsource: {default: hi}\n");
+        let bad = y("type: text\nsink: {dest: x}\nsource: {default: hi}\n");
         assert!(illegal_channel(&bad).is_some(), "text 收了 sink 应当报错");
 
-        let ok = y("type: input\nsink: {slot: x}\n");
-        assert!(illegal_channel(&ok).is_none(), "input 可以写");
+        // A field has no write channel at all any more (ADR 0032 §2), so the frame itself refuses the key.
+        let field = y("type: input\nsink: {dest: x}\n");
+        assert!(
+            illegal_channel(&field).is_some(),
+            "input 没有 sink，这个检查也要拒绝"
+        );
+
+        let ok = y("type: bundle\nsink: {dest: x}\nchildren: []\n");
+        assert!(illegal_channel(&ok).is_none(), "bundle 可以写");
     }
 
     #[test]
@@ -303,7 +313,7 @@ mod tests {
         let msg = dead_end_drop(&bad).expect("accept 没有 sink 应当报错");
         assert!(msg.contains("sink"), "错误要说该补什么：{msg}");
 
-        let ok = y("type: frame\nattrs: {accept: {tag: note}}\nsink: {slot: pin}\n");
+        let ok = y("type: frame\nattrs: {accept: {tag: note}}\nsink: {dest: pin}\n");
         assert!(dead_end_drop(&ok).is_none(), "落点带 sink 就成立");
     }
 
@@ -375,7 +385,9 @@ mod tests {
         assert!(msg.contains("node tree"), "错误要说定义是什么：{msg}");
         assert!(msg.contains("$name"), "错误要说新拼法：{msg}");
 
-        let ok = y("action: tmpl\nname: segment\nparams: [q]\ndata:\n  type: text\n  source: {default: \"$q\"}\n");
+        let ok = y(
+            "action: tmpl\nname: segment\nparams: [q]\ndata:\n  type: text\n  source: {default: \"$q\"}\n",
+        );
         assert!(retired_template_body(&ok).is_none(), "树本体成立");
     }
 }

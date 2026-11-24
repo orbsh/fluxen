@@ -21,7 +21,7 @@ Cargo lives on the frame, in the box's own `attrs`:
 - type: frame
   id: rail
   attrs: { accept: { tag: message } }         # this box takes that cargo
-  sink: { slot: pin }                         # …and this is where the drop is reported
+  sink: { dest: pin }                         # …and this is where the drop is reported
 ```
 
 A `frame` owns a subtree, so it can say "this is the thing that moves" without a second field

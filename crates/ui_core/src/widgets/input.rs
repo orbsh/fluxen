@@ -1,5 +1,5 @@
 use crate::Ctx;
-use crate::hooks::{enter_pressed, field_changed, locked, node_id, use_common_css, value_of};
+use crate::hooks::{enter_pressed, field_changed, locked, use_common_css, value_of};
 use crate::rough;
 use accrete::{AccreteOps, Input, JsType};
 use leptos::ev;
@@ -69,6 +69,12 @@ mod parse_tests {
     }
 }
 
+/// The name the hand draws by: the field's `tag` (what its form calls it), else its `id` (its identity when it
+/// stands alone). Either way it is stable across re-renders, so the same field keeps the same hand.
+fn seed_of(accrete: &accrete::Input) -> Option<&str> {
+    accrete.tag.as_deref().or(accrete.id.as_deref())
+}
+
 fn parse(kind: &Option<JsType>, raw: &str) -> Value {
     match kind {
         Some(JsType::bool) => Value::Bool(raw == "true"),
@@ -84,24 +90,16 @@ fn on_input(
     kind: Option<JsType>,
     slot: RwSignal<Value>,
     field: Option<RwSignal<Value>>,
-    sink: Option<accrete::Bind>,
-    id: Option<String>,
     ctx: Ctx,
 ) -> impl Fn(web_sys::Event) + 'static {
     move |event: web_sys::Event| {
         let parsed = parse(&kind, &target_value(&kind, event.target()));
         slot.set(parsed.clone());
+        // The value goes where the bundle keeps it, and nowhere else: a field has no exit of its own
+        // (ADR 0032 §2), so an untagged field is a display and nothing more.
         if let Some(sig) = field {
             sig.set(parsed);
             field_changed(&ctx, ctx.bundle.as_ref());
-            return;
-        }
-        // No tag: all a sink can still do is land locally, and it lands as the value changes — a switch's
-        // click, a filter's keystroke. A switch has no Enter to press; an uplink is the bundle's business.
-        if let Some(sink) = &sink
-            && matches!(sink.scope, accrete::Scope::Local)
-        {
-            ctx.emit(sink, id.clone(), parsed);
         }
     }
 }
@@ -128,23 +126,16 @@ fn on_key(
     }
 }
 
-/// A field: `source` is what it shows, `sink` is where its value goes when it
-/// stands alone, `tag` is what a bundle calls it (ADR 0032). `multiline` is the
-/// layout — same node, same channels.
+/// A field: `source` is what it shows, `kind` is what kind of field it is (element type and parse, one
+/// declaration), `tag` is what a bundle calls it (ADR 0032). `multiline` is the layout — same node.
 pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
-    let node_id = node_id(&accrete);
     let mut css = vec!["input", "flex", "is-shadow"];
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
-    let sink = accrete.get_sink().cloned();
-    // The type can sit on either channel: the read side gives the display, the
-    // write side gives the parse of the uplink payload.
-    let kind = sink
-        .as_ref()
-        .and_then(|s| s.r#type.clone())
-        .or_else(|| accrete.get_source().and_then(|b| b.r#type.clone()));
+    // One declaration for both halves: the same `kind` picks the element and parses what is typed into it.
+    let kind = accrete.kind.clone();
 
     // A tagged field belongs to its bundle: its value lives in the bundle's
     // signal and the bundle's sink is the only exit. No tag = no member, and the
@@ -173,18 +164,6 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
             .unwrap_or_else(|| default_option_jskind(&kind)),
     };
     let slot = RwSignal::new(initial);
-
-    // A tag-less field has no uplink (ADR 0032 §2 revised): the bundle owns the exit, so a `remote`/`both`
-    // sink on a field nobody packs would send into nothing. Say so once and keep the write local.
-    if field.is_none()
-        && let Some(sink) = &sink
-        && !matches!(sink.scope, accrete::Scope::Local)
-    {
-        tracing::warn!(
-            "input {:?}: a sink without a tag has no uplink — wrap the field in a bundle (ADR 0032 §2)",
-            accrete.id
-        );
-    }
 
     // A field's display follows the bundle's copy, so `reset: clear`/`default` shows up in the box. Writing an
     // equal value notifies nobody, so following the very signal this input writes costs no loop.
@@ -264,23 +243,13 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
             .attr("disabled", is_locked)
             .node_ref(node_area)
             .child(text)
-            .on(
-                ev::input,
-                on_input(
-                    kind.clone(),
-                    slot,
-                    field,
-                    sink.clone(),
-                    node_id.clone(),
-                    ctx.clone(),
-                ),
-            )
+            .on(ev::input, on_input(kind.clone(), slot, field, ctx.clone()))
             .on(ev::keydown, on_key(true, field, ctx.clone()));
         let el = match placeholder {
             Some(ph) => base.placeholder(ph).into_any(),
             None => base.into_any(),
         };
-        return rough::field_host(&ctx, accrete.id.as_deref(), el);
+        return rough::field_host(&ctx, seed_of(&accrete), el);
     }
 
     // Reactivity sinks into the attribute closure: `value` is a DynProperty, so a
@@ -302,17 +271,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
         .r#type(ty)
         .attr("disabled", is_locked)
         .node_ref(node_el)
-        .on(
-            ev::input,
-            on_input(
-                kind.clone(),
-                slot,
-                field,
-                sink.clone(),
-                node_id.clone(),
-                ctx.clone(),
-            ),
-        )
+        .on(ev::input, on_input(kind.clone(), slot, field, ctx.clone()))
         .on(ev::keydown, on_key(false, field, ctx.clone()));
     let el = match (&kind, placeholder) {
         (Some(JsType::bool), Some(ph)) => base.checked(checked).placeholder(ph).into_any(),
@@ -320,5 +279,5 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
         (_, Some(ph)) => base.value(value).placeholder(ph).into_any(),
         (_, None) => base.value(value).into_any(),
     };
-    rough::field_host(&ctx, accrete.id.as_deref(), el)
+    rough::field_host(&ctx, seed_of(&accrete), el)
 }

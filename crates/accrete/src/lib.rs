@@ -26,10 +26,10 @@ pub trait AccreteOps {
     fn borrow_attrs_mut(&mut self) -> Option<&mut dyn Classify>;
     /// The two channels (ADR 0031 §2). A node that accepts neither answers None,
     /// which is what makes "a channel this node does not take" a frame error.
-    fn get_source(&self) -> Option<&Bind> {
+    fn get_source(&self) -> Option<&Source> {
         None
     }
-    fn get_sink(&self) -> Option<&Bind> {
+    fn get_sink(&self) -> Option<&Sink> {
         None
     }
     fn get_id(&self) -> &Option<String>;
@@ -116,16 +116,15 @@ impl Scope {
     }
 }
 
-/// One value, one address, one scope (ADR 0031 §1-2). `source` is where a value
-/// flows in, `sink` where it flows out; both are this same struct.
+/// The read direction of one value (ADR 0031 §1-2, ADR 0039): where it comes from, who is authoritative,
+/// which member of it, and what to show when there is none.
 ///
-/// No `slot` means the value is a literal: `default` *is* the value (that is
-/// what the retired `kind: default` said). With a slot, `default` is what to
-/// use while the slot is still empty.
+/// No `slot` means the value is a literal: `default` *is* the value (that is what the retired
+/// `kind: default` said). With a slot, `default` is what to use while the slot is still empty.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
-pub struct Bind {
+pub struct Source {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slot: Option<String>,
     #[serde(default, skip_serializing_if = "Scope::is_remote")]
@@ -137,8 +136,25 @@ pub struct Bind {
     pub path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default: Option<Value>,
+}
+
+/// The write direction of one value: where it goes, and who is authoritative about it. No `default` — a write
+/// has no use for a value it does not have.
+///
+/// `dest` is the word ADR 0023 chose for an uplink target, and it is what an outflow calls the same address
+/// (`Outflow { dest, id?, data }`), so the emit no longer translates between two names for one thing.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Sink {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub r#type: Option<JsType>,
+    pub dest: Option<String>,
+    #[serde(default, skip_serializing_if = "Scope::is_remote")]
+    pub scope: Scope,
+    /// JSON Pointer into the target value. Only a `scope: local` write uses it: it names the member this node
+    /// owns, and the rest of the object is left alone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -237,7 +253,7 @@ pub struct Canvas {
     /// a named data slot (the raw JSON of `bind.value.default` on the node in the slot is the module's data area),
     /// streaming data in = `set`/`patch` on that slot (pointer `/bind/value/default/...`).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
+    pub source: Option<Source>,
 }
 
 /// A 3D force-directed relationship graph (ADR 0018). A native component, not a canvas module: the renderer and the layout
@@ -269,11 +285,11 @@ pub struct ForceGraph {
     #[serde(default, skip_serializing_if = "force_graph_style_is_default")]
     pub style: ForceGraphStyle,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
+    pub source: Option<Source>,
 
     /// Second value: the theme channel (`true`/`"dark"`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub theme: Option<Bind>,
+    pub theme: Option<Source>,
 }
 
 /// The graph renderer's knobs. Same semantics as canvas's `options`: mount-time config, changing it takes
@@ -476,7 +492,7 @@ pub struct Panel {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<PanelAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
+    pub source: Option<Source>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -583,14 +599,16 @@ pub struct BundleAttr {
 pub struct Bundle {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    /// The key this bundle contributes to its parent's packed object. Only read
-    /// when the bundle sits inside another bundle; falls back to `id`.
+    /// The key this bundle contributes to its parent's packed object — the same `tag` rule a field follows,
+    /// because a nested bundle is an input of the enclosing one. Only read when the bundle sits inside another
+    /// bundle; with no `tag` it packs nothing into its parent (`id` is identity, `dest` is where it sends, and
+    /// neither is a name — ADR 0032 §4).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<BundleAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sink: Option<Bind>,
+    pub sink: Option<Sink>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -605,7 +623,7 @@ pub struct Svg {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<SizeAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
+    pub source: Option<Source>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -620,7 +638,7 @@ pub struct Path {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
+    pub source: Option<Source>,
 }
 
 /// How much of the slot a `tiles` node puts on stage at once (ADR 0031 §4). Absent = every item is
@@ -712,7 +730,7 @@ pub struct Tiles {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<TilesAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
+    pub source: Option<Source>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -856,8 +874,8 @@ pub struct Button {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ButtonAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
-    pub sink: Option<Bind>,
+    pub source: Option<Source>,
+    pub sink: Option<Sink>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -888,14 +906,18 @@ pub struct Image {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ImageAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
+    pub source: Option<Source>,
 }
 
 /// A field: one value, one line (or many, with `multiline`) (ADR 0032).
+///
+/// Unknown keys are refused: a field has no `sink` any more, and an old page that still carries one should
+/// hear about it rather than quietly lose the write.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Input {
     pub id: Option<String>,
     /// The field's name inside an enclosing bundle: the bundle packs this tag
@@ -905,8 +927,12 @@ pub struct Input {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
-    pub sink: Option<Bind>,
+    pub source: Option<Source>,
+    /// What kind of field this is — the element type and the parse, one declaration (ADR 0032 §2: a field
+    /// has one type, and it is not the read's or the write's). Named `kind` because `type` is the node's own
+    /// discriminator on the wire. Absent = text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<JsType>,
 
     /// Multi-line is a layout of the field, not a different node.
     #[serde(default, skip_serializing_if = "is_false")]
@@ -914,13 +940,14 @@ pub struct Input {
     /// Second value: the placeholder text (literal or slot) — the channel
     /// `textarea` used to carry on its own type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub placeholder: Option<Bind>,
+    pub placeholder: Option<Source>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
 pub struct Select {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -930,12 +957,11 @@ pub struct Select {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<ClassAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
-    pub sink: Option<Bind>,
+    pub source: Option<Source>,
 
     /// Second value: the option rows (list plane).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub options: Option<Bind>,
+    pub options: Option<Source>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }
@@ -991,7 +1017,7 @@ pub struct Text {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<TextAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
+    pub source: Option<Source>,
 }
 
 /// A frame is a box: it wraps children, it can read a slot, and (ADR 0034) it is the
@@ -1053,11 +1079,11 @@ pub struct Frame {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<FrameAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Bind>,
+    pub source: Option<Source>,
     /// The landing uplink (ADR 0034): where a drop on this box goes — an event name or
-    /// a local slot, the same `Bind` `dock` had.
+    /// a local slot, the same channel `dock` had.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sink: Option<Bind>,
+    pub sink: Option<Sink>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Accrete>>,
 }

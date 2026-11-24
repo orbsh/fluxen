@@ -15,7 +15,7 @@ use serde_json::json;
 fn attrs(v: serde_json::Value) -> BundleAttr {
     let a: Accrete = serde_json::from_value(json!({
         "type": "bundle",
-        "sink": {"slot": "confirm"},
+        "sink": {"dest": "confirm"},
         "attrs": v,
         "children": [{"type": "input", "tag": "q"}]
     }))

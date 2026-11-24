@@ -32,7 +32,7 @@ use crate::components::canvas::{HIDDEN_STYLE, payload_is_empty};
 use crate::ctx::{render_accrete, render_children};
 use crate::hooks::{use_common_css, use_default};
 use crate::rough;
-use accrete::{AccreteOps, Bind, Direction, Panel, PanelAttr, PanelPlace, PanelState};
+use accrete::{AccreteOps, Direction, Panel, PanelAttr, PanelPlace, PanelState, Source};
 use leptos::ev::{click, keydown};
 use leptos::html::*;
 use leptos::leptos_dom::helpers::window_event_listener;
@@ -232,7 +232,12 @@ fn overlay_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView 
     let shown_style = attrs
         .pos
         .as_ref()
-        .map(|p| format!("position: fixed; {} z-index: 100; display: flex;", p.into_style()))
+        .map(|p| {
+            format!(
+                "position: fixed; {} z-index: 100; display: flex;",
+                p.into_style()
+            )
+        })
         .unwrap_or_else(|| LAYER_STYLE.to_string());
     // The value at construction time (before the first Effect): same as the canvas host, left to the Effect below to sync
     let style_now = if payload_is_empty(&read_payload(ctx, &local_slot, &data_source, &inline)) {
@@ -426,7 +431,7 @@ const LAYER_STYLE: &str = "position: fixed; inset: 0; height: 100vh; z-index: 10
 /// `source` → (local slot name, data slot name, inline default), decided by `scope` (ADR 0031 §1).
 /// `both` gives both addresses: the local assignment wins while it exists, the far side is
 /// the fallback.
-fn bind_slot(bind: Option<&Bind>) -> (Option<String>, Option<String>, Option<Value>) {
+fn bind_slot(bind: Option<&Source>) -> (Option<String>, Option<String>, Option<Value>) {
     match bind {
         Some(b) => match &b.slot {
             Some(slot) if b.scope.local() => (

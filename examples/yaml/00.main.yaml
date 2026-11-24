@@ -72,12 +72,17 @@
               class:
               - nogrow
             source: {default: drawn borders}
-          - type: input
+          - type: bundle
             attrs:
               class:
               - nogrow
-            source: {slot: __CONFIG__, path: /sketch, scope: both, type: bool}
-            sink: {slot: __CONFIG__, scope: local, path: /sketch}
+              submit: [change]
+            sink: {dest: __CONFIG__, scope: local, path: /}
+            children:
+            - type: input
+              tag: sketch
+              kind: bool
+              source: {slot: __CONFIG__, path: /sketch, scope: both}
     # ---- right column: message stream ---------------------------------------
     - type: frame
       attrs:
@@ -133,7 +138,7 @@
           # uplink of its own any more, so the box without this wrapper would send nothing.
           - type: bundle
             id: test
-            sink: {slot: message}
+            sink: {dest: message}
             attrs:
               submit: [enter]
               reset: clear
@@ -150,7 +155,7 @@
         class:
         - --rail
         accept: {tag: snippet}
-      sink: {slot: pin}
+      sink: {dest: pin}
 
 # ---- initial graph snapshot: crate layer ------------------------------------
 - action: set

@@ -2,7 +2,7 @@ action: append
 slot: chat
 data:
   type: bundle
-  sink: {slot: confirm}
+  sink: {dest: confirm}
   attrs:
     submit: [enter, button]
     # Two sends and no more (ADR 0032 §5): each one takes a count off, and at zero the fields are

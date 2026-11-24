@@ -37,6 +37,9 @@
 - [x] 29 — 皮肤：`config.skin` 镜像到 `<html data-*>` + roughr 实时画边（frame / panel / bundle；帧自己声明 `is-border` 才挂）— ADR 0038 §3-4 — 2026-11-24
 - [x] 30 — 开关落在控件本身：`bool` 字段读自己写的槽、change 即出口（文本字段仍以 Enter 为出口），复选框读 `checked()` 而非 `value()`；示例把它放进图的右下角（`panel place: anchor` 浮层，卡片向上开，占图的空边角），shell 不加任何栏 — ADR 0030、0038 §2、§5 — 2026-11-24
 - [x] 31 — 字段没有自己的上行：无 tag 的 sink 只剩本地落地（remote/both 报警告），清空改由 bundle 的 `reset: keep|clear|default` 决定；`sends: n` 每发一次减一、为 0 锁定（字段 disabled、拒发），缺省/-1 无限 — ADR 0032 §2、§6、§7 — 2026-11-24
+- [x] 32 — 字段的 `sink` 整个删掉（shape 也不再接受，`Input`/`Select` deny unknown keys）：字段只剩 `source` + `kind`（number/bool/text/password，缺省 text，元素类型与解析同一处声明）；本地落地归 bundle（`sink: {scope: local, path: /}` 把打包对象并进槽根，`write_local_at` 的根路径按对象合并）；例子里的 13 处字段 sink 全部改成 bundle — ADR 0032 §2 — 2026-11-24
+- [x] 34 — 嵌套 bundle 的打包键只认 `tag`：`id` 是身份（按它匹配答复）、`dest` 是它自己发送的去向，两者都不是名字，`bundle_key` 不再从 `id` 后备；无 `tag` 的内层 bundle 不进外层的包（它的字段留在自己包里，自己有 `dest` 就自己发）；顶层 `tag` 不读 — ADR 0032 §4 — 2026-11-24
+- [x] 33 — 读和写分成两个类型：`Source {slot, scope, path, default}` / `Sink {dest, scope, path}`（`dest` 与上行帧同名，`emit` 不再翻译；sink 没有 `default`，两个类型各自 deny unknown keys，`sink: {slot: …}` 解码即错）；例子/文档 29 处 `sink: {slot: …}` 改 `dest`，两条死 `default` 一并删掉 — ADR 0039（0031 §2 加 amend）— 2026-11-24
 - [ ] 32 — 皮肤的边角：`select` 的稳定子树、`button` 的类名、input 保持 CSS 边（void 元素装不下子节点）— ADR 0038 §4 — 待做
 
 ## 开着

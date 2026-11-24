@@ -24,10 +24,10 @@
 //! (`attrs.grid` has never taken effect since birth, and it was only left unhit because nobody used grid).
 
 use crate::Ctx;
-use crate::rough;
 use crate::ctx::{render_accrete, render_children};
 use crate::hooks::use_common_css;
-use accrete::{Accept, Accrete, AccreteOps, Bind, Frame};
+use crate::rough;
+use accrete::{Accept, Accrete, AccreteOps, Frame, Sink};
 use leptos::attr::any_attribute::AnyAttribute;
 use leptos::html::*;
 use leptos::prelude::*;
@@ -63,7 +63,7 @@ fn drag_attrs(
     cargo: &Accrete,
     draggable: &Option<accrete::Draggable>,
     accept: &Option<Accept>,
-    sink: &Option<Bind>,
+    sink: &Option<Sink>,
     id: &str,
     over: RwSignal<bool>,
 ) -> (
@@ -143,11 +143,7 @@ fn drag_attrs(
             }
             let mut data = Map::new();
             // An empty id counts as no identity (the same convention as `node_id`), so it is normalised here, at the exit point.
-            if let Some(id) = cargo
-                .get_id()
-                .as_deref()
-                .filter(|s| !s.is_empty())
-            {
+            if let Some(id) = cargo.get_id().as_deref().filter(|s| !s.is_empty()) {
                 data.insert("id".into(), Value::String(id.to_string()));
             }
             if let Some(tag) = cargo_tag(&cargo) {
@@ -172,10 +168,7 @@ fn drag_attrs(
         attr(accept.is_some(), on_enter.into_any_attr()),
         attr(accept.is_some(), on_over.into_any_attr()),
         attr(accept.is_some(), on_leave.into_any_attr()),
-        attr(
-            accept.is_some() && sink.is_some(),
-            on_drop.into_any_attr(),
-        ),
+        attr(accept.is_some() && sink.is_some(), on_drop.into_any_attr()),
     )
 }
 

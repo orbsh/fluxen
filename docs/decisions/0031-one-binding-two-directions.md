@@ -68,10 +68,16 @@ value comes from, `sink` is where it goes:
 
 ```yaml
 source: { slot: "draft", scope: both }   # the value flows in
-sink:   { slot: "draft", scope: both }   # the value flows out
+sink:   { dest: "draft", scope: both }   # the value flows out
 ```
 
-- `text` accepts `source`; `input` accepts `source` + `sink`; `select` accepts `source` + `sink`.
+> **Amended** (2026-11-24, ADR 0039): the two directions started out as one `Bind` struct, because there was
+> one channel to spell. Once they are two, they stop being one shape — a write has no `default`, and its
+> address is the `dest` an outflow already carries (ADR 0023). `source` is a `Source`, `sink` is a `Sink`;
+> nothing else about this section changes.
+
+- `text` accepts `source`; `input` and `select` accept `source` (their `sink` is gone: the enclosing bundle
+  sends, ADR 0032 §2); `bundle`, `frame` and `panel` accept `sink`.
 - `scope: local` — an assignment, nothing leaves the page. `scope: remote` — the existing `set` op.
   `scope: both` — assign locally and mirror the change up; the far side stays authoritative on
   replay, which is what makes a "local draft that the server has seen" expressible without a
@@ -89,7 +95,7 @@ sink:   { slot: "draft", scope: both }   # the value flows out
 
 `report` disappears. Sending an action to the far side was never a separate mechanism — it is a value
 flowing out. A select that tells the island what was chosen is
-`sink: { slot: "choice", scope: remote }`: one op, one address, no third channel to keep
+`sink: { dest: "choice", scope: remote }`: one op, one address, no third channel to keep
 consistent.
 
 `inject` goes with it. Nothing needs a private door into a component when the component can read a

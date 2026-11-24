@@ -1,8 +1,6 @@
 use crate::Ctx;
 use crate::ctx::render_accrete;
-use crate::hooks::{
-    field_changed, locked, use_common_css, use_source_list, use_source_untracked, use_target,
-};
+use crate::hooks::{field_changed, locked, use_common_css, use_source_list, use_source_untracked};
 use crate::rough;
 use accrete::{AccreteOps, Select, classify::Classify};
 use leptos::html::*;
@@ -69,23 +67,13 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
                 let v = to_value(&key).unwrap_or_else(|_| Value::String(String::new()));
                 let c = current;
                 let click_ctx = ctx.clone();
-                let b = accrete.clone();
                 div()
                     .on(leptos::ev::click, move |_| {
-                        match field {
-                            Some(sig) => {
-                                sig.set(v.clone());
-                                field_changed(&click_ctx, click_ctx.bundle.as_ref());
-                            }
-                            None => {
-                                // Without a tag the only landing left is local (ADR 0032 §2 revised).
-                                let local = b
-                                    .get_sink()
-                                    .is_some_and(|s| matches!(s.scope, accrete::Scope::Local));
-                                if local && let Some(emit) = use_target(click_ctx.clone(), &b) {
-                                    emit(v.clone());
-                                }
-                            }
+                        // A select with no tag keeps the choice to itself: a field has no exit
+                        // (ADR 0032 §2), so a bundle is what sends a choice anywhere.
+                        if let Some(sig) = field {
+                            sig.set(v.clone());
+                            field_changed(&click_ctx, click_ctx.bundle.as_ref());
                         }
                         if let Some(s) = v.as_str() {
                             c.set(s.to_string());
