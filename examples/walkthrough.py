@@ -2,7 +2,9 @@
 """Fluxen walkthrough demo: ONE chat box, every element streamed into a data slot.
 
 Steps (each waits for one Enter; --auto runs unattended, --delay paces the text):
-  1  send 00.main.yaml      the two-column shell (left graph, right stream)
+  1  send 00.main.yaml      the two-column shell (left graph, right stream), with the
+                            page's skin set to `sketch` first: every border in the
+                            walkthrough is hand-drawn (ADR 0038)
   2  append the ONE message row (13 children, every child bound to a slot) and
                             seed the six text slots
   3  TYPE the analytics intro
@@ -673,6 +675,11 @@ def main():
         )
 
     step.wait("send 00.main.yaml")
+    # Hand-drawn borders (ADR 0038 §3): this demo uses the drawn edge by default. The option
+    # travels on the far side — the producer decides at page build, nothing local overrides it —
+    # so the whole performance, every frame after this one included, is sketched. No switch to
+    # press.
+    print(f"    skin → {mirror.send('- action: config\n  data: {skin: sketch}\n')}")
     print(f"    send → {push_file('00.main.yaml')}")
 
     step.wait("the whole message arrives (one box: intro / line / radar / summary / review table / car / shoe / editor / graph, every child bound to a slot)")
