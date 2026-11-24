@@ -372,56 +372,52 @@ fn drawer_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
 
     let trigger_ctx = ctx.clone();
     let body_ctx = ctx.clone();
-    view! {
-        <div id=id class="panel flex col">
-            <div
-                class="panel-trigger flex"
-                on:click=move |ev: web_sys::MouseEvent| {
+    let viewport_style = format!(
+        "position: fixed; inset: 0; height: 100vh; z-index: 100; display: flex; {align} align-items: stretch;"
+    );
+    let panel_style = format!(
+        "position: relative; {body_style} background: var(--bg, Canvas); box-shadow: 0 0 2rem rgba(0,0,0,.25); overflow: auto;"
+    );
+
+    div()
+        .attr("id", id)
+        .class("panel flex col")
+        .child(
+            div()
+                .class("panel-trigger flex")
+                .on(click, move |ev: web_sys::MouseEvent| {
                     ev.stop_propagation();
                     show.update(|v| *v = !*v);
-                }
-            >
-                {render_accrete(&trigger_ctx, &trigger)}
-            </div>
-            {move || {
-                if !show.get() {
-                    return ().into_any();
-                }
-                let mask = if dismiss {
-                    Some(view! {
-                        <div
-                            class="panel-mask"
-                            style="position: absolute; inset: 0; background: rgba(0, 0, 0, 0.28);"
-                            on:click=move |_| show.set(false)
-                        ></div>
-                    })
-                } else {
-                    None
-                };
-                view! {
-                    <div
-                        class="panel-viewport"
-                        style=format!(
-                            "position: fixed; inset: 0; height: 100vh; z-index: 100; display: flex; {align} align-items: stretch;"
-                        )
-                    >
-                        {mask}
-                        <div
-                            class="panel-body flex col"
-                            style=format!(
-                                "position: relative; {body_style} background: var(--bg, Canvas); box-shadow: 0 0 2rem rgba(0,0,0,.25); overflow: auto;"
-                            )
-                            on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
-                        >
-                            {render_accrete(&body_ctx, &body)}
-                        </div>
-                    </div>
-                }
+                })
+                .child(render_accrete(&trigger_ctx, &trigger)),
+        )
+        .child(move || {
+            if !show.get() {
+                return ().into_any();
+            }
+            let mask = dismiss.then(|| {
+                div()
+                    .class("panel-mask")
+                    .attr(
+                        "style",
+                        "position: absolute; inset: 0; background: rgba(0, 0, 0, 0.28);",
+                    )
+                    .on(click, move |_| show.set(false))
+            });
+            div()
+                .class("panel-viewport")
+                .attr("style", viewport_style.clone())
+                .child(mask)
+                .child(
+                    div()
+                        .class("panel-body flex col")
+                        .attr("style", panel_style.clone())
+                        .on(click, move |ev: web_sys::MouseEvent| ev.stop_propagation())
+                        .child(render_accrete(&body_ctx, &body)),
+                )
                 .into_any()
-            }}
-        </div>
-    }
-    .into_any()
+        })
+        .into_any()
 }
 
 /// Layer geometry: fill the viewport + center the modal content. z-index above ordinary floats.

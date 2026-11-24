@@ -7,6 +7,7 @@
 //! promise the skin's default makes, and this is where it is kept.
 
 use crate::Ctx;
+use leptos::html::span;
 use leptos::prelude::*;
 use leptos::svg;
 use roughr::core::{OpSet, OpSetType, OpType, OptionsBuilder};
@@ -154,13 +155,11 @@ pub fn drawn_border(ctx: &Ctx, id: Option<&str>) -> AnyView {
 /// box of its own and the child lays out exactly as it did; sketching turns it into the
 /// host the drawing needs and takes the child's painted edge away.
 pub fn field_host(ctx: &Ctx, id: Option<&str>, child: AnyView) -> AnyView {
-    view! {
-        <span class="rough-host">
-            {child}
-            {drawn_border(ctx, id)}
-        </span>
-    }
-    .into_any()
+    span()
+        .class("rough-host")
+        .child(child)
+        .child(drawn_border(ctx, id))
+        .into_any()
 }
 
 /// Whether the page is in the drawing skin — the same question `sketch_layer` asks,
@@ -174,22 +173,19 @@ pub fn sketching(ctx: &Ctx) -> bool {
 /// The layer, mounted only while the skin asks for it.
 pub fn sketch_layer(ctx: &Ctx, seed: u64) -> AnyView {
     let ctx = ctx.clone();
-    view! {
-        {move || {
-            // The page's options are ordinary values now (ADR 0038 §2 revised): `sketch` is a bool a control
-            // can own, and the far side's `true` is what the producer sends when it builds the page.
-            let sketch = matches!(ctx.config_get("sketch"), Some(Value::Bool(true)));
-            sketch.then(|| view! { <RoughBorder seed=seed/> })
-        }}
-    }
+    (move || {
+        // The page's options are ordinary values now (ADR 0038 §2 revised): `sketch` is a bool a control
+        // can own, and the far side's `true` is what the producer sends when it builds the page.
+        let sketch = matches!(ctx.config_get("sketch"), Some(Value::Bool(true)));
+        sketch.then(|| border_svg(seed))
+    })
     .into_any()
 }
 
 /// An absolutely positioned `<svg>` over its host box, redrawn when the box
 /// resizes. `data-rough="ready"` on the host is what lets the stylesheet drop the
 /// CSS border's paint; until it is there, the box keeps its plain border.
-#[component]
-pub fn RoughBorder(seed: u64) -> impl IntoView {
+fn border_svg(seed: u64) -> AnyView {
     let svg_ref = NodeRef::<svg::Svg>::new();
     let edges = RwSignal::new(Vec::<String>::new());
     let marks = RwSignal::new(Vec::<String>::new());
@@ -250,31 +246,28 @@ pub fn RoughBorder(seed: u64) -> impl IntoView {
         }
     });
 
-    view! {
-        <svg
-            node_ref=svg_ref
-            class="rough"
-            aria-hidden="true"
-            viewBox=move || view_box.get()
-        >
-            {move || {
-                // Paint lives in the stylesheet (`svg.rough path`): one place for the
-                // pen, and `currentColor` is what makes the stroke follow
-                // `light-dark()` without this file knowing dark mode exists. The class
-                // says which of the two marks a path belongs to — the edge, or the L
-                // that only a selected box shows.
-                let edge = edges
-                    .get()
-                    .into_iter()
-                    .map(|d| view! { <path class="edge" d=d /> });
-                let mark = marks
-                    .get()
-                    .into_iter()
-                    .map(|d| view! { <path class="mark" d=d /> });
-                edge.chain(mark).collect_view()
-            }}
-        </svg>
-    }
+    leptos::svg::svg()
+        .node_ref(svg_ref)
+        .class("rough")
+        .attr("aria-hidden", "true")
+        .attr("viewBox", move || view_box.get())
+        .child(move || {
+            // Paint lives in the stylesheet (`svg.rough path`): one place for the
+            // pen, and `currentColor` is what makes the stroke follow
+            // `light-dark()` without this file knowing dark mode exists. The class
+            // says which of the two marks a path belongs to — the edge, or the L
+            // that only a selected box shows.
+            let edge = edges
+                .get()
+                .into_iter()
+                .map(|d| leptos::svg::path().class("edge").attr("d", d).into_any());
+            let mark = marks
+                .get()
+                .into_iter()
+                .map(|d| leptos::svg::path().class("mark").attr("d", d).into_any());
+            edge.chain(mark).collect_view()
+        })
+        .into_any()
 }
 
 #[cfg(test)]
