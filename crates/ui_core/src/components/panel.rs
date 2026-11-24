@@ -31,6 +31,7 @@ use crate::Ctx;
 use crate::components::canvas::{HIDDEN_STYLE, payload_is_empty};
 use crate::ctx::{render_accrete, render_children};
 use crate::hooks::{use_common_css, use_default};
+use crate::rough;
 use accrete::{AccreteOps, Bind, Direction, Panel, PanelAttr, PanelPlace, PanelState};
 use leptos::ev::{click, keydown};
 use leptos::html::*;
@@ -114,7 +115,7 @@ fn inline_(accrete: Panel, ctx: &Ctx, id: String, _attrs: PanelAttr) -> AnyView 
 
 /// `place: anchor` + `state: toggle`：贴着触发器的浮层（ADR 0026）。
 ///
-/// 曾经的显隐是 CSS 的 `:hover`（`main.css` 里 `.popup:hover > .body`）——那是一条只有指针
+/// 曾经的显隐是 CSS 的 `:hover`（`core.css` 里 `.popup:hover > .body`）——那是一条只有指针
 /// 设备才有的状态：触屏没有 hover，浮层根本打不开。现在状态是本地信号 `show`：触发器点击
 /// 切换，Esc 与点击外部关闭。`sub[0]` 是触发器，`sub[1]` 是浮层内容；缺一个就什么都不画。
 fn anchor_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
@@ -215,7 +216,7 @@ fn anchor_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
 /// 下次写入必是新值，同值短路不会误挡重开。故 dismiss 需要槽绑定：inline default 的层无槽
 /// 可清，只 warn。
 ///
-/// 几何必须内联，两条实测教训：① custom 层的定序缺陷在 main.css 层序声明归位前会输给
+/// 几何必须内联，两条实测教训：① custom 层的定序缺陷在 core.css 层序声明归位前会输给
 /// element 层（PLAN §19），而内联本无层叠歧义，与 ADR 0012 的 display 内联同款；② 本机
 /// headless chromium 上 `position: fixed` + `inset: 0` 的高度不撑开（干净 div 实测 20px），
 /// 要显式给 `height`。遮罩（模糊/色调）走 custom.css 的 `.layer::before`。
@@ -297,12 +298,19 @@ fn overlay_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView 
         .map(|s| render_children(ctx, s))
         .unwrap_or_default();
 
+    // 手绘皮肤（ADR 0038 §4）：层只有自己声明了 `is-border` 才有。
+    let layer = rough::border_layer(
+        ctx,
+        accrete.attrs.as_ref().and_then(|a| a.class.as_ref()),
+        Some(&id),
+    );
     div()
         .id(id)
         .class(css.as_str())
         .style(style_now)
         .on(click, onclick)
         .child(children)
+        .child(layer)
         .node_ref(nr)
         .into_any()
 }

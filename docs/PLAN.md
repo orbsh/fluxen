@@ -33,8 +33,9 @@
 - [x] 25 — 渲染器的发布产物：一份页面能直接引用的 UI bundle（tag `v*` → release 资产）— 2026-10-20
 - [x] 26 — Canvas 的模块选项与 forcegraph 变体 — ADR 0017 — 2026-10-23
 - [x] 27 — 删 `inject`：op / 消费臂 / 同值守卫 / 测试 / 示例帧 / wire 文档行 — ADR 0031 §2、0038 §1 — 2026-11-24
-- [ ] 28 — 全局 `config` 命名空间（每个选项一个 signal，local/remote 两半）：`config` op（按成员合并，远端为默认）、`set_config`（本地覆盖优先）、不提供本地设置面 — ADR 0038 §2、§5 — 待做
-- [ ] 29 — 手绘线框皮肤：`config.skin` 镜像到 `<html data-*>` + roughr 实时画边 — ADR 0038 §3-4 — 待做
+- [x] 28 — 全局 `config` 命名空间（每个选项一个 signal，local/remote 两半）：`config` op（按成员合并，远端为默认）、`set_config`（本地覆盖优先）、不提供本地设置面 — ADR 0038 §2、§5 — 2026-11-24
+- [x] 29 — 皮肤：`config.skin` 镜像到 `<html data-*>` + roughr 实时画边（frame / panel / bundle；帧自己声明 `is-border` 才挂）— ADR 0038 §3-4 — 2026-11-24
+- [ ] 30 — 皮肤的边角：`select` 的稳定子树、`button` 的类名、input 保持 CSS 边（void 元素装不下子节点）— ADR 0038 §4 — 待做
 
 ## 开着
 

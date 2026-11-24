@@ -15,6 +15,8 @@ itertools.workspace = true
 js-sys.workspace = true
 leptos.workspace = true
 markdown.workspace = true
+# 手绘边（ADR 0038 §4）：纯数据生成，不带浏览器；几何回来、颜色自己上（currentColor）。
+roughr.workspace = true
 send_wrapper.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -26,6 +28,11 @@ ui_leptos_macro = { path = "../ui_leptos_macro" }
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 web-sys.workspace = true
+
+# `rand 0.8` reaches `getrandom 0.2`, which refuses wasm32-unknown-unknown without
+# its `js` feature; the feature can only be turned on here, not inside roughr.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
 
 [lints]
 workspace = true

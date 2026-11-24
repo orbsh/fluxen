@@ -23,6 +23,7 @@ pub mod ctx;
 pub mod dom;
 pub mod hooks;
 pub mod render;
+pub mod rough;
 pub mod widgets;
 
 pub use ctx::Ctx;

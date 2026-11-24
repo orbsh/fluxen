@@ -24,6 +24,7 @@
 //! （`attrs.grid` 自出生起没生效过，没人用 grid 才没人踩到）。
 
 use crate::Ctx;
+use crate::rough;
 use crate::ctx::{render_accrete, render_children};
 use crate::hooks::use_common_css;
 use accrete::{Accept, Accrete, AccreteOps, Bind, Frame};
@@ -247,20 +248,28 @@ pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
     // id before the merge (ADR 0027 keeps its behaviour). The class token above
     // stays — it is what CSS addressed — but a class is not addressable by id.
     let dom_id = accrete.id.clone();
+    // 手绘皮肤（ADR 0038 §4）：帧自己声明了 `is-border` 才有这一层，且只在
+    // `config.skin = sketch` 时挂上——常规模式没有元素、没有 observer。
+    let sketch = {
+        let class = attrs.class.clone();
+        let id = accrete.id.clone();
+        move |c: &Ctx| rough::border_layer(c, class.as_ref(), id.as_deref())
+    };
     let Some(source) = source_of(&accrete) else {
         let view = div()
             .attr("class", class)
             .attr("draggable", drag_flag)
             .style(style)
             .add_any_attr(drag(&ctx))
-            .child(render_children(&ctx, &children));
+            .child(render_children(&ctx, &children))
+            .child(sketch(&ctx));
         return match dom_id {
             Some(id) => view.id(id).into_any(),
             None => view.into_any(),
         };
     };
 
-    // 数据区域：整个容器是槽的镜子。`is-fade-in-and-out` 是 main.css 里的一次性
+    // 数据区域：整个容器是槽的镜子。`is-fade-in-and-out` 是 core.css 里的一次性
     // 动画——元素随槽值重建，动画自己重播，不需要 JS 去加/删类。
     let inner_ctx = ctx.clone();
     move || -> AnyView {
@@ -271,7 +280,8 @@ pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
                     .attr("draggable", drag_flag)
                     .style(style.clone())
                     .add_any_attr(drag(&inner_ctx))
-                    .child(render_accrete(&inner_ctx, &data));
+                    .child(render_accrete(&inner_ctx, &data))
+                    .child(sketch(&inner_ctx));
                 match dom_id.clone() {
                     Some(id) => view.id(id).into_any(),
                     None => view.into_any(),
@@ -283,7 +293,8 @@ pub fn frame_(accrete: Frame, ctx: &Ctx, id: String) -> AnyView {
                     .attr("draggable", drag_flag)
                     .style(style.clone())
                     .add_any_attr(drag(&inner_ctx))
-                    .child(render_children(&inner_ctx, &children));
+                    .child(render_children(&inner_ctx, &children))
+                    .child(sketch(&inner_ctx));
                 match dom_id.clone() {
                     Some(id) => view.id(id).into_any(),
                     None => view.into_any(),
