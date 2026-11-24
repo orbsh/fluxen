@@ -10,6 +10,7 @@ use std::rc::Rc;
 use accrete::classify::Classify;
 use accrete::{ForceGraph, ForceGraphStyle};
 use leptos::html::Div;
+use leptos::html::div;
 use leptos::prelude::*;
 use serde_json::Value;
 use wasm_bindgen::JsCast;
@@ -96,7 +97,8 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
         let accrete_theme = accrete_load.clone();
         let view_theme = Rc::clone(&view_load);
         Effect::new(move |_| {
-            let Some(value) = hooks::value_of(&ctx_theme, accrete_theme.theme.as_ref(), true) else {
+            let Some(value) = hooks::value_of(&ctx_theme, accrete_theme.theme.as_ref(), true)
+            else {
                 return;
             };
             let theme = match &value {
@@ -159,10 +161,11 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
         classes.push(css.as_str());
     }
     let class = classes.join(" ");
-    view! {
-        <div class=class style=size node_ref=nr></div>
-    }
-    .into_any()
+    div()
+        .class(class)
+        .attr("style", size)
+        .node_ref(nr)
+        .into_any()
 }
 
 /// DSL knob → renderer knob. The fields on both sides correspond one to one, and the only mapping point is here.
