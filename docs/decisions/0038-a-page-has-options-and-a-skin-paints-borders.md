@@ -12,20 +12,22 @@ ADR 0031 §2 says "`source` / `sink`; delete `report` and `inject`". `report` wa
 
 Deleted in this change: the variant and `InjectOp`, the dispatch arm, `inject_writes` (the guard that existed only for its equal-value rule), `content/tests/inject_op.rs`, `examples/yaml/00.inject.yaml`, and the action list, the table row and the symmetry sentence in `docs/external-integration.md` and its `.zh-CN` twin. ADR 0011 is marked retired and keeps its record; the stale `inject` mentions in `docs/ideas/emergent-ui.md` now name the in-page write instead.
 
-What is lost with it, stated now rather than discovered later: **the far side can no longer plant a page-local assignment.** ADR 0031 §1 unified values into one bind whose `scope` says who is authoritative, so the far side still has a door — `set` writes the slot's node, and a `both` read takes it as the fallback (`tiles` builds exactly that bind for its `step` slot, tiles.rs:481-489, so `set slot: page, data: {type: text, source: {default: home}}` moves a window). What it cannot do any more is *outrank* the page: `value_of` reads the local assignment first (hooks.rs:107-111), so a remote `set` decides only while the page has not chosen, and after the first in-page click that slot is the page's. `inject` was the exception that could overwrite the local half; the exception is gone, the asymmetry ADR 0031 described is now the whole rule. A `config` option (§2) is a setting, not a state, and is the one thing the far side still owns outright.
+What is lost with it, stated now rather than discovered later: **the far side can no longer plant a page-local assignment.** ADR 0031 §1 unified values into one bind whose `scope` says who is authoritative, so the far side still has a door — `set` writes the slot's node, and a `both` read takes it as the fallback (`tiles` builds exactly that bind for its `step` slot, tiles.rs:481-489, so `set slot: page, data: {type: text, source: {default: home}}` moves a window). What it cannot do any more is *outrank* the page: `value_of` reads the local assignment first (hooks.rs:107-111), so a remote `set` decides only while the page has not chosen, and after the first in-page click that slot is the page's. `inject` was the exception that could overwrite the local half; the exception is gone, the asymmetry ADR 0031 described is now the whole rule. A `config` option (§2) is a setting, not a state: it is the one thing the far side still sets as a matter of course.
 
 ## 2. Options live in a namespace of their own: `config`
 
-A page option is not application data. It has no row identity, no node tree and no producer that owns it, and it has to be answerable as a whole — "what is this page configured as" is one object, visible in one place.
+A page option is not application data. It has no row identity, no node tree and no producer that owns it, and it has to be answerable as a whole — "what is this page configured as" dumps to one object out of one namespace.
 
 A slot *could* hold it: `ValueSlot` carries any JSON, not an `Accrete` node. So this is a naming and auditing decision, not a capability one. It does not use the slot namespace, because slots are the application's names — a producer's `skin` slot and the framework's `skin` option would be one word in one map, and "which of these names is configuration" would stop being answerable by looking.
 
-**Decision.** `Ctx.config: RwSignal<Value>` — one object, its own namespace, no per-name sub-slots. An option is a member: `{"skin": "sketch"}`.
+**Decision.** `Ctx.config` — its own namespace, and one signal **per option**: `RwSignal<HashMap<String, ConfigSlot>>` with `ConfigSlot = RwSignal<ConfigValue>` and `ConfigValue { local: Option<Value>, remote: Option<Value> }`. The outer map grows only when a new option appears; a write to one option notifies that option's subscribers and nobody else, which is the per-key arrangement the data and value planes already use. An option is a member — `skin = "sketch"` — and it reads as `local` first, `remote` behind it.
 
-Writers, and there are exactly two:
+`action: config` is the **primary** writer: a page's configuration normally arrives from the far side together with the frames that build the page — one `action: config` beside the `create` — so what a page looks like is a decision the producer makes at initialization, not a switch the reader flicks. There are exactly two writers, one primary and one optional:
 
-- `action: config {data}` — the far side. The object sent **becomes** the configuration: whole value, last write wins, no authority axis, because a setting has one writer at a time and the frame that just arrived is the later one. An equal value is not written and nobody is notified (level semantics — the guard ADR 0011 §2 asked for, now with one consumer instead of a whole plane).
-- `Ctx::set_config(path, value)` — the renderer's own configuration surface (§5). A JSON Pointer write that creates the containers it names.
+- `action: config {data}` — the far side. **Merge, not replace**: every member in `data` is written on its own and every member left out keeps its value, so two frames touching different options cannot undo each other, and `{}` changes nothing at all. A member set to `null` clears that option's `remote` half — that is how a producer hands one option back to the page without touching the rest, and there is deliberately no clear-all. This writes the `remote` half only; a page's own choice is never overwritten by a frame. A member equal to what is already there is not written and notifies nobody (level semantics — the guard ADR 0011 §2 asked for, now per option). No authority axis: a setting has one writer at a time and the frame that just arrived is the later one.
+- `Ctx::set_config(path, value)` — the page's own optional writer, with no surface behind it (§5), and it writes the `local` half. The first pointer segment names the option; anything after it writes inside that option's value, so a nested object is still one option and a write inside it re-notifies that option only. `null` at the option level clears the local half, which hands the option back to the far side's value. Containers are created as needed.
+
+The precedence is `both`'s: the page's value wins while it is set, the far side's is the fallback (ADR 0031 §1, `hooks::value_of`). That ordering is not a concession to the page — it is what makes remote primary in practice, because most applications never expose an option to their reader at all: absent a local choice, every option is exactly what the producer sent. A page that does expose one is saying the reader may overrule this default, and a default that cannot be overruled is a lock, not a default.
 
 A frame-declared node does **not** write the configuration. A frame asks for a border; it does not carry the page's options. That keeps `Bind` untouched: no new scope value, no reserved slot name, no second address space inside the bind vocabulary.
 
@@ -33,7 +35,7 @@ A frame-declared node does **not** write the configuration. A frame asks for a b
 
 A frame asks for a border with a class — `is-border` (main.css:957) — and has never asked how it is drawn. That is the seam: `config.skin` chooses the paint. Absent means `normal`, which is exactly today's rendering — no extra node, no observer, no branch taken.
 
-Mirroring to CSS: every member of `config` becomes a `data-*` attribute on the document root, so `{"skin": "sketch"}` yields `html[data-skin="sketch"]`. The boot installs the mirror through one `ui_core` helper, because the page shell is the boot's business (ui-core/src/lib.rs states that split) and a host that replaces the boot (prism, reflux) calls the same line. Nothing is per-option code: the whole option set is visible as attributes — to devtools and to CSS alike — and a new member is reachable the moment it is written.
+Mirroring to CSS: every option becomes a `data-*` attribute on the document root, one effect per option created when it first appears — a write sets its own attribute, a removal takes it away, and no other attribute is touched. `skin = "sketch"` yields `html[data-skin="sketch"]`; absent yields no attribute at all. The boot installs the mirror through one `ui_core` helper, because the page shell is the boot's business (ui-core/src/lib.rs states that split) and a host that replaces the boot (prism, reflux) calls the same line. Nothing is per-option code, and the whole option set is visible as attributes — to devtools and to CSS alike.
 
 What the skin changes in CSS, and only that, from `custom.css` (the page's own file, and the strongest layer):
 
@@ -60,11 +62,11 @@ Cost: one observer and one path string per sketched node. A thousand-card wall w
 
 wasm facts, recorded so they are not rediscovered: `rand 0.8` reaches `getrandom 0.2`, which refuses `wasm32-unknown-unknown` without its `js` feature, so the crate needs a `cfg(target_arch = "wasm32")` dependency line; and `roughr` pulls `palette`/`euclid`/`svgtypes`/`svg_path_ops` into a release bundle that is 2.9 MB today (`dist-release`, uncompressed) — the delta is measured and written here before the skin is attached anywhere.
 
-## 5. The configuration has a surface
+## 5. No settings surface ships
 
-An option nobody can see is an option nobody can audit. The reference host ships a configuration surface: `#main[data-config-ui]` mounts it, it renders one row per member of `config`, and the control follows the value's JSON type (bool → checkbox, number → input, string → input, anything else → a read-only JSON line). Writes go through `set_config`. No schema registry and no per-option code: the object is the list, so a new option appears the moment it exists.
+An option nobody can see is an option nobody can audit, and the answer here is not a panel. The far side sets the options when it draws the page, so the audit is the frame itself: one `action: config` in the same stream as the `create` that built the page, replayable like every other frame, greppable in the console, and carrying the whole delta it changed. A settings UI in the renderer would be a second writer with no owner, and the moment it exists "who configured this page" has two answers.
 
-It is renderer chrome, not a node tree. Options are not application content, and a frame that could draw them could also forge them.
+So the reference host ships no configuration surface, and `#main` grows no attribute for one. `set_config` stays as an API: a page that genuinely needs a reader-facing switch — a skin toggle drawn by the page, a preference row in a panel it already has — writes through it, reached by a handle the boot publishes beside `window.fluxen.send`. That UI and that handle are that producer's choice, not the framework's. It is also not a node tree: options are not application content, and a frame that could draw them could also forge them.
 
 ## Rejected
 
@@ -79,7 +81,7 @@ It is renderer chrome, not a node tree. Options are not application content, and
 ## Order
 
 1. Delete `inject` — variant, op, arm, guard, tests, example, documentation rows, ADR 0011 status. (Done in this change.)
-2. `Ctx.config`, `set_config`, the `config` op (whole-object replace, equal value dropped), tests beside the existing op tests.
-3. The `data-*` mirror on the document root, the skin block in `custom.css`, the configuration surface. Live check from the console: `action: config, data: {skin: sketch}`.
+2. `Ctx.config` (per-option signals), `set_config`, the `config` op (merge per member, `null` removes, equal value dropped), tests beside the existing op tests.
+3. The `data-*` mirror on the document root and the skin block in `custom.css`. Live check from the console: `action: config, data: {skin: sketch}`, then the same frame without it.
 4. `rough_border` in ui_core, `roughr` behind a wasm target dependency, the size probe — the measured delta goes into this ADR before anything is attached.
 5. Attach at the five widgets. Gates: `normal` renders no observer and no extra node; `sketch` covers `examples/yaml` (tabs, form, login, table, chart, forcegraph); frames per second with a 200-row list.
