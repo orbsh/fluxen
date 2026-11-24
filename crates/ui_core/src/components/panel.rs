@@ -1,31 +1,31 @@
-//! 面板：一个"出现/消失的内容区"（`accrete::Panel`）。
+//! Panel: a "content area that appears/disappears" (`accrete::Panel`).
 //!
-//! 帧里只有 `panel` 一个名字，两条轴说清它是什么（ADR 0030）：
-//!
-//! ```text
-//!   place: inline    占布局，展开时把下面的内容推下去     state: toggle   （原 fold）
-//!   place: anchor    贴在触发器旁浮起，页面不动           state: toggle   （原 popup）
-//!   place: viewport  盖住视口（遮罩 + 贴边或居中）        state: bound    （原 layer）
-//!   place: viewport  同上，显隐由本地开关决定             state: toggle   （抽屉）
-//! ```
-//!
-//! 这原来是三个文件（`fold.rs` / `popup.rs` / `layer.rs`），每种形状一套自己的几何与状态机，
-//! 实测重写没有收益。所以三份实现按原样搬进本文件，作为私有函数与 `drawer_` 并列：
+//! The frame has one name only, `panel`, and two axes say what it is (ADR 0030):
 //!
 //! ```text
-//!   inline_   place: inline   state: toggle   —— 一行 grid：图标 + 头 + 体
-//!   anchor_   place: anchor   state: toggle   —— 相对定位的触发器 + 绝对定位的浮层
-//!   overlay_  place: viewport state: bound    —— 内联几何 + "所绑槽非空即显示"
-//!   drawer_   place: viewport state: toggle   —— 贴边的边栏 + 遮罩点击 / Esc
+//!   place: inline    takes layout, pushes the content below down when opened    state: toggle   (formerly fold)
+//!   place: anchor    floats beside the trigger, the page does not move    state: toggle   (formerly popup)
+//!   place: viewport  covers the viewport (mask + flush to an edge or centered)    state: bound    (formerly layer)
+//!   place: viewport  as above, shown/hidden by a local switch    state: toggle   (drawer)
 //! ```
 //!
-//! 函数名取轴上的词（inline / anchor / overlay），不取退休的节点名（fold / popup / layer）：
-//! 本文件里一个词只指一件事，而 `place` 说的正是它放在哪。CSS 类名（`.popup`、`.layer`、
-//! `.panel-trigger` …）不改：那是页面样式表的词，不是模型里的词。
+//! This used to be three files (`fold.rs` / `popup.rs` / `layer.rs`), each shape with its own geometry and state machine,
+//! and a rewrite measured no gain. So the three implementations moved into this file as they were, as private functions beside `drawer_`:
 //!
-//! 子节点的约定按 `place` 分：`inline` 的 `children` 全是体（整行就是开关）；其余三格
-//! `children[0]` 是触发器、`children[1]` 是本体（`state: bound` 时触发器可省，因为显隐
-//! 由槽决定）。少写本体是帧的错误，不是"可以渲染半个面板"。
+//! ```text
+//!   inline_   place: inline   state: toggle   —— one grid row: icon + header + body
+//!   anchor_   place: anchor   state: toggle   —— relatively positioned trigger + absolutely positioned float
+//!   overlay_  place: viewport state: bound    —— inline geometry + "a non-empty bound slot means shown"
+//!   drawer_   place: viewport state: toggle   —— edge-flush sidebar + mask click / Esc
+//! ```
+//!
+//! Function names take the words of the axes (inline / anchor / overlay), not the retired node names (fold / popup / layer):
+//! in this file one word means one thing only, and `place` says precisely where it sits. CSS class names (`.popup`, `.layer`,
+//! `.panel-trigger` …) are unchanged: those are words of the page stylesheet, not words of the model.
+//!
+//! The child convention splits by `place`: an `inline` panel's `children` are all body (the whole row is the switch); in the other three cells
+//! `children[0]` is the trigger and `children[1]` is the body (`state: bound` may omit the trigger, since shown/hidden
+//! is decided by the slot). A missing body is a frame error, not "half a panel can be rendered".
 
 use crate::Ctx;
 use crate::components::canvas::{HIDDEN_STYLE, payload_is_empty};
@@ -51,7 +51,7 @@ pub fn panel_(accrete: Panel, ctx: &Ctx, id: String) -> AnyView {
             }
             inline_(accrete, ctx, id, attrs)
         }
-        // 贴触发器的浮层：显隐本来就是本地状态，bound 这一格没有对应实现。
+        // A float hugging the trigger: shown/hidden is local state to begin with, so the bound cell has no corresponding implementation.
         (PanelPlace::Anchor, state) => {
             if state == PanelState::Bound {
                 tracing::warn!("panel {id}: anchor + bound 按 toggle 画（浮层只认本地开关）");
@@ -63,11 +63,11 @@ pub fn panel_(accrete: Panel, ctx: &Ctx, id: String) -> AnyView {
     }
 }
 
-/// `place: inline` + `state: toggle`：撑开布局的折叠区。
+/// `place: inline` + `state: toggle`: a collapsible area that takes layout.
 ///
-/// 一行 grid（图标 / 头 / 体第 3/4 列），整行可点。`children` 全是体 —— 这一格没有触发器
-/// 与本体之分，打开就是把体放进网格；所以 `attrs.replace_header` 在这里没有头可换（它管的
-/// 是 `item` 那份头，随 `fold` 一起退休了）。初始开合读 `source.default` 的布尔值。
+/// One grid row (icon / header / body in columns 3/4), the whole row clickable. The `children` are all body — this cell has no trigger
+/// and body split, so opening is just putting the body into the grid; which is why `attrs.replace_header` has no header to swap here (it governed
+/// the header of `item`, retired along with `fold`). The initial open state reads the boolean of `source.default`.
 fn inline_(accrete: Panel, ctx: &Ctx, id: String, _attrs: PanelAttr) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["grid"];
@@ -113,11 +113,11 @@ fn inline_(accrete: Panel, ctx: &Ctx, id: String, _attrs: PanelAttr) -> AnyView 
     .into_any()
 }
 
-/// `place: anchor` + `state: toggle`：贴着触发器的浮层（ADR 0026）。
+/// `place: anchor` + `state: toggle`: a float hugging the trigger (ADR 0026).
 ///
-/// 曾经的显隐是 CSS 的 `:hover`（`core.css` 里 `.popup:hover > .body`）——那是一条只有指针
-/// 设备才有的状态：触屏没有 hover，浮层根本打不开。现在状态是本地信号 `show`：触发器点击
-/// 切换，Esc 与点击外部关闭。`sub[0]` 是触发器，`sub[1]` 是浮层内容；缺一个就什么都不画。
+/// Showing/hiding used to be CSS `:hover` (`.popup:hover > .body` in `core.css`) — a state only pointer
+/// devices have: a touch screen has no hover, so the float simply would not open. Now the state is the local signal `show`: a trigger click
+/// toggles it, Esc and a click outside close it. `sub[0]` is the trigger, `sub[1]` is the float content; missing one draws nothing.
 fn anchor_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["popup", "flex"];
@@ -132,9 +132,9 @@ fn anchor_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
     let show = RwSignal::new(false);
     let root = NodeRef::<Div>::new();
 
-    // 关闭的两条腿：Esc，以及"点到浮层外面"。两者都挂在 window 上——浮层是覆盖层，点击可能
-    // 落在它外面的任何地方，只在容器里监听会漏掉。监听器跟着组件的作用域销毁（句柄在 cleanup
-    // 里摘掉），否则每次重建都会多一个。
+    // The two legs of closing: Esc, and "a click outside the float". Both hang on window — the float is an overlay, so a click may
+    // land anywhere outside it, and listening inside the container alone would miss it. The listeners die with the component's scope (the handle is
+    // removed in cleanup), otherwise every rebuild would add one.
     {
         let on_key = window_event_listener(keydown, move |ev| {
             if ev.key() == "Escape" {
@@ -145,7 +145,7 @@ fn anchor_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
             if !show.get_untracked() {
                 return;
             }
-            // 点在自己的子树里（含触发器）不算外面；触发器自己会把状态翻过去。
+            // A click inside its own subtree (trigger included) does not count as outside; the trigger itself flips the state.
             let inside = root
                 .get_untracked()
                 .zip(ev.target().and_then(|t| t.dyn_into::<web_sys::Node>().ok()))
@@ -188,7 +188,7 @@ fn anchor_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
     };
 
     div()
-        // 身份：一个面板要能被找到（`portal` 指进来、别人的选择器指过来、调试时看得到）。
+        // Identity: a panel must be findable (`portal` points into it, other selectors point at it, debugging can see it).
         .id(id)
         .class(move || {
             if show.get() {
@@ -209,17 +209,17 @@ fn anchor_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
         .into_any()
 }
 
-/// `place: viewport` + `state: bound`：模态层（ADR 0014）。
+/// `place: viewport` + `state: bound`: the modal layer (ADR 0014).
 ///
-/// 显隐只有一条规则：**所绑槽非空即显示**（ADR 0012 的"空即无"）。`dismiss` 点层自身
-/// （模糊区，而非模态内容）时**清空所绑的槽**——清空即关，不新造第二个掩蔽状态；槽空了，
-/// 下次写入必是新值，同值短路不会误挡重开。故 dismiss 需要槽绑定：inline default 的层无槽
-/// 可清，只 warn。
+/// Shown/hidden has one rule only: **a non-empty bound slot means shown** (ADR 0012's "empty means absent"). When `dismiss` clicks the layer itself
+/// (the blurred area, not the modal content) it **clears the bound slot** — clearing is closing, and no second masked state is invented; with the slot empty,
+/// the next write is necessarily a new value, and the same-value short circuit cannot wrongly block a reopen. So dismiss needs a slot binding: a layer with an inline
+/// default has no slot to clear and only warns.
 ///
-/// 几何必须内联，两条实测教训：① custom 层的定序缺陷在 core.css 层序声明归位前会输给
-/// element 层（PLAN §19），而内联本无层叠歧义，与 ADR 0012 的 display 内联同款；② 本机
-/// headless chromium 上 `position: fixed` + `inset: 0` 的高度不撑开（干净 div 实测 20px），
-/// 要显式给 `height`。遮罩（模糊/色调）走 custom.css 的 `.layer::before`。
+/// The geometry must be inline, two measured lessons: (1) the ordering defect of the custom layer loses to the
+/// element layer until core.css's layer order declaration is put back (PLAN §19), while inline has no cascade ambiguity at all, the same as ADR 0012's inline display; (2) on this machine's
+/// headless chromium the height of `position: fixed` + `inset: 0` does not fill (a clean div measured 20px),
+/// so `height` must be given explicitly. The mask (blur/tint) comes from `.layer::before` in custom.css.
 fn overlay_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
     let dismiss = attrs.dismiss.unwrap_or(false);
     let mut css = vec!["layer", "flex"];
@@ -227,14 +227,14 @@ fn overlay_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView 
     let css = css.join(" ");
 
     let (local_slot, data_source, inline) = bind_slot(accrete.source.as_ref());
-    // 位置：给了 `right`/`top` 之类就贴在页面那一角（原来的 `float` 就是这个），没给就铺满
-    // 视口居中 —— 两种都是"层"，只是几何不同。
+    // Position: given `right`/`top` or the like it hugs that corner of the page (the former `float` was this), with nothing given it fills
+    // the viewport and centers — both are "layers", only the geometry differs.
     let shown_style = attrs
         .pos
         .as_ref()
         .map(|p| format!("position: fixed; {} z-index: 100; display: flex;", p.into_style()))
         .unwrap_or_else(|| LAYER_STYLE.to_string());
-    // 构建那一刻的值（首次 Effect 前）：与 canvas 宿主同款，交给下面的 Effect 同步
+    // The value at construction time (before the first Effect): same as the canvas host, left to the Effect below to sync
     let style_now = if payload_is_empty(&read_payload(ctx, &local_slot, &data_source, &inline)) {
         HIDDEN_STYLE.to_string()
     } else {
@@ -258,7 +258,7 @@ fn overlay_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView 
         });
     }
 
-    // 闭包要 'static：Ctx 与 id 都得先克隆进作用域（ctx 是 Rc，clone 即计数加一）
+    // The closure needs 'static: both Ctx and id must be cloned into scope first (ctx is an Rc, clone just bumps the count)
     let onclick = {
         let ctx = ctx.clone();
         let id = id.clone();
@@ -266,11 +266,11 @@ fn overlay_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView 
             if !dismiss {
                 return;
             }
-            // e.target === e.currentTarget：点的是层自己的空白（模糊面），点模态内容不算——
-            // 事件在冒泡路径上也会走到这里，判等把内容排掉。
+            // e.target === e.currentTarget: the click is on the layer's own blank area (the blurred surface), not on the modal content —
+            // the event also arrives here along the bubbling path, and the equality test rules the content out.
             let same = match (ev.target(), ev.current_target()) {
                 (Some(t), Some(c)) => {
-                    // 显式要 JsValue 视图：EventTarget 的 AsRef 有三个 impl，不标注会撞 E0283
+                    // Ask explicitly for the JsValue view: EventTarget's AsRef has three impls, and without an annotation it hits E0283
                     let tv: &wasm_bindgen::JsValue = t.as_ref();
                     let cv: &wasm_bindgen::JsValue = c.as_ref();
                     tv == cv
@@ -315,13 +315,13 @@ fn overlay_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView 
         .into_any()
 }
 
-/// 贴视口 + 本地切换：抽屉。
+/// Flush to the viewport + local toggle: the drawer.
 ///
-/// `children[0]` 是触发器，`children[1]` 是边栏本体（缺一个就什么都不画）。本体贴 `direction`
-/// 说的那条边（缺省 L），宽度由 `attrs.width` 或 class 决定。关闭有两条路，与另外两格同一套
-/// 词汇：点遮罩（`dismiss`，缺省开）与 Esc。
+/// `children[0]` is the trigger, `children[1]` is the sidebar body (missing one draws nothing). The body flushes to the edge
+/// `direction` names (default L), and the width comes from `attrs.width` or the class. There are two ways to close it, the same set of
+/// terms as the other two cells: clicking the mask (`dismiss`, on by default) and Esc.
 ///
-/// 动效不由框架给：本体一旦挂出来就带着 class，滑入是 CSS 的事（与 rack 的 enter 同一分工）。
+/// Animation is not the framework's to give: once the body is mounted it carries the class, and sliding in is CSS's job (the same division as rack's enter).
 fn drawer_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
     let subs = accrete.children.clone().unwrap_or_default();
     let Some(trigger) = subs.first().cloned() else {
@@ -345,7 +345,7 @@ fn drawer_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
         }
     });
 
-    // Esc 关。与 anchor 同一条策略：面板的显隐是本地状态，键盘只是另一只手。
+    // Esc closes. The same policy as anchor: a panel's shown/hidden state is local, and the keyboard is just another hand.
     let esc = window_event_listener(keydown, move |ev| {
         if ev.key() == "Escape" {
             show.set(false);
@@ -419,11 +419,11 @@ fn drawer_(accrete: Panel, ctx: &Ctx, id: String, attrs: PanelAttr) -> AnyView {
     .into_any()
 }
 
-/// 层几何：铺满视口 + 居中模态内容。z-index 高于普通浮层。
+/// Layer geometry: fill the viewport + center the modal content. z-index above ordinary floats.
 const LAYER_STYLE: &str = "position: fixed; inset: 0; height: 100vh; z-index: 100; \
                            display: flex; align-items: center; justify-content: center;";
 
-/// `source` → (local 槽名, data 槽名, inline 默认值), decided by `scope` (ADR 0031 §1).
+/// `source` → (local slot name, data slot name, inline default), decided by `scope` (ADR 0031 §1).
 /// `both` gives both addresses: the local assignment wins while it exists, the far side is
 /// the fallback.
 fn bind_slot(bind: Option<&Bind>) -> (Option<String>, Option<String>, Option<Value>) {
@@ -441,8 +441,8 @@ fn bind_slot(bind: Option<&Bind>) -> (Option<String>, Option<String>, Option<Val
     }
 }
 
-/// 当前载荷：local 槽裸值 / data 槽节点（其 `source.default` 优先，否则整节点 JSON）/ literal
-/// 默认值。槽没写过 = Null = 空（"空即无"的判据见 payload_is_empty）。
+/// Current payload: the bare value of the local slot / the node in the data slot (its `source.default` first, otherwise the whole-node JSON) / the literal
+/// default. A slot never written = Null = empty (for the "empty means absent" criterion see payload_is_empty).
 fn read_payload(
     ctx: &Ctx,
     local: &Option<String>,

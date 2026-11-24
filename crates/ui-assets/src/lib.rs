@@ -1,5 +1,5 @@
-//! 公共 UI 资源注册表：assets/ 下文件在此 crate 注册，
-//! 供各 UI crate 跨 crate 引用（manganis 要求资源位于定义它的 crate 内）。
+//! Shared UI asset registry: the files under assets/ are registered in this crate,
+//! so every UI crate can reference them across crates (manganis requires an asset to live in the crate that defines it).
 
 use manganis::Asset;
 

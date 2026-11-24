@@ -1,5 +1,5 @@
-# G2 饼图（ADR 0009）：spec = GoG 词汇的纯 JSON，直装 bind.value.default；
-# url 指向封装模块（ADR 0007 契约；框架不再有 chart 这个种类）。
+# G2 pie chart (ADR 0009): the spec = pure JSON in the GoG vocabulary, installed straight into bind.value.default;
+# the url points at the wrapper module (ADR 0007 contract; the framework no longer has a chart kind).
 action: append
 slot: chat
 data:

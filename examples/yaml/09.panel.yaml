@@ -6,8 +6,8 @@ data:
   children:
   - type: frame
   - type: frame
-  # 折叠区（ADR 0030）：panel 的 inline 那一格 —— 头是 children[0]，点它开合，
-  # 身体是后面的子节点。旧的 fold 节点已删除。
+  # Collapsible region (ADR 0030): the inline cell of panel — the head is children[0], clicking it toggles,
+  # the body is the children that follow. The old fold node has been removed.
   - attrs:
       class: [box, pad-sm, text-sm, is-border, round, warn, is-pointer, is-highlight, is-ease]
       place: inline

@@ -1,11 +1,11 @@
-# 示例：3D 浏览器能力模块（ADR 0007 模块契约的第一个实现）。
-# 构建：
+# Example: the 3D browser capability module (first implementation of the ADR 0007 module contract).
+# Build:
 #   cargo build --release --target wasm32-unknown-unknown
 #   wasm-bindgen --target web --out-dir pkg \
 #     target/wasm32-unknown-unknown/release/browser3d.wasm
-# pkg/ 目录内容（browser3d.js + browser3d_bg.wasm）与本目录的 index.js 一起
-# 拷进 examples/renderer/assets/3dbrowser/（该目录不入 git），Canvas 组件的
-# url 指向 index.js。
+# The pkg/ contents (browser3d.js + browser3d_bg.wasm), together with this directory's index.js,
+# are copied into examples/renderer/assets/3dbrowser/ (that dir is not in git); the Canvas component's
+# url points at index.js.
 [workspace]
 
 [package]
@@ -41,6 +41,6 @@ web-sys = { version = "0.3", features = [
 [profile.release]
 opt-level = "s"
 lto = "fat"
-# panic=unwind（wasm 默认 abort 会吞掉 panic 消息，只剩裸 unreachable）：
-# 让 std panic hook 能把它打到 console.error，便于诊断；wasm 边界仍会 abort。
+# panic=unwind (wasm's default abort swallows the panic message, leaving only a bare unreachable):
+# lets the std panic hook print it to console.error for diagnosis; the wasm boundary still aborts.
 panic = "unwind"

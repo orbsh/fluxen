@@ -84,7 +84,7 @@ async fn http_send(
     let frame = crate::proto::parse_yaml_to_frame(&body);
     match frame {
         Ok(frame) => {
-            // 渲染器只收动作列表（ADR 0021 决策 6）——这就是那一份。
+            // The renderer only takes an action list (ADR 0021 decision 6) — this is that one.
             let text = match serde_json::to_string(&frame) {
                 Ok(t) => t,
                 Err(e) => {

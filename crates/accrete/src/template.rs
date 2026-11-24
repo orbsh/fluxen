@@ -1,25 +1,25 @@
-//! 已注册的 stamp：定义是**结构**，不是文本（ADR 0037）。
+//! A registered stamp: the definition is a **structure**, not text (ADR 0037).
 //!
-//! 旧形态是 `名字 → 带 {{key}} 洞的 JSON 文本`：注册时不校验，实例化时做一遍文本替换再
-//! 解析。一句话里带引号就把 JSON 打断，洞是不是变量全看上下文，注册那一刻没有东西可查。
+//! The old form was `name → JSON text with {{key}} holes`: nothing was validated at registration, and instantiation
+//! did one round of text substitution then parsed. One quoted phrase broke the JSON, whether a hole was a variable was all context, and there was nothing checkable at registration.
 //!
-//! 现在一步就位：树在注册时解析、定型、数洞（每个 `$name` 必须在 `params` 里，`params`
-//! 里每个名字必须在树里出现），实例化只是把洞换成值——整值替换，不拼文本。一个值**就是**
-//! 字符串 `"$name"` 才是变量（引号只是 JSON 的语法，整值即变量），`$$name` 是"真以 `$` 开头"
-//! 的转义。所以 `"共 $q 件"` 是字面量，永远不会被当成变量。
+//! Now it lands in one step: the tree is parsed, typed and its holes counted at registration (every `$name` must be
+//! in `params`, and every name in `params` must appear in the tree); instantiation only swaps holes for values — whole-value
+//! replacement, no text assembly. A value is a variable only when it **is** the string `"$name"` (the quotes are just JSON
+//! syntax; the whole value is the variable), and `$$name` escapes "truly starting with `$`". So `"共 $q 件"` is a literal and never a variable.
 
 use super::{Accrete, AccreteOps};
 use std::collections::HashMap;
 use serde_json::{Map, Value};
 
-/// 一份 stamp 定义：解析过、校验过的树 + 它接收的名字。
+/// A stamp definition: the parsed, validated tree + the names it takes.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Template {
     params: Vec<String>,
     body: Value,
 }
 
-/// 注册表：名字 → 定义。解析只在这里发生一次（注册时），之后每个实例都从这棵树上克隆。
+/// The registry: name → definition. Parsing happens exactly once, here (at registration); afterwards every instance clones from this tree.
 #[derive(Debug, Clone, Default)]
 pub struct Templates(HashMap<String, Template>);
 
@@ -40,16 +40,16 @@ impl Templates {
         self.0.is_empty()
     }
 
-    /// 注册一份定义：`params` 是它接收的名字，`body` 是这棵树。
+    /// Register a definition: `params` are the names it takes, `body` is this tree.
     ///
-    /// 注册时能查的全查：树里每个 `$name` 必须在 `params` 里（否则实例化时才发现的拼写
-    /// 错误变成了静默的空值）；`params` 里每个名字必须在树里出现（声明了不用，等于一个
-    /// 永远没人传的参数）；**洞摘掉之后**剩下的每一块必须仍是合法的 Accrete 节点 —— 节点
-    /// 类型、属性词表、必填字段都在这里定案，解析只发生这一次。洞本身不查：它整值放进去，
-    /// 什么都能放（这正是"不做形状检查"的另一面）。
+    /// Everything checkable at registration is checked: every `$name` in the tree must be in `params` (otherwise a typo found only at
+    /// instantiation becomes a silent empty value); every name in `params` must appear in the tree (declared and unused is a
+    /// parameter nobody ever passes); and **after the holes are removed** every remaining piece must still be a valid Accrete node —
+    /// node type, attribute vocabulary and required fields are settled here, and parsing happens only this once. The holes themselves
+    /// are not checked: the whole value goes in, so anything can go in (which is the other face of "no shape check").
     ///
-    /// 旧的 `{{key}}` 文本形态明确拒收：静默解释成新形态是更坏的结局——帧作者以为自己在
-    /// 用洞，实际拿到一个字面量。
+    /// The old `{{key}}` text form is refused outright: silently interpreting it as the new form is the worse ending — the frame author thinks they are
+    /// using holes but actually gets a literal.
     pub fn register(&mut self, name: &str, params: &[&str], body: &Value) -> Result<(), String> {
         let declared: Vec<String> = params.iter().map(|p| (*p).to_string()).collect();
         let template = Template::new(declared, body)
@@ -64,13 +64,13 @@ impl Template {
         if let Value::String(_) = body {
             return Err(OLD_TEXT_FORM.into());
         }
-        // ① 洞摘掉之后，这棵树还是帧语言里的那棵树吗。
+        // ① After the holes are removed, is this tree still the tree of the frame language.
         let Some(skeleton) = skeleton(body) else {
             return Err("body is one hole — a definition is a node tree it can be spliced into".into());
         };
         serde_json::from_value::<Accrete>(skeleton)
             .map_err(|e| format!("body is not a node tree: {e}"))?;
-        // ② 树上的洞与声明的名字必须一一对上。
+        // ② The holes on the tree and the declared names must match one to one.
         let mut used = Vec::new();
         collect(body, &mut used);
         if let Some(missing) = used.iter().find(|u| !params.contains(u)) {
@@ -85,32 +85,32 @@ impl Template {
         })
     }
 
-    /// 实例化：把每个洞换成 `data` 里同名的值，整值替换。
+    /// Instantiate: swap every hole for the same-named value in `data`, whole-value replacement.
     ///
-    /// 值不做形状/类型检查——它就是被放进那个位置的东西（`$items` 站在 `children` 里时，
-    /// 放进去的是一串节点）。唯一会报错的是**缺一个名字**：洞没有值可换，模板不该自己
-    /// 编一个空值出来。
+    /// Values get no shape/type check — a value is exactly what is put into that position (`$items` standing in `children`
+    /// receives a run of nodes). The only thing that errors is **a missing name**: the hole has no value to swap in, and a template should not
+    /// invent an empty value of its own.
     pub fn instance(&self, data: &Map<String, Value>) -> Result<Accrete, String> {
         let mut body = self.body.clone();
         fill(&mut body, data)?;
         serde_json::from_value(body).map_err(|e| format!("instance is not a node tree: {e}"))
     }
 
-    /// 它接收的名字（注册时校验过：恰好等于树上的洞）。
+    /// The names it takes (validated at registration: exactly the holes on the tree).
     pub fn params(&self) -> &[String] {
         &self.params
     }
 }
 
-/// 文本形态的拒绝语：说清**该做什么**，而不只是"这个不行"。
+/// The wording of the text-form refusal: say **what to do**, not merely "this one is not allowed".
 const OLD_TEXT_FORM: &str = "a template body is a node tree, not a `{{key}}` JSON string — \
                              write the tree and put `\"$name\"` (whole value) where a value goes";
 
-/// 一个字符串是变量、是转义后的字面量，还是字面量。
+/// Whether a string is a variable, an escaped literal, or a literal.
 ///
-/// - `"$name"` → 变量（整值就是变量；名字是标识符）；
-/// - `"$$name"` → 字面量 `"$name"`（真以 `$` 开头的文本只有这一种写法）；
-/// - 其它 → 字面量，包括 `"共 $q 件"` 这种洞在句子中间的字符串——变量必须占满整个值。
+/// - `"$name"` → a variable (the whole value is the variable; the name is an identifier);
+/// - `"$$name"` → the literal `"$name"` (text that truly starts with `$` has only this spelling);
+/// - anything else → a literal, including a string like `"共 $q 件"` with a hole mid-sentence — a variable must fill the whole value.
 fn variable(s: &str) -> Option<&str> {
     let name = s.strip_prefix('$')?;
     if name.starts_with('$') {
@@ -126,11 +126,11 @@ fn variable(s: &str) -> Option<&str> {
         .then_some(name)
 }
 
-/// 把洞从树上摘掉：洞所在的键（或数组元素）整个消失，剩下的原样留下。
+/// Removing the holes from the tree: the key (or array element) the hole sits in disappears entirely, everything else stays as it was.
 ///
-/// 注册时解析的就是这棵"没有洞的树"——洞站在哪儿就意味着那里少了点什么，而"少了点什么"
-/// 仍然是合法的节点；洞本身不被检查（它整值放进去，形状由调用方决定）。洞如果占着定义
-/// 的根，就没有可摘的外壳了：`None`。
+/// What is parsed at registration is exactly this "tree without holes" — a hole standing somewhere means something is missing there, and "something
+/// missing" is still a valid node; the hole itself is not checked (the whole value goes in, the caller decides the shape). If a hole occupies the
+/// definition's root, there is no shell left to remove: `None`.
 fn skeleton(v: &Value) -> Option<Value> {
     match v {
         Value::String(s) => variable(s).is_none().then(|| v.clone()),
@@ -144,7 +144,7 @@ fn skeleton(v: &Value) -> Option<Value> {
     }
 }
 
-/// 树上的洞，按出现顺序去重。
+/// The holes on the tree, deduplicated in order of appearance.
 fn collect(v: &Value, out: &mut Vec<String>) {
     match v {
         Value::String(s) => {
@@ -160,7 +160,7 @@ fn collect(v: &Value, out: &mut Vec<String>) {
     }
 }
 
-/// 整值替换：洞所在的那个值被换掉，周围的字符串一个字节都不碰（就没有"周围"）。
+/// Whole-value replacement: the value the hole sits at is swapped, not one byte of the surrounding string is touched (there is no "surrounding").
 fn fill(v: &mut Value, data: &Map<String, Value>) -> Result<(), String> {
     match v {
         Value::String(s) => {
@@ -190,10 +190,10 @@ fn fill(v: &mut Value, data: &Map<String, Value>) -> Result<(), String> {
 }
 
 impl Accrete {
-    /// 深度优先展开本节点及后代的 `stamp`，就地替换。
-    /// 返回警告串（未注册名、缺值、实例不再是节点）——accrete 零日志依赖，
-    /// 由调用方决定打 warn（对齐 ADR 0005 的 miss-warn-drop 惯例）。
-    /// 失败节点保持 `stamp` 原形，渲染端有兜底占位。
+    /// Depth-first expansion of this node's and its descendants' `stamp`, in place.
+    /// Returns warning strings (unregistered name, missing value, instance is no longer a node) — accrete has zero logging dependencies,
+    /// the caller decides to log a warn (aligned with ADR 0005's miss-warn-drop convention).
+    /// A failed node keeps its `stamp` shape, and the render side has a fallback placeholder.
     pub fn expand(&mut self, env: &Templates) -> Vec<String> {
         let mut warns = Vec::new();
         self.expand_into(env, &mut warns);
@@ -216,7 +216,7 @@ impl Accrete {
                 }
             }
         }
-        // 展开产物本身可能还挂 stamp（模板套模板），统一继续下钻。
+        // The expansion result may itself still carry stamps (a template inside a template), so keep descending uniformly.
         if let Some(cs) = self.borrow_children_mut() {
             for c in cs {
                 c.expand_into(env, warns);

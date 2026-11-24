@@ -92,8 +92,8 @@ fn get_at_walks_wire_shape() {
 
 #[test]
 fn a_module_url_is_the_only_way_to_name_a_renderer() {
-    // ADR 0007 的形态是唯一形态：种类住在数据里，框架不替任何渲染器选实现。
-    // 原来的 chart/editor 默认 url 已移除——那正是"种类内置"的痕迹。
+    // The ADR 0007 shape is the only shape: the kind lives in the data, the framework picks an implementation for no renderer.
+    // The old default urls for chart/editor are removed — those were exactly the traces of "kinds are built in".
     let c: Accrete = serde_json::from_value(json!({
         "type": "canvas",
         "url": "/assets/g2chart/index.js",
@@ -101,12 +101,12 @@ fn a_module_url_is_the_only_way_to_name_a_renderer() {
     }))
     .unwrap();
     assert!(matches!(c, Accrete::canvas(_)));
-    // 没有 url 的 canvas 是坏帧，不是"合法的默认"
+    // A canvas without a url is a bad frame, not "a legal default"
     assert!(
         serde_json::from_value::<Accrete>(json!({"type": "canvas"})).is_err(),
         "a canvas without a module url must not decode"
     );
-    // 旧词汇不再 decode：框架没有 chart 这个种类
+    // The old vocabulary no longer decodes: the framework has no chart kind
     assert!(serde_json::from_value::<Accrete>(json!({"type": "chart"})).is_err());
     assert!(serde_json::from_value::<Accrete>(json!({"type": "editor"})).is_err());
     assert!(serde_json::from_value::<Accrete>(json!({"type": "diagram"})).is_err());

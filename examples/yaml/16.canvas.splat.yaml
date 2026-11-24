@@ -1,17 +1,17 @@
-# Canvas 示例（ADR 0007）：splatviewer 模块——高斯泼溅场景展示。
-# 前置：模块在 examples/renderer/assets/splatviewer/（纯 JS，无构建，配方见
-# examples/modules/splatviewer/index.js 头注释）；布局侧先发 00.main.yaml。
-# 泼溅素材 truck.ksplat / bonsai.ksplat 来自
-# GaussianSplats3D 官方演示数据（INRIA 3DGS 数据集场景，演示用途随仓库分发，
-# 许可同源场景——研究/演示用途，商用需自行核实）。
+# Canvas example (ADR 0007): the splatviewer module — Gaussian splat scene display.
+# Prerequisites: the module is in examples/renderer/assets/splatviewer/ (plain JS, no build; recipe in the
+# header comment of examples/modules/splatviewer/index.js); the layout side sends 00.main.yaml first.
+# The splat assets truck.ksplat / bonsai.ksplat come from the
+# official GaussianSplats3D demo data (INRIA 3DGS dataset scenes, demo use, shipped with the repository;
+# licence follows the source scenes — research/demo use, verify yourself for commercial use).
 #
-# 每个场景一条独立消息（每 box 一个 canvas）：数据槽是单值的，两个 canvas
-# 若订阅同一槽只有后写的 set 生效，所以各挂各的槽（splat_truck /
-# splat_bonsai），两份载荷都到得了各自模块。
+# One separate message per scene (one canvas per box): data slots are single-valued, so if two canvases
+# subscribe to the same slot only the set written later takes effect; hence each hangs on its own slot (splat_truck /
+# splat_bonsai) and both payloads reach their own module.
 #
-# camera 三件套取自 GaussianSplats3D 官方 demo 对应页面（demo/truck.html、
-# demo/bonsai.html）——3DGS 数据集的坐标系朝向各异，不给就是 GS3D 的默认
-# 相机（[0,10,15] 看向原点、up=[0,1,0]），视角是歪的。
+# The camera trio is taken from the matching pages of the official GaussianSplats3D demo (demo/truck.html,
+# demo/bonsai.html) — 3DGS datasets come with coordinate systems pointing in various directions; without them you get GS3D's default
+# camera ([0,10,15] looking at the origin, up=[0,1,0]), and the view is skewed.
 - action: append
   slot: chat
   data:

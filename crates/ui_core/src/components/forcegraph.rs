@@ -1,8 +1,8 @@
-//! 关系图组件（ADR 0018）：原生 leptos + wasm 渲染器，不是 canvas 模块。
+//! Relation graph component (ADR 0018): a native leptos + wasm renderer, not a canvas module.
 //!
-//! 这里的代码只做三件事——建宿主元素、把数据槽的载荷喂给渲染器、把渲染器
-//! 发出的事件交给 Ctx。渲染、布局、相机、拾取全在 `forcegraph` crate 里，
-//! 它不认识 Accrete，也不认识 leptos。
+//! The code here does three things only — build the host element, feed the data slot's payload to the renderer, and hand the events
+//! the renderer emits to Ctx. Rendering, layout, camera and picking all live in the `forcegraph` crate,
+//! which knows neither Accrete nor leptos.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -28,19 +28,19 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
         .as_ref()
         .map(|a| a.size_style())
         .unwrap_or_default();
-    // 一个有着色器的画布必须有实尺寸：没给 attrs 时也要给一个可画的高度，
-    // 否则 canvas 是 0×0，画面"什么都没有"却不是渲染失败。
+    // A canvas with a shader must have a real size: even with no attrs a drawable height must be given,
+    // otherwise the canvas is 0×0 and the picture "shows nothing", though that is not a render failure.
     let size = if size.is_empty() {
         "height: 360px;".to_string()
     } else {
         size
     };
 
-    // 尺寸之外还有三条结构属性：标签层和悬停卡是宿主的绝对定位子元素，定位
-    // 基准必须是宿主自己，超出面板的标签和卡片要被裁掉。`style` 属性归下面的
-    // Effect 重写，所以这三条必须跟尺寸一起写——只写尺寸会把 `mount` 时写下的
-    // `position: relative` / `overflow: hidden` 抹掉（症状：悬停卡出现在画布
-    // 下方、面板外，而不是节点旁边）。
+    // Beyond size there are three structural properties: the label layer and the hover card are absolutely positioned children of the host, so the positioning
+    // base must be the host itself, and labels and cards beyond the panel must be clipped. The `style` attribute belongs to the
+    // Effect below and gets rewritten, so these three must be written together with the size — writing the size alone would wipe out the
+    // `position: relative` / `overflow: hidden` written at `mount` (symptom: the hover card appears
+    // below the canvas, outside the panel, instead of beside the node).
     let host_style = format!("{size}position: relative; margin: 0; padding: 0; overflow: hidden;");
     let nr = NodeRef::<Div>::new();
     let view: Rc<RefCell<Option<forcegraph::View>>> = Rc::new(RefCell::new(None));
@@ -88,10 +88,10 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
             }
         }
 
-        // 主题通道（可选）：`theme` 绑本地槽或 source，载荷直接是
-        // `true/false` 或 `"dark"/"light"`——事件的 data 本来就是裸 Value，
-        // 布尔值不需要任何包装。这里只翻译成枚举并换表现：场景、相机、布局
-        // 都不动，所以切主题不会拉着画面重排。
+        // Theme channel (optional): `theme` binds a local slot or a source, and the payload is directly
+        // `true/false` or `"dark"/"light"` — an event's data is a bare Value to begin with,
+        // and a boolean needs no wrapping at all. This only translates into an enum and swaps the appearance: scene, camera and layout
+        // stay untouched, so switching themes does not drag the picture into a relayout.
         let ctx_theme = ctx_load.clone();
         let accrete_theme = accrete_load.clone();
         let view_theme = Rc::clone(&view_load);
@@ -116,8 +116,8 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
             }
         });
 
-        // 数据区：载荷是 `{nodes, links, focus?}`，整份快照推给渲染器。
-        // 空载荷 = 不占位（ADR 0012），与 canvas/chart 同一条规则。
+        // Data area: the payload is `{nodes, links, focus?}`, the whole snapshot pushed to the renderer.
+        // An empty payload = takes no place (ADR 0012), the same rule as canvas/chart.
         let ctx2 = ctx_load.clone();
         let view2 = Rc::clone(&view_load);
         let accrete2 = accrete_load.clone();
@@ -129,8 +129,8 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
                 .as_ref()
                 .map(super::canvas::payload_is_empty)
                 .unwrap_or(true);
-            // 占位随载荷生效（ADR 0012）：空 data 区 = 收起容器，非空写回
-            // 节点自己的尺寸。改属性而不是加类：`.f` 与 `.hide` 会互相压制。
+            // Placement follows the payload (ADR 0012): an empty data area = collapse the container, a non-empty one writes back
+            // the node's own size. Change the attribute rather than add a class: `.f` and `.hide` suppress each other.
             let want = if empty {
                 super::canvas::HIDDEN_STYLE.to_string()
             } else {
@@ -165,7 +165,7 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
     .into_any()
 }
 
-/// DSL 旋钮 → 渲染器旋钮。两侧字段一一对应，唯一的映射点在这里。
+/// DSL knob → renderer knob. The fields on both sides correspond one to one, and the only mapping point is here.
 fn style_of(style: &ForceGraphStyle) -> forcegraph::Style {
     forcegraph::Style {
         node_size_px: style.node_size_px,
@@ -200,7 +200,7 @@ fn style_of(style: &ForceGraphStyle) -> forcegraph::Style {
     }
 }
 
-/// `Value` → 快照，给没有 serde 直接路径的调用方（测试）用。
+/// `Value` → snapshot, for callers without a direct serde path (tests).
 pub fn snapshot_of(value: &Value) -> Option<forcegraph::Snapshot> {
     serde_json::from_value(value.clone()).ok()
 }

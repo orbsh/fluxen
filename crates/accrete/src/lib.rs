@@ -149,9 +149,9 @@ pub struct ClassAttr {
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
-    /// 容器自身的排布方向（同 FrameAttr 字段；ADR 0010 缺陷修复：
-    /// 此前只有 Case 认识 horizontal，select/rack 的 col 类无法被
-    /// 自己的 attrs 推翻——父 case 的 horizontal 只管父 div）。
+    /// The container's own layout direction (same field as FrameAttr; ADR 0010 defect fix:
+    /// previously only Case knew about horizontal, so the col class of select/rack could not be
+    /// overridden by its own attrs — the parent case's horizontal only governed the parent div).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub horizontal: Option<bool>,
 }
@@ -211,9 +211,9 @@ pub enum Direction {
     R,
 }
 
-/// 外部渲染模块的原位挂载容器（ADR 0007）。
-/// 核心不解释 `data`——载荷语义完全归模块；尺寸/样式走 `attrs`，
-/// 与数据流的联动走现有 bind 槽协议（`set`/`patch` 按 `data_event` 寻址）。
+/// An in-place mount container for an external render module (ADR 0007).
+/// The core does not interpret `data` — payload semantics belong entirely to the module; size/style go through `attrs`,
+/// and coupling to the data flow goes through the existing bind slot protocol (`set`/`patch` addressed by `data_event`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
@@ -221,41 +221,41 @@ pub enum Direction {
 pub struct Canvas {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    /// CDN 上的 ES module 地址（导出 mount/update/resize/unmount 契约）。
+    /// The address of the ES module on the CDN (exports the mount/update/resize/unmount contract).
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<SizeAttr>,
-    /// 模块私有选项的**动态袋**（ADR 0017）：核心不认识的渲染器配置
-    /// （3d-force-graph 的节点/边尺寸、力参数、配色……）打包放这里，
-    /// 宿主原样交给模块的 `mount(el, data, host, options)`，一个键都不解释。
-    /// 这是"变体不进 accrete"的落点：换渲染器只换 url + options，DSL 不变。
-    /// 缺省/Null = `{}`（模块自己套默认值）；与 `url` 同一语义——挂载期配置，
-    /// 不进 update 热更新腿（改它要靠重新挂载）。
+    /// The **dynamic bag** of module-private options (ADR 0017): renderer configuration the core
+    /// does not know (3d-force-graph's node/link sizes, force parameters, colours…) packed up here,
+    /// which the host hands to the module's `mount(el, data, host, options)` as it is, interpreting not one key.
+    /// This is where "variants do not enter accrete" lands: swapping renderers only swaps url + options, the DSL is unchanged.
+    /// Absent/Null = `{}` (the module applies its own defaults); same semantics as `url` — mount-time config,
+    /// not on the update hot-reload leg (changing it takes a remount).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub options: Option<Value>,
-    /// `bind["value"]`：载荷惯例与 Chart/diagram 同族——`kind: source` 指向
-    /// 具名数据槽（槽内节点的 `bind.value.default` 原始 JSON 即模块 data 区），
-    /// 流式喂数据 = 对该槽 `set`/`patch`（指针 `/bind/value/default/...`）。
+    /// `bind["value"]`: the payload convention is kin to Chart/diagram — `kind: source` points at
+    /// a named data slot (the raw JSON of `bind.value.default` on the node in the slot is the module's data area),
+    /// streaming data in = `set`/`patch` on that slot (pointer `/bind/value/default/...`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Bind>,
 }
 
-/// 三维力导向关系图（ADR 0018）。原生组件，不是 canvas 模块：渲染器与布局
-/// 都在 wasm 里（`forcegraph` crate），所以没有 `url`、没有 JS 资产、没有
-/// mount/update/resize/unmount 契约——可写的只有 `attrs`、渲染器旋钮 `style`
-/// 和数据区 `bind["value"]`。
+/// A 3D force-directed relationship graph (ADR 0018). A native component, not a canvas module: the renderer and the layout
+/// both live in wasm (the `forcegraph` crate), so there is no `url`, no JS asset, no
+/// mount/update/resize/unmount contract — all that can be written is `attrs`, the renderer knobs `style`
+/// and the data area `bind["value"]`.
 ///
-/// 数据区载荷 = `forcegraph::Snapshot`：`{nodes, links, focus?}`，按 id 求
-/// 差量（整份快照重复送达幂等）。`focus` 是视图指令
-/// `{ids, seq?, padding_px?, duration_ms?}`——`seq` 变了同一个目标可以再飞一次，
-/// 不动 `seq` 的重复写入不碰相机。
+/// Data area payload = `forcegraph::Snapshot`: `{nodes, links, focus?}`, diffed by id
+/// (re-sending the whole snapshot is idempotent). `focus` is a view instruction
+/// `{ids, seq?, padding_px?, duration_ms?}` — changing `seq` lets the same target fly again,
+/// while a repeat write that leaves `seq` alone does not touch the camera.
 ///
-/// **这是一个独立组件，不是 canvas 的一种**（ADR 0029）：渲染、布局、相机、拾取都在
-/// 同一个 wasm 里，所以它有自己的节点类型、自己的 `style` 词表（类型化，可被 schema
-/// 与 patch 校验），不走 url + options 那条动态袋。图数据是这个界面的主要读数面，
-/// 定制能力按"再加一个维度"来长：载荷是快照，加字段不换节点类型——`node_cluster` /
-/// `edge_cluster` 这类分组显示将作为 `Snapshot` 的新字段与 `style` 的新旋钮出现，
-/// 而不是变成另一个组件或换一个渲染器。
+/// **This is a standalone component, not a kind of canvas** (ADR 0029): rendering, layout, camera and picking are all in
+/// the same wasm, so it has its own node type and its own `style` vocabulary (typed, so it can be checked by schema
+/// and by patch), and does not take that url + options dynamic bag. The graph data is this interface's main reading surface,
+/// and customisation grows by "adding one more dimension": the payload is a snapshot, adding fields does not swap the node type — grouping displays like
+/// `node_cluster` / `edge_cluster` will appear as new fields of `Snapshot` and new knobs of `style`,
+/// rather than becoming another component or swapping the renderer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
@@ -265,7 +265,7 @@ pub struct ForceGraph {
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attrs: Option<SizeAttr>,
-    /// 渲染器旋钮，全部有缺省值；缺省时不进 wire。
+    /// Renderer knobs, all with defaults; when default they stay off the wire.
     #[serde(default, skip_serializing_if = "force_graph_style_is_default")]
     pub style: ForceGraphStyle,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -276,79 +276,79 @@ pub struct ForceGraph {
     pub theme: Option<Bind>,
 }
 
-/// 图渲染器的旋钮。语义与 canvas 的 `options` 同级：挂载期配置，改它要
-/// 重新挂载（不进 update 腿）。区别只在于这是自家渲染器的词表，所以可以
-/// 类型化、可以被 schema 和 patch 校验。
-/// 边的走向。两种朝向都是"节点上的接口"：连线从一个朝向离开，再从另一端的
-/// 朝向进入，中间用三次曲线接起来。
+/// The graph renderer's knobs. Same semantics as canvas's `options`: mount-time config, changing it takes
+/// a remount (not on the update leg). The only difference is that this is our own renderer's vocabulary, so it can be
+/// typed and checked by schema and by patch.
+/// The direction of an edge. Both orientations are "interfaces on a node": a link leaves from one orientation and enters
+/// the other end's orientation, joined in between by a cubic curve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LinkShape {
     #[default]
     Straight,
-    /// 直角坐标系：±x ±y ±z 六个朝向。
+    /// Cartesian coordinates: the six directions ±x ±y ±z.
     Axes,
-    /// 正四面体：四个顶点到中心的方向。
+    /// Regular tetrahedron: the directions from the four vertices to the centre.
     Tetra,
 }
 
-/// 图所在的底色。两套配色只差明度：莫兰迪色低彩度，同一套色在浅底上够
-/// 对比就会在深底上糊成一团，反之亦然。
+/// The ground colour the graph sits on. The two palettes differ only in lightness: Morandi colours are low-chroma, so a palette with
+/// enough contrast on a light ground will smear into a blur on a dark one, and vice versa.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
     Light,
-    /// 默认：节点是光团、边是光线，光需要暗底才成立。
+    /// Default: nodes are orbs of light and edges are rays — light only works on a dark ground.
     #[default]
     Dark,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-// 结构级 default：帧里只写想改的旋钮，其余取 `Default::default()`。
-// 字段级 default 只管"整个 style 缺席"，写半个对象就会报 missing field。
+// Struct-level default: a frame writes only the knobs it wants to change, the rest take `Default::default()`.
+// Field-level default only covers "the whole style is absent"; writing half an object reports a missing field.
 #[serde(default)]
 pub struct ForceGraphStyle {
-    /// 节点基础半径（屏幕像素）。
-    /// 节点半径（屏幕像素）；0 = 由 `node_size_ratio` 推导。
+    /// Node base radius (screen pixels).
+    /// Node radius (screen pixels); 0 = derived from `node_size_ratio`.
     pub node_size_px: f32,
-    /// 节点球直径相对边宽的倍数（默认 2）。
+    /// Multiple of the link width for the node sphere diameter (default 2).
     pub node_size_ratio: f32,
-    /// 每档权重增加的半径（屏幕像素）；档数见 `node_tiers`。
+    /// Radius added per weight tier (screen pixels); the tier count is `node_tiers`.
     pub node_size_step_px: f32,
     pub node_tiers: u8,
     pub link_width_px: f32,
-    /// 边的走向：`straight` 直连；`axes` 从六个坐标朝向里取最近的一个；
-    /// `tetra` 从正四面体的四个顶点方向里取最近的。
+    /// Edge direction: `straight` connects directly; `axes` takes the nearest of the six coordinate orientations;
+    /// `tetra` takes the nearest of the regular tetrahedron's four vertex directions.
     pub link_shape: LinkShape,
     pub link_opacity: f32,
-    /// 斥力，负值 = 相互推开。
+    /// Repulsion; a negative value = pushing each other apart.
     pub charge: f32,
     pub link_distance: f32,
     pub link_strength: Option<f32>,
     pub velocity_decay: f32,
-    /// 常显名字标签层。
+    /// An always-on name label layer.
     pub labels: bool,
     pub label_px: f32,
-    /// 超过这个节点数只画不标（标签层是逐帧投影的 DOM，量大就成噪声）。
+    /// Above this node count draw only, no labels (the label layer is DOM projected per frame, so at volume it is noise).
     pub label_max_nodes: u32,
-    /// 首批数据后自动取景到整张图；之后的追加不重排、不飞相机。
+    /// After the first batch of data, fit the view to the whole graph; later appends neither re-layout nor fly the camera.
     pub auto_fit: bool,
     pub fit_padding_px: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub background: Option<String>,
-    /// 节点配色，按 `kind` 轮取；空 = 用 `theme` 对应的内置莫兰迪方案。
+    /// Node colours, taken in rotation by `kind`; empty = the built-in Morandi scheme for `theme`.
     #[serde(default)]
     pub palette: Vec<String>,
-    /// 底色：浅底 / 深底。只换配色与面板背景，不改布局。
+    /// Ground: light / dark. Swaps only palette and panel background, not the layout.
     pub theme: Theme,
-    /// 高亮节点的标记强度：光晕核心与每一圈波纹的峰值不透明度。
+    /// Marker strength for highlighted nodes: peak opacity of the halo core and of each ripple ring.
     pub glow_alpha: f32,
-    /// 高亮可达路径（从选中/聚焦节点向外 `reach_hops` 条边），而不是压暗其它部分。
+    /// Highlight the reachable path (`reach_hops` edges out from the selected/focused node) instead of dimming the rest.
     pub highlight_reach: bool,
-    /// 可达的跳数。
+    /// The number of reachable hops.
     pub reach_hops: u32,
 }
 
@@ -460,12 +460,12 @@ fn is_default_state(s: &PanelState) -> bool {
     *s == PanelState::Toggle
 }
 
-/// 面板：一个"出现/消失的内容区"。`attrs.place` 说它放在哪（inline / 贴触发器 / 贴视口），
-/// `attrs.state` 说谁决定它出现（本地切换 / 跟着所绑槽）。这两条轴上的四格就是原来的
-/// `fold`、`popup`、`layer`，以及它们没覆盖的一格 —— 贴视口 + 本地切换（抽屉）。
+/// A panel: one "appear/disappear content area". `attrs.place` says where it goes (inline / hugging the trigger / hugging the viewport),
+/// `attrs.state` says who decides it appears (local toggle / following the bound slot). The four cells on these two axes are the old
+/// `fold`, `popup`, `layer`, plus the one cell they did not cover — hugging the viewport + local toggle (the drawer).
 ///
-/// `children[0]` 是触发器，`children[1]` 是浮层内容（`state: bound` 时触发器可以省：面板
-/// 的出现由槽决定，不需要人点）。缺内容就什么都不画 —— 少写一个子节点是帧的错误。
+/// `children[0]` is the trigger, `children[1]` is the floating content (with `state: bound` the trigger may be omitted: the panel's
+/// appearance is decided by the slot, nobody has to click). With no content nothing is drawn at all — omitting a child is a frame error.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
@@ -1065,9 +1065,9 @@ pub enum Accrete {
     canvas(Canvas),
     #[ui_acrete(has_id = "true")]
     forcegraph(ForceGraph),
-    /// 内容区：`place` × `state` 两轴四格（ADR 0030）。`fold`/`popup`/`layer` 作为节点类型
-    /// 已删除，连同它们在模型里的壳：四格的实现都在 ui_core 的 `components/panel.rs` 里，
-    /// 这条臂是他们共用的同一个名字。
+    /// A content area: the four cells of the two axes `place` × `state` (ADR 0030). `fold`/`popup`/`layer` as node types
+    /// are gone, along with their shells in the model: all four cells are implemented in ui_core's `components/panel.rs`,
+    /// and this arm is the single name they share.
     #[ui_acrete(has_id = "true")]
     panel(Panel),
     bundle(Bundle),

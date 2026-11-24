@@ -1,12 +1,12 @@
-# panel 示例（ADR 0030/0031）：模态登录框。
+# panel example (ADR 0030/0031): a modal login box.
 #
-# 1) 布局根 append 一个 panel = 显式声明的挂载点；显隐只有一条规则：
-#    所绑 local 槽 `login_modal` 非空即显示（ADR 0012「空即无」）。
-# 2) chat 行里放触发输入框（回车写槽 = 打开）。内容直接长在面板里 ——
-#    portal 已删除：槽是全局的，谁绑谁显示，不需要把子树搬运到别处。
-#    点卡片外的模糊区关闭 = 清空该槽；槽空过，再回车即重开
-#    （下次写入必是新值，「同值不写」不会误挡）。
-# 前置：先发 00.main.yaml。
+# 1) append one panel to the layout root = an explicitly declared mount point; visibility has a single rule:
+#    visible as soon as the bound local slot `login_modal` is non-empty (ADR 0012 "empty means absent").
+# 2) the trigger input goes in a chat row (enter writes the slot = open). The content grows right inside the panel —
+#    portal is gone: slots are global, whoever binds one shows it, there is no need to carry the subtree elsewhere.
+#    Clicking the blurred area outside the card closes it = clears that slot; once the slot has been empty, enter reopens it
+#    (the next write is bound to be a new value, so "don't write equal values" cannot block it by mistake).
+# Prerequisites: send 00.main.yaml first.
 - action: patch
   slot: ""
   path: /children

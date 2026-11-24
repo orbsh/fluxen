@@ -98,8 +98,8 @@ data:
 
 #[test]
 fn the_wire_decodes_as_the_renderers_frame_type() {
-    // 端到端的那一段尾巴：stage 发出去的字节，必须就是渲染器解开的那一帧
-    // （ADR 0021 决策 6）。用真的示例文件，走 JSON 与 CBOR 两条路。
+    // The last link of the end-to-end chain: the bytes stage sends out must be exactly the frame the renderer decodes
+    // (ADR 0021 decision 6). Use the real example file, going both the JSON and the CBOR way.
     let src = std::fs::read_to_string("../../examples/yaml/00.main.yaml").unwrap();
     let frame = stage::proto::parse_yaml_to_frame(&src).unwrap();
     let wire = frame.as_slice();

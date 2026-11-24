@@ -13,7 +13,7 @@ static MDFMT: LazyLock<Vec<String>> = LazyLock::new(|| {
         .collect()
 });
 
-/// 文本：取 `source`（槽值或字面量）；`TextAttr.format` 为 markdown/md 时渲染 HTML。
+/// Text: takes `source` (slot value or literal); renders HTML when `TextAttr.format` is markdown/md.
 pub fn text_(accrete: Text, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let mut css = vec!["text"];
@@ -21,8 +21,8 @@ pub fn text_(accrete: Text, ctx: &Ctx) -> AnyView {
         css.push(id);
     }
     use_common_css(&mut css, &accrete);
-    // markdown 并进同一次 join：同一个元素上两次 .class() 落在同一个 class 属性上，
-    // 后者会把前者整个挤掉（实测 markdown 节点的类名只剩 "markdown"，text/用户类/id 全丢）。
+    // markdown goes into the same join: two .class() calls on one element land on the same class attribute,
+    // and the latter squeezes the former out entirely (measured: a markdown node's class list kept only "markdown", text/user classes/id all lost).
     if let Some(TextAttr {
         format: Some(fmt), ..
     }) = &accrete.attrs

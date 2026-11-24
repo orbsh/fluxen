@@ -10,31 +10,31 @@ use std::sync::Arc;
 use std::sync::{LazyLock, RwLock};
 use transport::Transport;
 
-/// 已注册的 stamp 定义表（ADR 0037：定义是节点树，值是整值替换）。
+/// Table of registered stamp definitions (ADR 0037: a definition is a node tree, a value is a whole-value replacement).
 static TMPL: LazyLock<RwLock<accrete::template::Templates>> =
     LazyLock::new(|| RwLock::new(accrete::template::Templates::new()));
 
-/// 全局共享状态容器：掌管布局、数据、列表与传输收发。
+/// Globally shared state container: owns layout, data, lists, and transport send/receive.
 ///
 /// `bundle` is the render-time environment: `bundle_` injects its own
 /// `BundleState` and clones `Ctx` for the subtree, so ownership follows the
 /// clone chain; sibling branches each keep their own clone and cannot pollute
 /// each other. Nested bundles shadow the outer one.
-/// per-key 信号槽：外层 map 只存句柄（键集变化时才写外层），
-/// 值经内层信号发布——某个键的更新不通知其他键的订阅者。
-/// 列表槽：一个共享的、不可变快照。
+/// per-key signal slot: the outer map holds only handles (the outer map is written only when the key set changes),
+/// values are published through the inner signal — an update to one key does not notify subscribers of other keys.
+/// List slot: one shared, immutable snapshot.
 ///
-/// 外层 `Arc` 让渲染闭包抱着整个列表而不拷贝它；内层 `Arc<Accrete>` 让「加一行」只需要复制
-/// 指针，不必把已有的每一行都深拷贝一遍——那曾使每次 append 都 O(rows) 深拷贝，消息越多越慢
-/// （O(n²)）。行的内容是共享的，所以改动一行要 `Arc::make_mut`（独占就原地改，共享时克隆这一行）。
+/// The outer `Arc` lets a render closure hold the whole list without copying it; the inner `Arc<Accrete>` makes "add one row" need only a
+/// pointer instead of deep-copying every existing row — that once made every append an O(rows) deep copy, slower the more messages there were
+/// (O(n²)). The row contents are shared, so changing a row needs `Arc::make_mut` (in place when exclusive, clone that row when shared).
 pub type ListSlot = RwSignal<std::sync::Arc<Vec<std::sync::Arc<Accrete>>>>;
 pub type DataSlot = RwSignal<Option<std::sync::Arc<Accrete>>>;
-/// 裸 Value 槽（ADR 0008 local 平面）：事件数据不是展示形态，
-/// 与 data（Accrete）分平面。
+/// Bare Value slot (ADR 0008 local plane): event data is not a display shape,
+/// it lives on a plane separate from data (Accrete).
 pub type ValueSlot = RwSignal<Option<Value>>;
 
-/// 一个页面选项的两半（ADR 0038 §2）：`local` 是页面自己的选择，`remote` 是远端给的默认。
-/// 生效值本地优先、远端回落——与 `both` 的读法是同一条规则（ADR 0031 §1）。
+/// The two halves of a page option (ADR 0038 §2): `local` is the page's own choice, `remote` is the default given by the far side.
+/// The effective value prefers local and falls back to remote — the same rule as reading `both` (ADR 0031 §1).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ConfigValue {
     pub local: Option<Value>,
@@ -42,13 +42,13 @@ pub struct ConfigValue {
 }
 
 impl ConfigValue {
-    /// 生效值：页面选过就是页面的，否则是远端的；两半都空 = 组件自己的默认。
+    /// Effective value: the page's if it has chosen, otherwise the far side's; both halves empty = the component's own default.
     pub fn effective(&self) -> Option<&Value> {
         self.local.as_ref().or(self.remote.as_ref())
     }
 }
 
-/// 一个选项的槽：per-key 信号，写一个选项不通知别的选项的订阅者。
+/// A slot for one option: a per-key signal, writing one option does not notify subscribers of other options.
 pub type ConfigSlot = RwSignal<ConfigValue>;
 
 #[derive(Clone)]
@@ -58,45 +58,45 @@ pub struct Ctx {
     pub layout: RwSignal<Accrete>,
     pub data: RwSignal<HashMap<String, DataSlot>>,
     pub list: RwSignal<HashMap<String, ListSlot>>,
-    /// local 平面：`kind: local` 事件落点与订阅共用的具名 Value 槽。
+    /// local plane: named Value slots shared by where `kind: local` events land and by their subscription.
     pub vals: RwSignal<HashMap<String, ValueSlot>>,
-    /// 页面选项（ADR 0038 §2）：自己的命名空间，一个选项一个信号、local/remote 两半。
-    /// 它不是 slot 平面的一员——slot 是应用的名字，混在一起就答不出"哪些名字是配置"。
+    /// Page options (ADR 0038 §2): a namespace of their own, one signal per option, local/remote halves.
+    /// It is not a member of the slot plane — slot names are the application's, and mixing them in would make "which names are configuration" unanswerable.
     pub config: RwSignal<HashMap<String, ConfigSlot>>,
-    /// 拖拽会话（ADR 0034）：`Some` 即「有拖拽在飞」，里面放的就是那个源框节点
-    /// 本身——货物是它自己的子树，所以不再有第二份平行的结构（复制体和原体迟早
-    /// 对不上）。这是渲染器里唯一一份跨组件的瞬态态：源和落点隔着别的节点，本地信号
-    /// 到不了对面。它不进任何槽、不上线：「谁在飞、悬在谁上面」是浏览器的事实，不是
-    /// 生产者的树。只能有这一份，组件各自维护一份就是这条设计的反面。
+    /// Drag session (ADR 0034): `Some` means "a drag is in flight", and what it holds is that source frame node
+    /// itself — the cargo is its own subtree, so there is no second parallel structure (a copy and the original would sooner or later
+    /// disagree). This is the only cross-component transient state in the renderer: source and drop target sit apart with other nodes between them, and a local signal
+    /// cannot reach across. It enters no slot and never goes on the wire: "who is in flight, over what" is a fact of the browser, not
+    /// of the producer's tree. There can be only one copy of it; each component keeping its own is the opposite of this design.
     pub drag: RwSignal<Option<Accrete>>,
-    /// 槽位的永久 owner：Ctx::new 时捕获的 app 根作用域。
-    /// 槽若建在消费帧的 Effect 作用域里，Effect 重跑会 dispose 其存储，
-    /// 外层 map 里留下的就是死句柄（panic: already disposed）。
+    /// Permanent owner of the slots: the app root scope captured at Ctx::new.
+    /// If a slot were built inside the scope of the frame-consuming Effect, an Effect rerun would dispose its storage,
+    /// and what is left in the outer map is a dead handle (panic: already disposed).
     pub(crate) owner: Owner,
     pub bundle: Option<Arc<BundleState>>,
 }
 
-/// UI 侧持有传输 + 下行帧信号。wasm 单线程，Rc 共享。
+/// The UI side holds the transport plus the downstream frame signal. wasm is single-threaded, shared through Rc.
 #[derive(Clone)]
 pub struct LeptosTransport {
-    /// wasm 单线程，用 SendWrapper 让 Rc 满足 leptos 组件闭包的 Send 约束
-    /// （与原 WebSocketHandle 的做法一致）。
+    /// wasm is single-threaded; SendWrapper makes the Rc satisfy the Send bound of leptos component closures
+    /// (the same approach as the former WebSocketHandle).
     pub inner: send_wrapper::SendWrapper<std::rc::Rc<dyn Transport>>,
-    /// 尚未处理的**一批**下行帧；桥接自 transport.on() 读循环。
+    /// The **batch** of downstream frames not yet processed; bridged from the transport.on() read loop.
     ///
-    /// 队列而不是"最近一帧"：读循环一次可以连续取到多帧（无界 channel 永远 ready），
-    /// Effect 要等微任务边界才跑。用最新值信号时后到的帧会覆盖先到的，症状是"连上就推的
-    /// 布局丢了、界面空白"——那是丢帧，不是渲染问题。顺序在这里是语义：布局必须先于
-    /// 它的后续 set/append 被应用。
+    /// A queue rather than "the latest frame": the read loop can take several frames back to back (an unbounded channel is always ready),
+    /// and the Effect only runs at a microtask boundary. With a latest-value signal the later frame overwrites the earlier one; the symptom is "the layout pushed
+    /// on connect is lost, the view is blank" — that is dropped frames, not a rendering problem. Order is semantic here: a layout must be applied before
+    /// its subsequent set/append.
     pub frame: RwSignal<Vec<Vec<u8>>>,
 }
 
 impl Ctx {
-    /// 装配：传入已连接的 transport（由 lib.rs 按 feature 选择实现）。
-    /// 框架桥接：`spawn_local` 读流写 `frame` 信号，Effect 消费解码分发。
+    /// Assembly: pass in an already connected transport (lib.rs picks the implementation per feature).
+    /// Framework bridge: `spawn_local` reads the stream and writes the `frame` signal, and an Effect consumes, decodes and dispatches.
     /// # Panics
-    /// 只在 leptos 的 owner 作用域里构造（mount/render 期）；没有 owner 就
-    /// 没有响应式图，构造本身无从谈起——这是运行期不变量，不是可返回的错误。
+    /// Construct only inside a leptos owner scope (at mount/render time); without an owner there is
+    /// no reactive graph, and construction itself has no basis — this is a runtime invariant, not a returnable error.
     #[allow(clippy::expect_used)]
     pub fn new(transport: std::rc::Rc<dyn Transport>, codec: ActiveCodec) -> Self {
         let frame = RwSignal::new(Vec::new());
@@ -107,7 +107,7 @@ impl Ctx {
         let config = RwSignal::new(HashMap::new());
         let drag = RwSignal::new(None);
 
-        // 读循环：transport.on() -> frame 信号
+        // Read loop: transport.on() -> frame signal
         {
             let mut stream = transport.on();
             let frame_writer = frame;
@@ -135,21 +135,21 @@ impl Ctx {
             bundle: None,
         };
 
-        // 消费下行帧并分发
+        // Consume downstream frames and dispatch
         let ctx_clone = ctx.clone();
         Effect::new(move |_| {
             let batch = ctx_clone.transport.frame.get();
             if batch.is_empty() {
                 return;
             }
-            // 取走整批再分发：清空要在分发前，分发本身会再触发本 Effect，空批直接返回。
+            // Take the whole batch, then dispatch: clearing must come before dispatch, dispatch itself retriggers this Effect, and an empty batch returns immediately.
             ctx_clone.transport.frame.set(Vec::new());
             for b in batch {
-                // 收侧双格式自适应：帧首字节定格式，与 ?codec= 钉定的发送格式无关；
-                // 解出来的一帧就是动作列表本身——信封是宿主的（ADR 0021 决策 6）。
+                // Receive side adapts to both formats: the first byte of the frame fixes the format, regardless of the send format pinned by ?codec=;
+                // a decoded frame is the action list itself — the envelope belongs to the host (ADR 0021 decision 6).
                 match ctx_clone.codec.decode_auto::<Vec<Content<Accrete>>>(&b) {
                     Ok(actions) => dispatch_msg(&actions, &ctx_clone),
-                    // decode 失败若静默丢弃，症状就是"ws 正常但界面空白"——必须留痕
+                    // If a decode failure were silently dropped the symptom would be "ws fine but the view is blank" — it must leave a trace
                     Err(e) => tracing::error!("ws frame decode failed: {e}"),
                 }
             }
@@ -202,13 +202,13 @@ impl Ctx {
         true
     }
 
-    /// 取（或首次时建）某 source 的列表槽。外层 map 用 untracked 读：
-    /// 订阅本槽即可，键集变化不该惊动 reader。
+    /// Get (or create on first use) the list slot of a source. The outer map is read untracked:
+    /// subscribing to this slot is enough, and a change in the key set should not disturb the reader.
     pub fn slot_for_list(&self, source: &str) -> ListSlot {
         if let Some(s) = self.list.get_untracked().get(source).copied() {
             return s;
         }
-        // 建在根 owner 下：存储与 Ctx 同寿，Effect/render 作用域轮换不会 dispose 它
+        // Built under the root owner: storage lives as long as Ctx, and Effect/render scope rotation cannot dispose it
         let slot = self
             .owner
             .with(|| RwSignal::new(std::sync::Arc::new(Vec::new())));
@@ -223,7 +223,7 @@ impl Ctx {
             .unwrap_or(slot)
     }
 
-    /// 取（或首次时建）某 source 的数据槽（语义同 slot_for_list）。
+    /// Get (or create on first use) the data slot of a source (same semantics as slot_for_list).
     pub fn slot_for_data(&self, source: &str) -> DataSlot {
         if let Some(s) = self.data.get_untracked().get(source).copied() {
             return s;
@@ -240,8 +240,8 @@ impl Ctx {
             .unwrap_or(slot)
     }
 
-    /// 取（或首次时建）某 slot 的本地值槽（ADR 0008 local 平面，
-    /// 语义同 slot_for_data——per-key 信号、建在根 owner 下）。
+    /// Get (or create on first use) the local value slot of a slot (ADR 0008 local plane,
+    /// same semantics as slot_for_data — per-key signal, built under the root owner).
     pub fn slot_for_value(&self, source: &str) -> ValueSlot {
         if let Some(s) = self.vals.get_untracked().get(source).copied() {
             return s;
@@ -258,9 +258,9 @@ impl Ctx {
             .unwrap_or(slot)
     }
 
-    /// 取（或首次时建）某选项的槽（语义同 slot_for_value——per-key 信号、建在根 owner 下）。
-    /// 读一个还没出现过的选项会为它建槽：没有槽就无从订阅，而"没写过"与"不存在"在这里
-    /// 本来就是同一种状态，区别只在值是不是空。
+    /// Get (or create on first use) the slot of an option (same semantics as slot_for_value — per-key signal, built under the root owner).
+    /// Reading an option that has not appeared yet creates a slot for it: without a slot there is nothing to subscribe to, and "never written" and "does not exist" are
+    /// the same state to begin with here, differing only in whether the value is empty.
     pub fn config_slot(&self, name: &str) -> ConfigSlot {
         if let Some(s) = self.config.get_untracked().get(name).copied() {
             return s;
@@ -277,14 +277,14 @@ impl Ctx {
             .unwrap_or(slot)
     }
 
-    /// 生效的选项值（本地优先、远端回落）。读即订阅这一个选项——别的选项变了不重跑。
+    /// The effective option value (local preferred, remote fallback). Reading subscribes to this one option — other options changing does not rerun.
     pub fn config_get(&self, name: &str) -> Option<Value> {
         self.config_slot(name).get().effective().cloned()
     }
 
-    /// 页面自己的写法（ADR 0038 §2）：指针第一段是选项名，其余写进这个选项的 `local`
-    /// 半边；选项级的 `null` 清掉本地半边，把选项交还给远端。写会创建路径上的容器——
-    /// 写有路径，没有"打错目标"这回事（`patch` 的拒绝语义是另一件事）。
+    /// The page's own write form (ADR 0038 §2): the first pointer segment is the option name, the rest is written into that option's `local`
+    /// half; an option-level `null` clears the local half, handing the option back to the far side. A write creates the containers along the path —
+    /// a write has a path, so there is no such thing as "hitting the wrong target" (the rejection semantics of `patch` are another matter).
     pub fn set_config(&self, path: &str, value: Value) -> Result<(), String> {
         let segs = pointer_segments(path)?;
         let Some((name, rest)) = segs.split_first() else {
@@ -309,9 +309,9 @@ impl Ctx {
         Ok(())
     }
 
-    /// 把每个选项镜像成文档根上的 `data-<name>`（ADR 0038 §3）：一个选项一个 effect，
-    /// 写了设属性、清了摘属性，别的选项不跟着重写。选项名原样进属性名（`skin` →
-    /// `data-skin`），所以 CSS 只认一个选择器。
+    /// Mirror every option onto the document root as `data-<name>` (ADR 0038 §3): one effect per option,
+    /// a write sets the attribute, a clear removes it, and other options are not rewritten along with it. The option name goes into the attribute name as is (`skin` →
+    /// `data-skin`), so CSS needs only one selector.
     pub fn mirror_config(&self) {
         let Some(root) = web_sys::window()
             .and_then(|w| w.document())
@@ -320,7 +320,7 @@ impl Ctx {
             tracing::warn!("mirror_config: no document root to mirror onto");
             return;
         };
-        // 键集变了才长 effect：已经挂上的选项继续用自己那份跟值。
+        // An effect only grows when the key set changes: options already attached keep following values with their own.
         let seen: std::rc::Rc<std::cell::RefCell<std::collections::HashSet<String>>> =
             Default::default();
         let ctx = self.clone();
@@ -337,7 +337,7 @@ impl Ctx {
                     let el = el.clone();
                     let attr = attr.clone();
                     Effect::new(move |_| {
-                        // 只订阅这一个选项
+                        // Subscribe to this one option only
                         let v = slot.get().effective().cloned();
                         match v {
                             Some(v) => {
@@ -360,7 +360,7 @@ impl Ctx {
     }
 }
 
-/// 一帧里的一个成员落进远程半边：`null` 清掉它，值没变就返回 None（不写、不通知）。
+/// One member of a frame lands in the remote half: `null` clears it, and an unchanged value returns None (no write, no notification).
 fn merge_remote(cur: &ConfigValue, incoming: &Value) -> Option<ConfigValue> {
     let next = ConfigValue {
         local: cur.local.clone(),
@@ -373,7 +373,7 @@ fn merge_remote(cur: &ConfigValue, incoming: &Value) -> Option<ConfigValue> {
     (next != *cur).then_some(next)
 }
 
-/// JSON Pointer（RFC 6901）分段，`~1`/`~0` 反转义——与 `Accrete::with_pointer` 同一套语法。
+/// JSON Pointer (RFC 6901) segments, with `~1`/`~0` unescaped — the same syntax as `Accrete::with_pointer`.
 fn pointer_segments(path: &str) -> Result<Vec<String>, String> {
     if !path.starts_with('/') {
         return Err(format!("config path must start with '/': {path:?}"));
@@ -384,7 +384,7 @@ fn pointer_segments(path: &str) -> Result<Vec<String>, String> {
         .collect())
 }
 
-/// 把值写进 `segs` 指定的位置，缺的容器按需长出来。空路径 = 整值替换。
+/// Write the value into the position named by `segs`, growing missing containers as needed. An empty path = whole-value replacement.
 fn write_into(root: &mut Value, segs: &[String], value: Value) -> Result<(), String> {
     let Some((seg, rest)) = segs.split_first() else {
         *root = value;
@@ -405,7 +405,7 @@ fn write_into(root: &mut Value, segs: &[String], value: Value) -> Result<(), Str
             write_into(child, rest, value)
         }
         Value::Null => {
-            // 没写过 = 空：在这一段长出一个对象，再往下走
+            // Never written = empty: grow an object at this segment, then keep going
             *root = Value::Object(Map::new());
             write_into(root, segs, value)
         }
@@ -414,15 +414,15 @@ fn write_into(root: &mut Value, segs: &[String], value: Value) -> Result<(), Str
 }
 
 fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
-    // 每帧就是动作列表：没有消息级 `ev`，也就没有"这帧是不是给我"的闸
-    // （ADR 0021 决策 6——信封连同它的 ev 归宿主）。`Influx.slot` 是数据槽名，
-    // 属渲染内部寻址，与帧的形状无关。
+    // A frame is the action list: there is no message-level `ev`, and so no gate asking "is this frame for me"
+    // (ADR 0021 decision 6 — the envelope, along with its ev, belongs to the host). `Influx.slot` is a data slot name,
+    // a render-internal address unrelated to the shape of the frame.
     for c in actions {
         match c {
             Content::Tmpl(x) => {
-                // 注册即校验（ADR 0037）：树上每个 `$name` 与 params 必须一一对上，
-                // 定义是一次解析出来的树。拒绝时定义不入表——下一次同名注册仍是
-                // 一次干净的尝试，而不是悄悄沿用上一份。
+                // Registration is validation (ADR 0037): every `$name` in the tree must match params one to one,
+                // and a definition is a tree parsed once. On rejection the definition does not enter the table — the next registration of the same name is still
+                // a clean attempt, not a silent reuse of the previous one.
                 if let Err(e) = TMPL
                     .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -438,7 +438,7 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                     tracing::warn!("{w}");
                 }
                 tracing::info!("create: layout set, root = {:.100?}", d);
-                // Effect 内写信号一律 set/untracked；tracked 读见上注释
+                // Writes to signals inside an Effect are always set/untracked; for tracked reads see the comment above
                 ctx.layout.set(d);
             }
             Content::Set(x) => {
@@ -447,8 +447,8 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 for w in d.expand(&env) {
                     tracing::warn!("{w}");
                 }
-                // 环的一个端点可以在这里出现（值里引用了某个槽）；另一个端点在别处写入。
-                // 每次写入都问一次：这个值会不会让渲染绕回自己。
+                // One endpoint of a cycle can appear here (the value references some slot); the other endpoint is written elsewhere.
+                // Every write asks once: would this value make rendering loop back to itself.
                 if let Some(path) = slots::note(&x.slot, &d, true) {
                     tracing::error!(
                         "slot cycle {} — the value would render itself; dropped",
@@ -464,17 +464,17 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 for w in d.expand(&env) {
                     tracing::warn!("{w}");
                 }
-                // untracked 读：dispatch_msg 运行在消费 frame 的 Effect 里，
-                // tracked 读会让 Effect 订阅自己写入的槽 → 自激循环。
+                // untracked read: dispatch_msg runs inside the Effect that consumes frames,
+                // and a tracked read would make the Effect subscribe to slots it writes → self-exciting loop.
                 let slot = ctx.slot_for_list(&x.slot);
                 let cur = slot.get_untracked();
                 let mut list = std::sync::Arc::unwrap_or_clone(cur);
-                // 行身份在数据里（ADR 0005：`data.id`）；空串 id = 位置行
-                // （无身份，可重复追加），与 DSL 的 no-id 约定一致
+                // Row identity lives in the data (ADR 0005: `data.id`); an empty-string id = a positional row
+                // (no identity, may be appended repeatedly), matching the DSL's no-id convention
                 let id = d.get_id().clone().filter(|s| !s.is_empty());
                 if let Some(id) = &id {
-                    // 行 id 唯一性在边界守住（ADR 0005）：重复 append 拒收，
-                    // keyed 渲染身份不留给下游打架。
+                    // Row id uniqueness is guarded at the boundary (ADR 0005): a duplicate append is refused,
+                    // so keyed render identity is not left for downstream to fight over.
                     if list.iter().any(|i| i.get_id().as_deref() == Some(id.as_str())) {
                         tracing::warn!(
                             "append rejected: event {:?} already has row id {:?}",
@@ -484,8 +484,8 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                         continue;
                     }
                 }
-                // 落点：0 = 末尾；正数从尾往内数（+1 = 最后一个之前）；负数从头往内数
-                // （-1 = 头部）。域外拒收并计数——夹取会把行放到调用方没要求的位置。
+                // Landing spot: 0 = the end; a positive number counts inward from the end (+1 = before the last one); a negative one counts inward from the head
+                // (-1 = the head). Out of range is refused and counted — clamping would put the row where the caller did not ask.
                 let Some(spot) = content::append_index(list.len(), x.position) else {
                     tracing::warn!(
                         "append rejected: event {:?} has {} rows, position {} is out of range",
@@ -518,12 +518,12 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 }
             }
             Content::Patch(x) => {
-                // 平面路由（ADR 0005）："" = layout 根；id 设 = 列表行；
-                // 其余 = 具名数据槽。
+                // Plane routing (ADR 0005): "" = the layout root; an id set = a list row;
+                // anything else = a named data slot.
                 let result = if x.slot.is_empty() {
                     let mut d = ctx.layout.get_untracked();
                     let r = apply_patch(&mut d, x);
-                    // 写回 layout 信号，否则响应式根（lib.rs tracked get）永不重建
+                    // Write back to the layout signal, otherwise the reactive root (lib.rs tracked get) never rebuilds
                     if r.is_ok() {
                         ctx.layout.set(d);
                     }
@@ -536,7 +536,7 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                         .iter_mut()
                         .find(|i| i.get_id().as_deref() == Some(id.as_str()))
                     {
-                        // 行是共享的：独占时原地改，别处还持有时只克隆这一行。
+                        // Rows are shared: change in place when exclusive, clone just this row when someone else still holds it.
                         Some(row) => apply_patch(std::sync::Arc::make_mut(row), x),
                         None => Err(format!("no row {id:?} in {:?}", x.slot)),
                     };
@@ -558,13 +558,13 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                     }
                 };
                 if let Err(e) = result {
-                    // 未命中是合法降级（补丁可能先于其 create 到达），warn 保证可观测。
+                    // A miss is a legitimate degradation (a patch may arrive before its create); warn keeps it observable.
                     tracing::warn!("patch {x:?} skipped: {e}");
                 }
             }
             Content::Config(x) => {
-                // 页面选项（ADR 0038 §2）：按成员合并，且只写远程半边——一帧永远不覆盖
-                // 页面自己的选择（ADR 0031 §1 给 `both` 定的优先级）。
+                // Page options (ADR 0038 §2): merged per member, and only the remote half is written — a frame never overwrites
+                // the page's own choice (the priority ADR 0031 §1 sets for `both`).
                 for (name, v) in &x.data {
                     let slot = ctx.config_slot(name);
                     let cur = slot.get_untracked();
@@ -690,13 +690,13 @@ mod slots {
     }
 }
 
-/// 渲染深度守卫（wasm 里递归渲染会把栈吃干，症状是 `memory access out of bounds` 或
-/// `Maximum call stack size exceeded` —— 崩在 malloc 或 `Option<String>::clone` 里，
-/// 与真正的递归点隔着几十层，看上去像内存 bug）。
+/// Render depth guard (recursive rendering in wasm eats the stack; the symptom is `memory access out of bounds` or
+/// `Maximum call stack size exceeded` — the crash lands in malloc or `Option<String>::clone`,
+/// dozens of frames away from the real recursion point, and looks like a memory bug).
 ///
-/// 一旦某棵数据能渲染到自己（槽里的值里又有绑定同一个槽的节点），崩溃就是必然的，
-/// 而 wasm 崩掉之后**整页**都失去响应，不是某一个区域坏掉。所以这里限深：超限时
-/// 打一行指出是哪个节点、哪个 id，然后渲染成空——一个坏节点不该带走整张页面。
+/// Once some data can render itself (a value in a slot holds a node bound to that same slot again), the crash is a certainty,
+/// and after wasm dies the **whole page** stops responding, not just one region. So depth is capped here: when the limit is exceeded,
+/// log one line naming which node and which id, then render as empty — one bad node should not take the whole page with it.
 const MAX_RENDER_DEPTH: usize = 64;
 
 thread_local! {
@@ -711,7 +711,7 @@ impl Drop for DepthGuard {
     }
 }
 
-/// 渲染一个 accrete 为视图（供 external 触发）。
+/// Render an accrete into a view (for external triggers).
 pub fn render_accrete(ctx: &Ctx, accrete: &Accrete) -> AnyView {
     let depth = RENDER_DEPTH.with(|d| {
         let v = d.get() + 1;
@@ -732,7 +732,7 @@ pub fn render_accrete(ctx: &Ctx, accrete: &Accrete) -> AnyView {
     dispatch(accrete, ctx)
 }
 
-/// 渲染一组子 accrete。
+/// Render a group of child accretes.
 pub fn render_children(ctx: &Ctx, subs: &[Accrete]) -> Vec<AnyView> {
     subs.iter().map(|b| render_accrete(ctx, b)).collect()
 }

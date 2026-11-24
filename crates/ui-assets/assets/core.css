@@ -1,21 +1,21 @@
 @layer tokens, reset, components, utilities, custom;
 
-/* 层序必须先声明、再 import：层序由**首次出现**决定，import 写在前面的话 `custom` 会成为
-   第一个（最弱）层，custom.css 里所有与 components/utilities 同属性的声明全部被盖掉（老坑
-   `.hide` 打不过 `.flex` 的根因，见 docs/PLAN.md §19）。五层从弱到强：
+/* Layer order must be declared before the imports: order is decided by **first appearance**, so an
+   import written first makes `custom` the first (weakest) layer, and every declaration in custom.css
+   sharing a property with components/utilities is overridden (the root cause of `.hide` losing to `.flex`, see docs/PLAN.md §19). Five layers, weakest to strongest:
 
-     tokens     只声明变量
-     reset      元素归一（html/body/表单/排版）
-     components 结构名词（.flex/.grid/.box/.text/.tiles…）
-     utilities  尺寸（gap- / pad- / text- 三个前缀）、色调（.accent/.tone-clear…）、状态（.is-）
-     custom     页面自己的类（custom.css，以及 prism 的 shell.yaml 那一侧）
+     tokens     declares variables only
+     reset      normalises elements (html/body/forms/typography)
+     components structural nouns (.flex/.grid/.box/.text/.tiles…)
+     utilities  sizing (gap- / pad- / text-), tone (.accent/.tone-clear…), state (.is-)
+     custom     the page's own classes (custom.css, and prism's shell.yaml side)
 
-   上一层永远打得过下一层，与选择器特异性无关——所以 utilities 不需要 `!important`，也不
-   需要靠堆类名（`.sm.f.gap`）来赢。 */
+   A higher layer always beats a lower one, regardless of selector specificity — so utilities need no `!important`, and no
+   piling up of class names (`.sm.f.gap`) to win. */
 
 @import url("custom.css") layer(custom);
 
-/* ---- 类型：注册过的自定义属性才会算错就出声 -----------------------------------
+/* ---- Types: only a registered property fails loudly -------------------------
    A custom property nobody registered has the universal syntax `*`: `--depth: hgih` inherits as a
    string and `calc()` quietly returns nonsense, `--leave-ms: 350` (no unit) never transitions, and
    nothing says so. Registered, the value is checked at computed-value time and a bad one falls
@@ -97,26 +97,26 @@
 
 @layer reset {
     html {
-        color-scheme: light dark; /* 激活浏览器的 light-dark 支持 */
+        color-scheme: light dark; /* turn on the browser's light-dark support */
         height: 100%;
         font-size: 1.25rem;
     }
 
     body {
         margin: 0;
-        min-height: 100dvh; /* 使用 dynamic vh 处理移动端工具栏高度 */
+        min-height: 100dvh; /* dynamic vh copes with the mobile toolbar height */
         background-color: var(--bg);
         color: var(--fg);
-        /* 标准化滚动条样式 */
+        /* standardise the scrollbar styling */
         scrollbar-color: var(--fg) transparent;
         scrollbar-width: thin;
 
-        /* 布局容器优化 */
+        /* layout container optimisation */
         display: grid;
         grid-template-rows: auto 1fr auto;
     }
 
-    /* 统一所有元素的盒子模型 */
+    /* unify the box model of every element */
     *,
     *::before,
     *::after {
@@ -157,13 +157,13 @@
 }
 
 @layer components {
-    /* ---- 结构：一个维度一个名词 -------------------------------------------------
-       容器只有两个：`.flex` 与 `.grid`。方向由子类说（`col` / `rev` / `inline` /
-       `wrap`），不再用单个字母——`.f` 那种名字谁也读不出是 flex 还是 float。
+    /* ---- Structure: one noun per dimension ---------------------------
+       There are only two containers: `.flex` and `.grid`. The direction is named by a subclass (`col` / `rev` / `inline` /
+       `wrap`), never by a single letter again — a name like `.f` tells nobody whether it means flex or float.
 
-       `:where()` 把这些默认值压到零特异性：utilities 层和页面 CSS 本来就该赢，不必靠
-       叠类名或 `!important` 去和默认值打架。`.grid` 写在 `.flex` 之后，于是两者同时出现
-       时 grid 赢（`attrs.grid` 自出生起没生效过，根因就是 `.f` 压在 `.g` 上）。 */
+       `:where()` presses these defaults down to zero specificity: the utilities layer and page CSS are meant to win, without stacking
+       class names or `!important` to fight the defaults. `.grid` is written after `.flex`, so grid wins when both appear
+       (`attrs.grid` has never taken effect since birth; the cause was `.f` sitting on top of `.g`). */
     :where(.flex) {
         display: flex;
         flex: 1 0 auto;
@@ -696,7 +696,7 @@
         }
     }
 
-    /* Arrival (进场). A newly inserted item fades in and rises a little — no frame field, no JS, no
+    /* Arrival (entering). A newly inserted item fades in and rises a little — no frame field, no JS, no
        class to remember: `@starting-style` is the browser's own "the style this element had before
        it existed", so the transition runs exactly once, when the node is inserted.
 
@@ -750,9 +750,9 @@
         }
     }
 
-    /* 弹窗（ADR 0026）：状态在信号里，不在 CSS 里。`:hover` 只有指针设备才有，
-       而触屏恰恰是最需要"点一下弹出来"的地方——原来的写法等于在手机上不存在。
-       `.open` 是唯一开关；位置由宿主容器给基准，浮层贴在触发器下方。 */
+    /* Popup (ADR 0026): the state lives in the signal, not in CSS. `:hover` exists only on pointer devices,
+       and a touch screen is exactly where "tap it and it pops open" matters most — the old form simply did not exist on a phone.
+       `.open` is the only switch; the host container supplies the reference position and the overlay hugs the trigger from below. */
     .popup {
         position: relative;
 
@@ -774,11 +774,11 @@
         }
     }
 
-    /* 拖拽的落点（ADR 0034）：落点就是框本身，样式也长在框上——`dock` 那个内层
-       panel 没有了，所以 `--rail` 的细条几何跟着搬到了 custom.css（那是一个页面
-       的决定，不是渲染器的）。这里只剩三态：常态一条虚线说「这里能放」、拖拽在
-       飞时每个落点亮起来说「哪里能放」、悬停在上说「放这里」。几何一概不动：
-       拖拽期间光标下面的内容不许移动。 */
+    /* A drag target (ADR 0034): the target is the box itself, and the style grows on the box too — the inner
+       `dock` panel is gone, so `--rail`'s thin-strip geometry moved along to custom.css (that is a page
+       decision, not the renderer's). Only three states remain here: at rest one dashed line says "this can take a drop", while a drag is in
+       flight every target lights up saying "this is where it can go", and hovering over one says "drop it here". No geometry moves at all:
+       during a drag the content under the cursor must not move. */
     .drop {
         overflow: hidden;
         border-radius: var(--round);
@@ -797,11 +797,11 @@
 }
 
 @layer utilities {
-    /* ---- 尺寸：一个维度一个前缀 -------------------------------------------------
-       `gap-*` 只管 gap，`pad-*` 只管 padding，`text-*` 只管 font-size。原来一个 `.md`
-       同时意味着这三件事，而且还要搭配 `flex` / `gap` / `box` 才生效，谁也说不清自己在量
-       什么。`pad-wide` 接 `.wd` 的班：它量的是横向留白（1em 4em），不是刻度上的下一级，
-       所以不叫 `pad-lg`。 */
+    /* ---- Sizing: one prefix per dimension ----------------------------
+       `gap-*` is only gap, `pad-*` is only padding, `text-*` is only font-size. One `.md` used to
+       mean all three at once, and only took effect in combination with `flex` / `gap` / `box`, so nobody could say what they were measuring.
+       `pad-wide` takes over from `.wd`: it measures horizontal whitespace (1em 4em), not the next step on a scale,
+       which is why it is not called `pad-lg`. */
     .gap-sm {
         gap: 0.2rem;
     }
@@ -854,9 +854,9 @@
         font-size: 4rem;
     }
 
-    /* ---- 归零：把节点已经带着的那个尺寸维度清零，不是颜色 -----------------------
-       这一组原来和下面"把颜色清成前景色"的色调维度共用一个词：一个名字两个意思，尺寸归零
-       会撞上颜色。色调那一组现在叫 `.tone-clear`。 */
+    /* ---- Zeroing: the size dimension, not the colour ----
+       This group used to share one word with the tone dimension below ("clear the colour to the foreground"): one name, two meanings, and zeroing a size
+       collided with a colour. That tone group is now called `.tone-clear`. */
     .reset.box {
         padding: 0;
     }
@@ -869,21 +869,21 @@
         gap: 0;
     }
 
-    /* ---- 色调：颜色角色，是变体不是状态 -----------------------------------------
-       `accent` / `primary` / `secondary` / `warn` / `error` / `tone-clear` 是色板上的角色
-       （`--accent` 这些变量），一个节点"是什么颜色"，不是"处于什么状态"，所以保留词形；
-       `is-disabled` 既是状态又是角色，跟着状态那一栏走 `is-` 前缀。角色后面接的
-       `.text` / `.is-border` / `.is-shadow` / `.is-highlight` 说的都是"把颜色涂到哪儿"。
+    /* ---- Tone: colour roles, variants not states -----------------
+       `accent` / `primary` / `secondary` / `warn` / `error` / `tone-clear` are roles on the palette
+       (the `--accent` variables): what colour a node IS, not what state it is IN, so the word form stays.
+       `is-disabled` is both a state and a role, so it follows the state column and takes the `is-` prefix. What follows a role —
+       `.text` / `.is-border` / `.is-shadow` / `.is-highlight` — all say "where the colour is painted".
 
-       七个角色只差一个变量，所以每个只声明 `--tone`，剩下的规则写在下面一次：一处说"节点是
-       什么颜色"，一处说"颜色涂到哪儿"，两件事不再各抄七遍。`--tone` 是注册过的 `<color>`
-       （文件顶部），拼错的值不会安静地变成一条没颜色的阴影。
+       The seven roles differ by one variable, so each declares only `--tone` and the rest of the rules are written once below: one place says "what colour
+       a node is", one place says "where the colour is painted", and neither of the two things is copied seven times. `--tone` is a registered `<color>`
+       (top of the file), so a misspelled value cannot quietly become a shadow with no colour.
 
-       角色后面那三条属性仍然读同一个 token；只有悬停底色是派生的——`color-mix(in oklch, …)`
-       把 token 洗成 25% 的一层。混合的对色是 `transparent`，不是 `--bg`：oklch 里插值会把
-       无彩色对色的色相当成 0 一起平均，实测 accent（182.49°）混白得到的是 45.6° 的粉调；
-       而对色透明时预乘插值不给任何分量，洗完仍是本角色的色相（`oklch(0.7 0.12 182.49 / 0.25)`），
-       落在哪个背景上就跟着哪个背景走。角色自己的颜色因此只有一个来源。 */
+       The three properties after a role still read the same token; only the hover background is derived — `color-mix(in oklch, …)`
+       washes the token into a 25% layer. The mix's counterpart is `transparent`, not `--bg`: in oklch, interpolation averages the hue of an
+       achromatic counterpart in as 0, so measured, accent (182.49°) mixed with white gives a 45.6° pink;
+       with a transparent counterpart premultiplied interpolation contributes no component at all, so the wash keeps this role's hue (`oklch(0.7 0.12 182.49 / 0.25)`),
+       and follows whichever background it lands on. A role's own colour therefore has exactly one source. */
     .accent,
     .primary,
     .secondary,
@@ -910,7 +910,7 @@
         }
     }
 
-    /* 每个角色只有这一行是它自己的：色板上的哪个变量。 */
+    /* This one line is the only thing each role owns: which variable on the palette. */
     .accent {
         --tone: var(--accent);
     }
@@ -935,21 +935,21 @@
         --tone: var(--error);
     }
 
-    /* 前景色这个角色：`clear` 说的是"清成前景色"，它只改颜色，和上面那组归零无关。 */
+    /* The foreground role: `clear` means "clear to the foreground colour"; it changes colour only, and has nothing to do with the zeroing group above. */
     .tone-clear {
         --tone: var(--fg);
     }
 
-    /* ---- 状态与效果：`.is-*` 只描述节点此刻是什么样子，永远不是结构 --------------
-       结构那一栏只留名词（`.flex` / `.box` / `.absolute`），所以看到 `.is-*` 就知道它
-       不会改布局：`is-disabled` / `is-highlight` 是状态，`is-border` / `is-shadow` /
-        `is-glass` / `is-pointer` / `is-ease` / `is-filter-gray` / `is-fade-in-and-out`
-       是效果（画一条边、投一层影、动一次、指一指）。
+    /* ---- States and effects: `.is-*`, never structure ---
+       The structure column keeps nouns only (`.flex` / `.box` / `.absolute`), so seeing `.is-*` tells you it
+       will not change layout: `is-disabled` / `is-highlight` are states, `is-border` / `is-shadow` /
+       `is-glass` / `is-pointer` / `is-ease` / `is-filter-gray` / `is-fade-in-and-out`
+       are effects (draw an edge, cast a shadow, move once, point).
 
-       留在词形里的是**只在基类旁边才有意义**的修饰：`.round`（`.is-border.round`）、
-       `.bold`（`.text.bold`）、`.col` / `.rev` / `.wrap` / `.inline`（`.flex` 的轴）、
-       `.selected` / `.active` / `.off`（组件内部态）。它们单独写出来什么也不做，所以
-       不占顶层的名字。 */
+       What stays in the word form are the modifiers that **only mean something beside a base class**: `.round` (`.is-border.round`),
+       `.bold` (`.text.bold`), `.col` / `.rev` / `.wrap` / `.inline` (`.flex`'s axes),
+       `.selected` / `.active` / `.off` (component-internal states). Written on their own they do nothing, so they
+       take no top-level name. */
     .is-pointer {
         cursor: pointer;
     }

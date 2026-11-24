@@ -1,20 +1,20 @@
-# 原生力导向图组件（ADR 0018）：`forcegraph` 节点，不是 canvas 模块。
+# Native force-directed graph component (ADR 0018): a `forcegraph` node, not a canvas module.
 #
-# 这不是 canvas 的一种，是独立组件（ADR 0029）。与 canvas 模块的区别是结构性的：
-#   * 没有 `url`——渲染器与布局都在 wasm 里（crates/forcegraph），没有 JS 资产、
-#     没有 mount/update/resize/unmount 契约、没有 3d-force-graph 与 three.js。
-#   * 没有 `options` 动态袋——旋钮是 DSL 里的 `style` 结构，字段类型化、可被
-#     schema 与 patch 校验。
-#   * 取景规则变了：`auto_fit` 只在第一批非空载荷生效，之后的追加不重排、不飞
-#     相机，新点就近落在邻居旁边（布局稳定是导航成立的前提）。
+# This is not a kind of canvas but a component of its own (ADR 0029). The difference from canvas modules is structural:
+#   * there is no `url` — the renderer and the layout both live in wasm (crates/forcegraph), with no JS asset,
+#     no mount/update/resize/unmount contract, no 3d-force-graph and no three.js.
+#   * there is no dynamic `options` bag — the knobs are the `style` struct in the DSL, with typed fields that
+#     the schema and patch validation can check.
+#   * the framing rule has changed: `auto_fit` only takes effect on the first non-empty payload; later appends do not re-lay out and do not fly
+#     the camera; new points settle next to their neighbours (a stable layout is the precondition for navigation).
 #
-# 喂数据的方式不变：每帧送一份整份快照（`{nodes, links, focus?}`），组件按节点
-# id 求差量，重复送达幂等。`focus` 是视图指令：`{ids, seq?}`，`seq` 变了同一个
-# 目标可以再飞一次；不抬 `seq` 的重复写入不动相机。
+# The way data is fed is unchanged: every frame sends a whole snapshot (`{nodes, links, focus?}`), and the component diffs
+# by node id, so repeated delivery is idempotent. `focus` is a view instruction: `{ids, seq?}`; when `seq` changes the same
+# target can be flown to once more; a repeated write that does not raise `seq` leaves the camera alone.
 #
-# 前置：布局侧先发 00.main.yaml。本文件不依赖任何模块资产。
+# Prerequisites: the layout side sends 00.main.yaml first. This file depends on no module assets.
 
-# ---- 第 1 帧：骨架（空载荷不占位，ADR 0012） ---------------------------------
+# ---- frame 1: skeleton (an empty payload takes up no space, ADR 0012) ---------
 - action: append
   slot: chat
   data:
@@ -23,20 +23,20 @@
       width: 100%
       height: 460px
     style:
-      # 直径 = 2 × 边宽；不给 node_size_px，尺寸就只由这个比例决定。
+      # diameter = 2 × edge width; without node_size_px, the size is decided by this ratio alone.
       node_size_ratio: 2
       link_width_px: 2.5
       link_opacity: 0.85
-      # 外部高亮（focus 指令）不压暗其它节点，改为点亮从选中点向外 1 条边的路径。
+      # External highlight (the focus instruction) does not dim the other nodes; it lights the path one edge out from the selected point instead.
       highlight_reach: true
       reach_hops: 1
       fit_padding_px: 56
-      # 边的走向：straight 直连（默认）；axes 走 ±x ±y ±z；tetra 走正四面体的四个方向。
-      # 面板上的按钮可在运行时切换。
+      # Edge direction: straight connects directly (default); axes goes along ±x ±y ±z; tetra goes along the four directions of a regular tetrahedron.
+      # The buttons on the panel can switch this at runtime.
       link_shape: straight
     source: {slot: mfg}
 
-# ---- 第 2 帧：crate 层 --------------------------------------------------------
+# ---- frame 2: crate layer -----------------------------------------------------
 - action: set
   slot: mfg
   data:
@@ -56,7 +56,7 @@
           - {source: stage, target: ui_leptos, kind: serves, strength: 3}
           - {source: transport, target: content, kind: carries, strength: 3}
 
-# ---- 第 3 帧：组件层 ----------------------------------------------------------
+# ---- frame 3: component layer -------------------------------------------------
 - action: set
   slot: mfg
   data:
@@ -86,7 +86,7 @@
           - {source: chart, target: ui_leptos, kind: mounted-by, strength: 3}
           - {source: editor, target: ui_leptos, kind: mounted-by, strength: 3}
 
-# ---- 第 4 帧：外部模块层（追加不重排、不飞相机） ------------------------------
+# ---- frame 4: external module layer (appends do not re-lay out, no camera flight) ----
 - action: set
   slot: mfg
   data:
@@ -126,9 +126,9 @@
           - {source: g2chart, target: chart, kind: mounts, strength: 3}
           - {source: monaco, target: editor, kind: mounts, strength: 5}
 
-# ---- 第 5 帧：距焦（搜索那一下的等价物） --------------------------------------
-# 同一份快照 + focus：相机飞向这一簇，其余不消失（高亮由渲染器按 focus 判断）。
-# `seq` 必须变——不然同一目标重复送达不会重新飞。
+# ---- frame 5: focus (the equivalent of hitting search) ------------------------
+# The same snapshot + focus: the camera flies to this cluster and the rest does not vanish (highlighting is decided by the renderer from focus).
+# `seq` must change — otherwise delivering the same target again does not fly there again.
 - action: set
   slot: mfg
   data:
