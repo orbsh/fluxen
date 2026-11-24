@@ -1360,7 +1360,37 @@
         --input-round: 0;
     }
 
-    html[data-sketch="true"] .is-border[data-rough="ready"] {
+    /* Whatever drew a border and has its drawing in place drops the painted edge: the space stays (the
+       border width is still reserved), so the box does not move a pixel. */
+    html[data-sketch="true"] [data-rough="ready"] {
+        border-color: transparent;
+    }
+
+    /* A void element cannot hold its own drawing, so a field is sketched on the box one level out: the
+       wrapper is the box (it carries the node's classes), and the field inside it keeps only what its type
+       selector gives it. Only the child's edge goes; its padding and background stay. */
+    .rough-host {
+        display: contents;
+    }
+
+    html[data-sketch="true"] .rough-host {
+        position: relative;
+        display: inline-flex;
+    }
+
+    html[data-sketch="true"] .rough-host > input,
+    html[data-sketch="true"] .rough-host > textarea,
+    html[data-sketch="true"] .rough-host > select {
+        flex: 1 1 auto;
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+        font-size: inherit;
+    }
+
+    html[data-sketch="true"] .rough-host[data-rough="ready"] > input,
+    html[data-sketch="true"] .rough-host[data-rough="ready"] > textarea,
+    html[data-sketch="true"] .rough-host[data-rough="ready"] > select {
         border-color: transparent;
     }
 
@@ -1369,26 +1399,44 @@
        allowed to spill out of the box: a hand-drawn line should not be cropped by its own
        box, and `overflow: visible` also undoes `.round`'s clipping (the radius is 0 here,
        so there is nothing to clip). */
-    html[data-sketch="true"] .is-border {
+    html[data-sketch="true"] .is-border,
+    html[data-sketch="true"] .select,
+    html[data-sketch="true"] .button {
         position: relative;
         overflow: visible;
     }
 
-    html[data-sketch="true"] .is-border > svg.rough {
+    html[data-sketch="true"] svg.rough {
         position: absolute;
         inset: calc(-1 * var(--border-width));
         overflow: visible;
         pointer-events: none;
     }
 
-    /* The pen: one stroke, no fill, coloured by `currentColor` (whatever the page gave this
-       box), at a weight that reads as the same line as the 1px edge in normal mode. No
-       concrete colour is written here. */
-    html[data-sketch="true"] .is-border > svg.rough path {
+    /* The pen: no fill, coloured by `currentColor` (whatever the page gave this box), rounded
+       ends, and no concrete colour written here. Each element is traced twice by the module,
+       so 1px is a pencil gone over rather than a hairline. */
+    html[data-sketch="true"] svg.rough path {
         fill: none;
         stroke: currentColor;
-        stroke-width: 1.5;
         stroke-linecap: round;
         stroke-linejoin: round;
+    }
+
+    html[data-sketch="true"] svg.rough path.edge {
+        stroke-width: 0.75px;
+    }
+
+    /* What "selected" looks like in the same hand: an L in the right-bottom corner, a few pixels
+       outside the edge, retraced the same way — the line barely gains weight instead of turning
+       into a frame. Hidden until the box says `selected` (or `active`), which the stylesheet can
+       see for itself; nothing has to watch the class from script. */
+    html[data-sketch="true"] svg.rough path.mark {
+        stroke-width: 1px;
+        opacity: 0;
+    }
+
+    html[data-sketch="true"] .is-border.selected > svg.rough path.mark {
+        opacity: 1;
     }
 }

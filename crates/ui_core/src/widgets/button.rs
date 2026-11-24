@@ -1,5 +1,6 @@
 use crate::Ctx;
-use crate::hooks::{nearest, submit, use_default};
+use crate::hooks::{nearest, submit, use_common_css, use_default};
+use crate::rough;
 use accrete::{AccreteOps, Button, SubmitMode};
 use leptos::ev::click;
 use leptos::html::*;
@@ -31,13 +32,21 @@ pub fn button_(accrete: Button, ctx: &Ctx) -> AnyView {
         return div().into_any();
     };
 
+    // The class list is the page's (ADR 0038 §4 recorded `button` ignoring `attrs.class` as the reason a
+    // button could not be skinned; this is that one-line fix), with the pressing look as its default.
+    let mut css = vec!["button", "is-shadow", "accent"];
+    use_common_css(&mut css, &accrete);
+    let css = css.join(" ");
+    let id = accrete.id.clone();
+
     let ctx = ctx.clone();
     move || -> AnyView {
         let ctx = ctx.clone();
         let bundle = bundle.clone();
         button()
-            .class("button is-shadow accent")
+            .class(css.clone())
             .child(t.clone())
+            .child(rough::drawn_border(&ctx, id.as_deref()))
             .on(click, move |_| submit(&ctx, &bundle))
             .into_any()
     }

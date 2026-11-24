@@ -3,6 +3,7 @@ use crate::ctx::render_accrete;
 use crate::hooks::{
     field_changed, locked, use_common_css, use_source_list, use_source_untracked, use_target,
 };
+use crate::rough;
 use accrete::{AccreteOps, Select, classify::Classify};
 use leptos::html::*;
 use leptos::prelude::*;
@@ -47,7 +48,12 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     let locked_ctx = ctx.clone();
     let is_locked = move || locked(locked_ctx.bundle.as_ref()).then_some("");
 
-    move || -> AnyView {
+    // The rows are rebuilt on every choice, so they hang inside the box rather than being the box: the layer
+    // is a child of it and stays put while a choice re-picks the rows (ADR 0038 §4).
+    let layer = rough::drawn_border(&ctx, accrete.id.as_deref());
+    let rows_ctx = ctx.clone();
+    let rows = move || {
+        let ctx = rows_ctx.clone();
         let option = use_source_list(&ctx, &accrete).unwrap_or_default();
         let children = option.iter().enumerate().map(|(idx, child)| {
             let key = child.get_id().clone().unwrap_or(idx.to_string());
@@ -89,11 +95,13 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
                     .into_any()
             }
         });
-        div()
-            .class(css.as_str())
-            .attr("disabled", is_locked.clone())
-            .child(Vec::from_iter(children))
-            .into_any()
-    }
-    .into_any()
+        Vec::from_iter(children)
+    };
+
+    div()
+        .class(css.clone())
+        .attr("disabled", is_locked.clone())
+        .child(rows)
+        .child(layer)
+        .into_any()
 }
