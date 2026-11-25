@@ -177,6 +177,136 @@ fn ops_to_d(set: &OpSet<f32>) -> String {
     d
 }
 
+/// The scrollbar's strip. A scrollbar has no element to host a layer, so the pen leaves Rust as a picture: an
+/// irregular zigzag walked down a 160px strip that CSS repeats. Two things make it a drawing rather than a
+/// pattern — the walk drifts (segment lengths and both rails vary, and no two segments cover the same distance),
+/// and the seed is the clock, not the page, so the strip is drawn again on every load. A scrollbar that wobbles
+/// exactly the same way every time is a stamp.
+#[must_use]
+pub fn scroll_strip(seed: u64, ink: &str) -> String {
+    const W: f32 = 12.0;
+    const H: f32 = 160.0;
+    const CENTER: f32 = 6.0;
+    let Ok(opts) = OptionsBuilder::default()
+        .seed(seed)
+        // The pen may wobble, but it may not undo the angle: a strip of paper tape is squashed tight, so the
+        // walk stays near the middle and the folds stay shallow (see the amplitude rule below).
+        .roughness(0.35)
+        .bowing(0.15)
+        .disable_multi_stroke(true)
+        .build()
+    else {
+        return String::new();
+    };
+    let mut rng = seed | 1;
+    let mut next = move |lo: f32, hi: f32| {
+        // xorshift64: three shifts and three xors per number is the whole budget a strip of ink deserves.
+        rng ^= rng << 13;
+        rng ^= rng >> 7;
+        rng ^= rng << 17;
+        lo + (rng % 1000) as f32 / 1000.0 * (hi - lo)
+    };
+    // One walk, one path: the pen goes down the strip the way it goes round a box, and the joins stay joins.
+    // Short steps and a narrow swing, and the swing is *derived* from the step: `2 * atan(2a / d) <= 30°`, so no
+    // fold can open wider than the tape allows however the clock draws the numbers. The factor is below the
+    // tangent on purpose — the pen's own wobble lands on top of the geometry (measured: 0.12 exceeded 30°).
+    let mut points: Vec<roughr::Point2D<f32>> = vec![roughr::Point2D::new(CENTER, 0.0)];
+    let mut y = 0.0f32;
+    let mut at_hi = true;
+    while y < H - 2.0 {
+        let drop = next(6.0, 9.0).min(H - y);
+        let amp = next(0.5, 0.9).min(drop * 0.09);
+        y += drop;
+        points.push(roughr::Point2D::new(
+            CENTER + if at_hi { amp } else { -amp },
+            y,
+        ));
+        at_hi = !at_hi;
+    }
+    // The walk ends where it started, so one tile meets the next without a seam — and the tail is lengthened
+    // until that last fold is no wider than the rest. A cramped closing segment folds sharply: a 3.4px tail
+    // measured 32.9° where the walk itself stays under 27°.
+    while points.len() > 2 && H - points[points.len() - 1].y < 5.0 {
+        points.pop();
+    }
+    points.push(roughr::Point2D::new(CENTER, H));
+    let passes: String = Generator::default()
+        .linear_path(&points, false, &Some(opts))
+        .sets
+        .iter()
+        .filter(|s| s.op_set_type == OpSetType::Path)
+        .map(ops_to_d)
+        .filter(|d| !d.is_empty())
+        .map(|d| format!("<path stroke-width='1.3' d='{d}'/>"))
+        .collect();
+    let svg = format!(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='{W}' height='{H}' viewBox='0 0 {W} {H}' \
+         preserveAspectRatio='none'><g fill='none' stroke='{ink}' stroke-linecap='round' \
+         stroke-linejoin='round'>{passes}</g></svg>"
+    );
+    let encoded = svg
+        .replace('%', "%25")
+        .replace('<', "%3C")
+        .replace('>', "%3E")
+        .replace('#', "%23")
+        .replace('"', "%22");
+    format!("url(\"data:image/svg+xml,{encoded}\")")
+}
+
+/// Hand the strip to CSS as custom properties on the document root: two inks, because a background image cannot
+/// read `--fg`, and the tile height, because CSS cannot measure an image it only repeats.
+pub fn paint_scroll_strip(root: &web_sys::Element) {
+    let Some(el) = root.dyn_ref::<web_sys::HtmlElement>() else {
+        tracing::warn!("scroll strip: the document root is not an HTML element");
+        return;
+    };
+    let seed = (js_sys::Math::random() * u64::MAX as f64) as u64 | 1;
+    let style = el.style();
+    for (var, ink) in [
+        ("--rough-strip", "#2e2e2e"),
+        ("--rough-strip-dark", "#f2f2f2"),
+    ] {
+        if style.set_property(var, &scroll_strip(seed, ink)).is_err() {
+            tracing::warn!("scroll strip: cannot set {var}");
+        }
+    }
+    style.set_property("--rough-strip-h", "160px").ok();
+}
+
+/// Keep the strip in step with the page's own options. The pen watches `sketch` itself rather than being called
+/// from the boot's config mirroring: mirroring attributes and painting a drawing are two different jobs, and the
+/// drawing is this module's. A host that writes its own boot calls this once, beside `Ctx::mirror_config`; a
+/// host that does not still has the flat fallback tile in the stylesheet.
+pub fn watch_skin(ctx: &Ctx) {
+    let Some(root) = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.document_element())
+    else {
+        tracing::warn!("scroll strip: no document root to paint onto");
+        return;
+    };
+    let ctx = ctx.clone();
+    Effect::new(move |_| {
+        if matches!(ctx.config_get("sketch"), Some(Value::Bool(true))) {
+            paint_scroll_strip(&root);
+        } else {
+            clear_scroll_strip(&root);
+        }
+    });
+}
+
+/// Take the strip back out when the skin goes: normal mode has no business carrying a drawing in its style
+/// attribute.
+pub fn clear_scroll_strip(root: &web_sys::Element) {
+    let Some(el) = root.dyn_ref::<web_sys::HtmlElement>() else {
+        return;
+    };
+    let style = el.style();
+    for var in ["--rough-strip", "--rough-strip-dark", "--rough-strip-h"] {
+        style.remove_property(var).ok();
+    }
+}
+
 /// A stable seed per node. What identifies a node is its id when the page gave it one; when it did not,
 /// the id it did not have hashed the same string for every node — so every box on a page without ids was
 /// the same drawing, retraced stroke for stroke. A counter, advanced once per layer and mixed with
@@ -408,7 +538,9 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
 
 #[cfg(test)]
 mod tests {
-    use super::{border_paths, check_paths, mark_paths, ops_to_d, seed_for, shadow_cut};
+    use super::{
+        border_paths, check_paths, mark_paths, ops_to_d, scroll_strip, seed_for, shadow_cut,
+    };
     use roughr::core::{Op, OpSet, OpSetType, OpType};
 
     #[test]
@@ -500,6 +632,120 @@ mod tests {
         }
         assert_eq!(tick, check_paths(20.0, 20.0, 7));
         assert_ne!(tick, check_paths(20.0, 20.0, 8));
+    }
+
+    #[test]
+    fn the_scroll_strip_is_a_walk_inside_its_strip() {
+        let strip = scroll_strip(11, "#2e2e2e");
+        assert!(
+            strip.starts_with("url(\"data:image/svg+xml,"),
+            "not a css url: {strip:.40}"
+        );
+        assert!(
+            !strip.contains('<') && !strip.contains('#'),
+            "the markup has to be escaped for a url(): {strip:.40}"
+        );
+        let d = strip
+            .split("d='")
+            .nth(1)
+            .and_then(|t| t.split('\'').next())
+            .unwrap_or_default();
+        let nums: Vec<f32> = d
+            .split_whitespace()
+            .filter_map(|w| w.parse::<f32>().ok())
+            .collect();
+        assert!(nums.len() > 12, "a walk of many segments: {d:.40}");
+        // It ends at the strip's far edge — that is what lets one tile meet the next — and nothing flies out.
+        assert!(
+            nums.iter().any(|v| (*v - 160.0).abs() < 1.0),
+            "the walk never reaches the end: {d:.80}"
+        );
+        assert!(
+            nums.iter().all(|v| (-4.0..=172.0).contains(v)),
+            "the walk left its strip: {d:.80}"
+        );
+        assert_eq!(strip, scroll_strip(11, "#2e2e2e"), "one seed, one walk");
+        assert_ne!(
+            strip,
+            scroll_strip(12, "#2e2e2e"),
+            "a new seed has to be a new walk"
+        );
+
+        // The tape is squashed tight: short steps, and no fold wider than 30°. Checked on every seed, since the
+        // amplitude is derived from the step rather than fixed.
+        for seed in 1..=40u64 {
+            let svg = scroll_strip(seed, "#2e2e2e");
+            let d = svg
+                .split("d='")
+                .nth(1)
+                .and_then(|t| t.split('\'').next())
+                .unwrap_or_default();
+            let v = vertices(d);
+            assert!(v.len() > 16, "a strip of short steps: {} vertices", v.len());
+            let worst = folds(&v);
+            assert!(worst < 30.5, "seed {seed} folds at {worst:.1}°");
+        }
+    }
+
+    /// Where each segment ends: the last pair of every `C`/`L`. Moves are skipped on purpose — roughr opens
+    /// every segment with one, and those starts sit a hair *behind* the previous end (the doubled pass), so
+    /// keeping them would put a sub-pixel side into every triple and make the fold check vacuously pass.
+    fn vertices(d: &str) -> Vec<(f32, f32)> {
+        let t: Vec<&str> = d.split_whitespace().collect();
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i < t.len() {
+            let n = match t[i] {
+                "M" => {
+                    i += 3;
+                    continue;
+                }
+                "L" => 2,
+                "C" => 6,
+                _ => {
+                    i += 1;
+                    continue;
+                }
+            };
+            let nums: Vec<f32> = t[i + 1..(i + 1 + n).min(t.len())]
+                .iter()
+                .filter_map(|s| s.parse().ok())
+                .collect();
+            if nums.len() == n {
+                out.push((nums[n - 2], nums[n - 1]));
+            }
+            i += 1 + n;
+        }
+        out
+    }
+
+    /// The widest fold in the walk, in degrees, measured from straight. roughr draws every edge twice — the
+    /// second pass a hair to one side — so the corners first collapse to one vertex each; without that the
+    /// measurement is of a 0.1px doubling, not of the walk.
+    fn folds(v: &[(f32, f32)]) -> f32 {
+        let mut walk: Vec<(f32, f32)> = Vec::new();
+        for p in v {
+            match walk.last() {
+                Some(q) if (p.0 - q.0).hypot(p.1 - q.1) < 1.5 => {}
+                _ => walk.push(*p),
+            }
+        }
+        let v = &walk[..];
+        let mut worst = 0.0f32;
+        for w in v.windows(3) {
+            let (ax, ay) = (w[0].0 - w[1].0, w[0].1 - w[1].1);
+            let (bx, by) = (w[2].0 - w[1].0, w[2].1 - w[1].1);
+            let (na, nb) = ((ax * ax + ay * ay).sqrt(), (bx * bx + by * by).sqrt());
+            if na > 0.01 && nb > 0.01 {
+                let cos = ((ax * bx + ay * by) / (na * nb)).clamp(-1.0, 1.0);
+                worst = worst.max(std::f32::consts::PI - cos.acos());
+            }
+        }
+        if worst.is_finite() {
+            worst.to_degrees()
+        } else {
+            0.0
+        }
     }
 
     #[test]

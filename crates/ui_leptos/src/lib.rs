@@ -435,6 +435,10 @@ fn boot(
         // Mirror page options onto the document root (ADR 0038 §3): things like `skin` are sent down when the producer builds the page,
         // and CSS only looks at `html[data-<name>]`. One line of assembly; a host swapping the boot does the same one line.
         ctx.mirror_config();
+        // The skin's scrollbar is a drawing, and a drawing is not a config attribute: the pen keeps its own
+        // custom properties in step with `sketch` (ui_core's `rough`). One line here; a host that writes its own
+        // boot calls the same function, or leaves it out and gets the stylesheet's flat fallback.
+        ui_core::rough::watch_skin(&ctx);
         publish_page_send(ctx.clone());
         // Reactive root: rebuilt only when the layout changes
         move || {
