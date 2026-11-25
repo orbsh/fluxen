@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::{LazyLock, RwLock};
 use transport::Transport;
+use wasm_bindgen::JsCast;
+use wasm_bindgen::closure::Closure;
 
 /// Table of registered stamp definitions (ADR 0037: a definition is a node tree, a value is a whole-value replacement).
 static TMPL: LazyLock<RwLock<accrete::template::Templates>> =
@@ -567,6 +569,43 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                     tracing::warn!("remove: slot {:?} has no row id {:?}", x.slot, x.id);
                 }
             }
+            Content::Move(x) => {
+                let slot = ctx.slot_for_list(&x.slot);
+                let cur = slot.get_untracked();
+                let mut list = std::sync::Arc::unwrap_or_clone(cur);
+                // The row has to be there: `move` reorders, it never inserts (ADR 0005). A miss is
+                // refused and counted, the same boundary `append` draws against a duplicate id.
+                let Some(from) = list
+                    .iter()
+                    .position(|i| i.get_id().as_deref() == Some(x.id.as_str()))
+                else {
+                    tracing::warn!("move rejected: slot {:?} has no row id {:?}", x.slot, x.id);
+                    continue;
+                };
+                // The count is taken with the row lifted, so the domain is one narrower than append's.
+                let Some(spot) = content::move_index(list.len(), x.position) else {
+                    tracing::warn!(
+                        "move rejected: slot {:?} has {} rows, position {} is out of range",
+                        x.slot,
+                        list.len(),
+                        x.position
+                    );
+                    continue;
+                };
+                // Landing back where it started is not a change: writing the slot would rebuild the
+                // list's view for nothing.
+                if spot == from {
+                    continue;
+                }
+                // No new node joins the list, so no cycle can close: the row was already rendered here.
+                let typing = typing();
+                let row = list.remove(from);
+                list.insert(spot, row);
+                slot.set(Arc::new(list));
+                // The row's node is reused (the list is keyed), but a DOM move still takes the node
+                // out and puts it back, and a focused element that leaves the document is blurred.
+                resume(typing);
+            }
             Content::Patch(x) => {
                 // Plane routing (ADR 0005): "" = the layout root; an id set = a list row;
                 // anything else = a named data slot.
@@ -617,6 +656,70 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
             }
             Content::Empty => {}
         }
+    }
+}
+
+/// What the user was typing in, if anything: the element and where the caret was. A list move keeps
+/// a row's node but still moves it in the DOM, so the caret has to be put back by hand.
+struct Typing {
+    el: web_sys::Element,
+    caret: Option<(Option<u32>, Option<u32>)>,
+}
+
+fn typing() -> Option<Typing> {
+    let el = web_sys::window()?.document()?.active_element()?;
+    // Nobody is typing: the document's own body is what a page with no focus reports, and taking it
+    // back on the way out would steal the next click.
+    if el.tag_name() == "BODY" {
+        return None;
+    }
+    let caret = if let Some(i) = el.dyn_ref::<web_sys::HtmlInputElement>() {
+        Some((
+            i.selection_start().ok().flatten(),
+            i.selection_end().ok().flatten(),
+        ))
+    } else if let Some(t) = el.dyn_ref::<web_sys::HtmlTextAreaElement>() {
+        Some((
+            t.selection_start().ok().flatten(),
+            t.selection_end().ok().flatten(),
+        ))
+    } else {
+        None
+    };
+    Some(Typing { el, caret })
+}
+
+/// Put the caret back after the move has been drawn, and only if nothing else took the focus in the
+/// meantime — a user who clicked elsewhere while the frame was in flight is not to be dragged back.
+fn resume(typing: Option<Typing>) {
+    let Some(t) = typing else { return };
+    let restore = Closure::once_into_js(move || {
+        let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+            return;
+        };
+        let focused = doc.active_element();
+        let free = match &focused {
+            None => true,
+            Some(el) => {
+                el.tag_name() == "BODY" || !el.is_connected() || focused.as_ref() == Some(&t.el)
+            }
+        };
+        if !free || !t.el.is_connected() {
+            return;
+        }
+        if let Some(h) = t.el.dyn_ref::<web_sys::HtmlElement>() {
+            let _ = h.focus();
+        }
+        if let Some((Some(start), Some(end))) = t.caret {
+            if let Some(i) = t.el.dyn_ref::<web_sys::HtmlInputElement>() {
+                let _ = i.set_selection_range(start, end);
+            } else if let Some(x) = t.el.dyn_ref::<web_sys::HtmlTextAreaElement>() {
+                let _ = x.set_selection_range(start, end);
+            }
+        }
+    });
+    if let Some(w) = web_sys::window() {
+        let _ = w.request_animation_frame(restore.unchecked_ref());
     }
 }
 

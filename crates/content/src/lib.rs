@@ -39,6 +39,14 @@ pub enum Content<T> {
     #[serde(rename = "remove")]
     Remove(RemoveOp),
 
+    /// Move the row `id` — which is already in the list — to another place in the same list
+    /// (ADR 0005). The row is not rebuilt: the list's order changes, and the renderer's keyed
+    /// diff reuses the node, so its focus, its animation and its scroll position survive the
+    /// move. A row that is not there is refused, the same boundary `append` draws against a
+    /// duplicate id; there is no `move` that creates a row.
+    #[serde(rename = "move")]
+    Move(MoveOp),
+
     /// Value-domain update addressed by JSON Pointer (ADR 0005).
     /// Plane: `slot == ""` → layout root; `id` set → that list row;
     /// otherwise → the named data slot.
@@ -98,6 +106,39 @@ pub fn append_index(len: usize, position: i64) -> Option<usize> {
 pub struct RemoveOp {
     pub slot: String,
     pub id: String,
+}
+
+/// One row's new place in a list it is already in (ADR 0005).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct MoveOp {
+    pub slot: String,
+    /// The row: its `data.id`. A row with no id cannot be moved — there is nothing to name.
+    pub id: String,
+    /// The landing spot, in `append`'s vocabulary: `0` = the end, a positive number counts inward
+    /// from the tail, a negative one inward from the head. The count is taken on the list **with
+    /// the row lifted out** — otherwise "counted before the row came out" and "counted after"
+    /// would both be defensible, and the implementation and the reader would disagree. That is one
+    /// position fewer than `append` has, which sees the list as it is; see `move_index`.
+    ///
+    /// Always written, `0` included: for `append` the default *is* the end, while here the end is
+    /// one of many places a row can be sent, so leaving it out would read as "no opinion" where the
+    /// operation has nothing else to say.
+    pub position: i64,
+}
+
+/// Which index a row lands at when it is moved: `len` is the list's row count **with the row still
+/// in it** (so the row must exist: `len >= 1`), and `position` is the number on the wire.
+///
+/// The row is lifted out first, so the count runs over `len - 1` positions — one fewer than
+/// `append`'s domain. With ten rows, "send the last one to the front" is `-1`, and "send the first
+/// one to the end" is `0`; `+1` is second from the end of the lifted list, which is where `+1`
+/// lands an `append` too.
+///
+/// Out of domain returns `None` and the caller refuses the operation — the same rule `append_index`
+/// states, for the same reason: clamping would put the row where nobody asked.
+pub fn move_index(len: usize, position: i64) -> Option<usize> {
+    len.checked_sub(1)
+        .and_then(|lifted| append_index(lifted, position))
 }
 
 /// Patch write semantics (ADR 0005). `Replace` swaps the pointed value;

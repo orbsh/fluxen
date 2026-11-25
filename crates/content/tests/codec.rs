@@ -1,10 +1,16 @@
 //! Codec wire-format contract: Json/CBOR round-trips of the action list,
 //! plus the receive-side auto-detect that tells an action list apart from a
 //! host envelope (ADR 0021 decision 6).
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unwrap_in_result,
+    clippy::panic_in_result_fn
+)]
 
 use content::codec::{ActiveCodec, CodecType};
-use content::{AppendOp, Content, Influx, PatchKind, PatchOp, RemoveOp};
+use content::{AppendOp, Content, Influx, MoveOp, PatchKind, PatchOp, RemoveOp};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -62,7 +68,10 @@ fn action_wire_names_are_lowercase() {
         (
             Content::Set(Influx {
                 slot: "e".into(),
-                data: Payload { n: 1, s: "x".into() },
+                data: Payload {
+                    n: 1,
+                    s: "x".into(),
+                },
             }),
             "set",
         ),
@@ -70,9 +79,20 @@ fn action_wire_names_are_lowercase() {
             Content::Append(AppendOp {
                 slot: "e".into(),
                 position: 0,
-                data: Payload { n: 1, s: "x".into() },
+                data: Payload {
+                    n: 1,
+                    s: "x".into(),
+                },
             }),
             "append",
+        ),
+        (
+            Content::Move(MoveOp {
+                slot: "chat".into(),
+                id: "r1".into(),
+                position: -1,
+            }),
+            "move",
         ),
         (
             Content::Remove(RemoveOp {
@@ -145,7 +165,11 @@ fn an_envelope_is_not_a_frame() {
     // frame must fail to decode here, and the auto-detect says why.
     let envelope = json!({ "ev": "draw", "sender": "s", "content": [{ "action": "empty" }] });
     let bytes = serde_json::to_vec(&envelope).unwrap();
-    assert!(codec(CodecType::Json).decode::<Frame<Value>>(&bytes).is_err());
+    assert!(
+        codec(CodecType::Json)
+            .decode::<Frame<Value>>(&bytes)
+            .is_err()
+    );
     let err = codec(CodecType::Json)
         .decode_auto::<Frame<Value>>(&bytes)
         .expect_err("envelope refused");
