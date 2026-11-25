@@ -1010,6 +1010,42 @@ pub struct Input {
     pub emit: Option<Emit>,
 }
 
+/// A disc in the `oklch` plane (the field-shaped picker). Two of the three terms are on the face — the
+/// angle is the hue, the radius is the chroma (the centre is grey) — and the third is pinned by `attrs`,
+/// because a flat face has no room for a third axis. What it packs is `"<light> <chroma> <hue>"`: a
+/// written-out `L C H` triple, the same spelling colour members already take.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "ops", derive(AccreteOps))]
+#[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
+#[serde(deny_unknown_fields)]
+pub struct Disc {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// The field's name inside an enclosing loom (same rule as `input`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<DiscAttr>,
+    /// The current value, in the triple spelling above.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<Source>,
+}
+
+/// What the disc does not show: lightness, and the usual attribute surface.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
+pub struct DiscAttr {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    /// Lightness the disc keeps (0–1). The face is drawn at this lightness, so the disc is a slice of the
+    /// space, not the whole of it.
+    pub light: f64,
+}
+
 impl Input {
     /// The field's timing, with the default filled in — the renderer's entry point.
     pub fn emission(&self) -> Emit {
@@ -1209,6 +1245,10 @@ pub enum Accrete {
     image(Image),
     input(Input),
     select(Select),
+    /// A disc in the `oklch` plane: a field whose angle is the hue and whose radius is the chroma. One term
+    /// (`attrs.light`) is pinned, so what it packs is the whole `L C H` triple a colour token reads — the
+    /// picker and the value stay one thing, and nothing downstream has to know that a disc was involved.
+    disc(Disc),
     text(Text),
     /// A registered template by name (ADR 0006), spelled `stamp` since ADR 0034.
     stamp(Stamp),
