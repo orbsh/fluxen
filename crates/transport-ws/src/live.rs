@@ -338,6 +338,21 @@ fn connect(
              done: Rc<RefCell<Option<futures::channel::oneshot::Sender<()>>>>| {
                 move || {
                     shared.state.set(ConnState::Reconnecting);
+                    // Frames that never reached the wire belong to the connection that just died, and they
+                    // are not carried into the next one (ADR 0047 §2). A click from the previous session,
+                    // replayed into a new one, is an action nobody claims — worse than losing it, so it is
+                    // dropped here with a count, not silently at the next open.
+                    let dropped = {
+                        let mut out = shared.outbox.borrow_mut();
+                        let n = out.len();
+                        out.clear();
+                        n
+                    };
+                    if dropped > 0 {
+                        web_sys::console::warn_1(
+                            &format!("fluxen: {dropped} unsent frame(s) dropped with the connection").into(),
+                        );
+                    }
                     publish(&shared);
                     if let Some(tx) = done.borrow_mut().take() {
                         let _ = tx.send(());
