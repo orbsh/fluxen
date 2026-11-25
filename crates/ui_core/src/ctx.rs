@@ -86,6 +86,9 @@ pub struct Ctx {
     pub loom: Option<Arc<LoomState>>,
     /// The host's seams (ADR 0047): empty until a page names one.
     pub hooks: Hooks,
+    /// Slot values written since the last drain, one entry per name — the newest (ADR 0047 §4). A map
+    /// instead of a queue: a host that watches a slot wants its current value, not every intermediate.
+    pub pending: RwSignal<HashMap<String, Arc<Accrete>>>,
 }
 
 /// The UI side holds the transport plus the downstream frame signal. wasm is single-threaded, shared through Rc.
@@ -146,6 +149,7 @@ impl Ctx {
             owner: Owner::current().expect("Ctx::new requires a reactive owner"),
             loom: None,
             hooks: Hooks::default(),
+            pending: RwSignal::new(HashMap::new()),
         };
 
         // Consume downstream frames and dispatch
@@ -166,6 +170,9 @@ impl Ctx {
                     Err(e) => tracing::error!("ws frame decode failed: {e}"),
                 }
             }
+            // The batch is applied, the page has been told to redraw: only now do the host's observers
+            // hear about it (ADR 0047 §4).
+            ctx_clone.drain_slots();
         });
 
         ctx
@@ -201,13 +208,28 @@ impl Ctx {
         self.slot_for_data(name).set(Some(value.clone()));
         // The host's observers run after the write and outside it (ADR 0047 §4): a deferred task, so
         // the reactive update above is not waiting on anyone's callback. `"*"` matches every name.
-        // NOTE: deliberately inline for now. ADR 0047 §4 asks for deferral (a slow observer must not
-        // hold up the render the write just triggered); `spawn_local` refused the `Rc` here because this
-        // crate is also built for the server, so the deferral needs a runtime-neutral queue. That is the
-        // next slice, not a footnote to leave behind.
-        for (watched, notify) in &self.hooks.slots {
-            if watched == "*" || watched == name {
-                notify(name, Some(&value));
+        // Coalesce, do not queue (ADR 0047 §4): the newest value per name is the only one worth
+        // delivering, and overwriting a map needs no scheduler — `drain_slots` runs at the end of the
+        // pass that consumed the frames, so a host's callback never sits inside the write that caused it.
+        if !self.hooks.slots.is_empty() {
+            self.pending
+                .update(|pending| {
+                    pending.insert(name.to_owned(), value);
+                });
+        }
+    }
+
+    /// Deliver what accumulated since the last pass: one callback per name, with its newest value.
+    pub fn drain_slots(&self) {
+        if self.pending.read().is_empty() {
+            return;
+        }
+        let taken = std::mem::take(&mut *self.pending.write());
+        for (name, value) in taken {
+            for (watched, notify) in &self.hooks.slots {
+                if watched == "*" || watched == &name {
+                    notify(&name, Some(&value));
+                }
             }
         }
     }
