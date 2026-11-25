@@ -55,6 +55,9 @@ pub struct Hooks {
     /// `(slot, callback)`: a value landed in that slot — `"*"` matches every name. Called AFTER the
     /// write, deferred, so a slow observer cannot hold up the render that the write just triggered.
     pub slots: Vec<(String, SlotObserver)>,
+    /// The root was replaced (`create`): the whole page, not one slot (ADR 0047 §3). Called after the
+    /// layout is set, and it does not produce "all slots are now empty" notifications.
+    pub create: Option<std::sync::Arc<dyn Fn(&Accrete) + Send + Sync>>,
     /// `(dest, callback)`: the uplink, before it is encoded. `None` leaves the payload as it is; a
     /// value replaces it. Synchronous by necessity — the frame cannot leave without the answer.
     pub dests: Vec<(String, DestRewriter)>,
@@ -554,7 +557,11 @@ fn dispatch_msg(actions: &[Content<Accrete>], ctx: &Ctx) {
                 }
                 tracing::info!("create: layout set, root = {:.100?}", d);
                 // Writes to signals inside an Effect are always set/untracked; for tracked reads see the comment above
-                ctx.layout.set(d);
+                ctx.layout.set(d.clone());
+                // The page was rebuilt: a host that holds DOM references wants to know (ADR 0047 §3).
+                if let Some(announce) = &ctx.hooks.create {
+                    announce(&d);
+                }
             }
             Content::Set(x) => {
                 let mut d = x.data.clone();

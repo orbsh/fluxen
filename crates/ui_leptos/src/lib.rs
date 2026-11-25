@@ -75,7 +75,7 @@ pub fn start() {
         codec: Some(codec),
         ..Opts::default()
     });
-    if let Err(e) = boot(el, opts, None, Vec::new(), Vec::new()) {
+    if let Err(e) = boot(el, opts, None, Vec::new(), Vec::new(), None, None, None) {
         report(&e);
     }
 }
@@ -97,6 +97,12 @@ thread_local! {
     static SLOT_HOOKS: std::cell::RefCell<std::collections::HashMap<u32, js_sys::Function>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
     static DEST_HOOKS: std::cell::RefCell<std::collections::HashMap<u32, js_sys::Function>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static CREATE_HOOKS: std::cell::RefCell<std::collections::HashMap<u32, js_sys::Function>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static OPEN_HOOKS: std::cell::RefCell<std::collections::HashMap<u32, js_sys::Function>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static CLOSE_HOOKS: std::cell::RefCell<std::collections::HashMap<u32, js_sys::Function>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
     static NEXT_HOOK: std::cell::Cell<u32> = const { std::cell::Cell::new(1) };
 }
@@ -123,6 +129,59 @@ fn slot_observer(id: u32) -> ui_core::ctx::SlotObserver {
                     web_sys::console::warn_1(
                         &JsValue::from_str(&format!("fluxen: hooks.slots[{name}] threw: {e:?}")),
                     );
+                }
+            }
+        });
+    })
+}
+
+/// The page's uplink handle, read at the moment `open` speaks: the boot publishes `window.fluxen.send`
+/// when it mounts, which is before any socket can open, so it is there to hand over.
+fn uplink_handle() -> JsValue {
+    web_sys::window()
+        .and_then(|w| js_sys::Reflect::get(&w, &JsValue::from_str("fluxen")).ok())
+        .and_then(|f| js_sys::Reflect::get(&f, &JsValue::from_str("send")).ok())
+        .unwrap_or(JsValue::NULL)
+}
+
+/// The socket's life, said to the host (ADR 0047 §1/§2). `open` gets the uplink handle, because the
+/// first word of a connection is the host's to say and there is nothing else it could say it with.
+fn lifecycle(open: Option<u32>, close: Option<u32>) -> std::rc::Rc<dyn Fn(bool)> {
+    std::rc::Rc::new(move |up: bool| {
+        if up {
+            if let Some(id) = open {
+                OPEN_HOOKS.with(|table| {
+                    if let Some(callback) = table.borrow().get(&id) {
+                        if let Err(e) = callback.call1(&JsValue::NULL, &uplink_handle()) {
+                            web_sys::console::warn_1(&JsValue::from_str(&format!(
+                                "fluxen: hooks.open threw: {e:?}"
+                            )));
+                        }
+                    }
+                });
+            }
+        } else if let Some(id) = close {
+            CLOSE_HOOKS.with(|table| {
+                if let Some(callback) = table.borrow().get(&id) {
+                    let _ = callback.call0(&JsValue::NULL);
+                }
+            });
+        }
+    })
+}
+
+/// One `create` observer: the root was replaced, the page is new (ADR 0047 §3).
+fn create_observer(id: u32) -> std::sync::Arc<dyn Fn(&accrete::Accrete) + Send + Sync> {
+    std::sync::Arc::new(move |root: &accrete::Accrete| {
+        let Ok(js) = serde_wasm_bindgen::to_value(&root) else {
+            return;
+        };
+        CREATE_HOOKS.with(|table| {
+            if let Some(callback) = table.borrow().get(&id) {
+                if let Err(e) = callback.call1(&JsValue::NULL, &js) {
+                    web_sys::console::warn_1(&JsValue::from_str(&format!(
+                        "fluxen: hooks.create threw: {e:?}"
+                    )));
                 }
             }
         });
@@ -164,6 +223,9 @@ pub fn mount(element: web_sys::Element, options: JsValue) -> Result<(), JsValue>
     let mut hook = None;
     let mut slots: Vec<(String, u32)> = Vec::new();
     let mut dests: Vec<(String, u32)> = Vec::new();
+    let mut create: Option<u32> = None;
+    let mut open: Option<u32> = None;
+    let mut close: Option<u32> = None;
     if !options.is_undefined() && !options.is_null() {
         // A hook is a live object, not data: take it off first, then deserialize the rest, so an unknown key
         // or a mis-shaped value is still a loud refusal.
@@ -179,7 +241,7 @@ pub fn mount(element: web_sys::Element, options: JsValue) -> Result<(), JsValue>
             && !found.is_undefined()
             && !found.is_null()
         {
-            (slots, dests) = collect_hooks(&found)?;
+            (slots, dests, create, open, close) = collect_hooks(&found)?;
         }
         // Deserialize a copy without that key: `deny_unknown_fields` is the rule, and a key set to
         // `undefined` is still a key — the caller's object is not ours to rewrite either.
@@ -193,15 +255,60 @@ pub fn mount(element: web_sys::Element, options: JsValue) -> Result<(), JsValue>
             })?);
     }
 
-    boot(el, opts, hook, slots, dests).map_err(|e| JsValue::from_str(&e))
+    boot(el, opts, hook, slots, dests, create, open, close).map_err(|e| JsValue::from_str(&e))
 }
 
 /// Read `hooks.slots` / `hooks.dests` off the mount options: keep the functions here, hand the context
 /// their ids. A key that is present but not a function is a refusal, not a silent skip — the same rule
 /// every other option follows.
-fn collect_hooks(hooks: &JsValue) -> Result<(Vec<(String, u32)>, Vec<(String, u32)>), JsValue> {
+fn collect_hooks(
+    hooks: &JsValue,
+) -> Result<
+    (
+        Vec<(String, u32)>,
+        Vec<(String, u32)>,
+        Option<u32>,
+        Option<u32>,
+        Option<u32>,
+    ),
+    JsValue,
+> {
     let mut slots: Vec<(String, u32)> = Vec::new();
     let mut dests: Vec<(String, u32)> = Vec::new();
+    // `create` stands alone: the root replaced is not a slot, so it gets no name to match on.
+    let mut create: Option<u32> = None;
+    // `create`, `open` and `close` stand alone: none of them is a slot, so none carries a name.
+    let mut named = |key: &str, table: &dyn Fn(u32, js_sys::Function)| -> Result<Option<u32>, JsValue> {
+        let Ok(found) = js_sys::Reflect::get(hooks, &JsValue::from_str(key)) else {
+            return Ok(None);
+        };
+        if found.is_undefined() || found.is_null() {
+            return Ok(None);
+        }
+        let callback = found
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsValue::from_str(&format!("fluxen: hooks.{key} is not a function")))?;
+        let id = next_hook_id();
+        table(id, callback);
+        Ok(Some(id))
+    };
+    if let Some(id) = named("create", &|id, f| {
+        CREATE_HOOKS.with(|t| {
+            t.borrow_mut().insert(id, f);
+        })
+    })? {
+        create = Some(id);
+    }
+    let open = named("open", &|id, f| {
+        OPEN_HOOKS.with(|t| {
+            t.borrow_mut().insert(id, f);
+        })
+    })?;
+    let close = named("close", &|id, f| {
+        CLOSE_HOOKS.with(|t| {
+            t.borrow_mut().insert(id, f);
+        })
+    })?;
     for (key, into) in [("slots", &mut slots), ("dests", &mut dests)] {
         let Ok(found) = js_sys::Reflect::get(hooks, &JsValue::from_str(key)) else {
             continue;
@@ -237,7 +344,7 @@ fn collect_hooks(hooks: &JsValue) -> Result<(Vec<(String, u32)>, Vec<(String, u3
             into.push((name, id));
         }
     }
-    Ok((slots, dests))
+    Ok((slots, dests, create, open, close))
 }
 
 /// One boot for both entrances: resolve, open the socket, mount the root, publish the uplink handle.
@@ -247,6 +354,9 @@ fn boot(
     hook_value: Option<JsValue>,
     slots: Vec<(String, u32)>,
     dests: Vec<(String, u32)>,
+    create: Option<u32>,
+    open: Option<u32>,
+    close: Option<u32>,
 ) -> Result<(), String> {
     // Mounting is a page-level operation; every step can fail (not in a browser, WS won't connect); these are
     // states the caller must surface, so they go through Result, no panic.
@@ -295,7 +405,13 @@ fn boot(
             }
             hooked
         }
-        None => std::rc::Rc::new(transport_ws::LiveWs::new(&url, codec.clone(), boot.policy)?),
+        None => {
+            let live = transport_ws::LiveWs::new(&url, codec.clone(), boot.policy)?;
+            if open.is_some() || close.is_some() {
+                live.on_lifecycle(lifecycle(open, close));
+            }
+            std::rc::Rc::new(live)
+        }
     };
 
     // The UnmountHandle returned by mount_to unmounts the view when dropped — `let _ =` tears the UI down as soon as it mounts
@@ -311,6 +427,9 @@ fn boot(
         }
         for (name, id) in dests {
             ctx.hooks.dests.push((name, dest_rewriter(id)));
+        }
+        if let Some(id) = create {
+            ctx.hooks.create = Some(create_observer(id));
         }
         ctx.set_config_slot(boot.config.clone());
         // Mirror page options onto the document root (ADR 0038 §3): things like `skin` are sent down when the producer builds the page,
