@@ -177,27 +177,12 @@ fn ops_to_d(set: &OpSet<f32>) -> String {
     d
 }
 
-/// The scrollbar's strip. A scrollbar has no element to host a layer, so the pen leaves Rust as a picture: an
-/// irregular zigzag walked down a 160px strip that CSS repeats. Two things make it a drawing rather than a
-/// pattern — the walk drifts (segment lengths and both rails vary, and no two segments cover the same distance),
-/// and the seed is the clock, not the page, so the strip is drawn again on every load. A scrollbar that wobbles
-/// exactly the same way every time is a stamp.
-#[must_use]
-pub fn scroll_strip(seed: u64, ink: &str) -> String {
-    const W: f32 = 12.0;
+/// The scrollbar's strip, as a walk: an irregular sawtooth along `y` from `0` to `H`, swinging across `x` around
+/// the strip's centre. Both orientations are drawn from this one walk, so a horizontal scrollbar carries the same
+/// shape as a vertical one — the hand is not asked to draw twice.
+fn strip_walk(seed: u64) -> Vec<(f32, f32)> {
     const H: f32 = 160.0;
     const CENTER: f32 = 6.0;
-    let Ok(opts) = OptionsBuilder::default()
-        .seed(seed)
-        // The pen may wobble, but it may not undo the angle: a strip of paper tape is squashed tight, so the
-        // walk stays near the middle and the folds stay shallow (see the amplitude rule below).
-        .roughness(0.35)
-        .bowing(0.15)
-        .disable_multi_stroke(true)
-        .build()
-    else {
-        return String::new();
-    };
     let mut rng = seed | 1;
     let mut next = move |lo: f32, hi: f32| {
         // xorshift64: three shifts and three xors per number is the whole budget a strip of ink deserves.
@@ -206,41 +191,76 @@ pub fn scroll_strip(seed: u64, ink: &str) -> String {
         rng ^= rng << 17;
         lo + (rng % 1000) as f32 / 1000.0 * (hi - lo)
     };
-    // One walk, one path: the pen goes down the strip the way it goes round a box, and the joins stay joins.
-    // Short steps and a narrow swing, and the swing is *derived* from the step: `2 * atan(2a / d) <= 30°`, so no
-    // fold can open wider than the tape allows however the clock draws the numbers. The factor is below the
-    // tangent on purpose — the pen's own wobble lands on top of the geometry (measured: 0.12 exceeded 30°).
-    let mut points: Vec<roughr::Point2D<f32>> = vec![roughr::Point2D::new(CENTER, 0.0)];
+    // The fold is named in degrees and everything else follows from it: the angle at the fold, the swing across
+    // the bar, then the step (`d = 2a / tan((180° - fold) / 2)`). Naming the step instead is what made the tape
+    // overlap — a 1px step under a 1.2px pen is a smudge, however right the angle is.
+    let mut points: Vec<(f32, f32)> = vec![(CENTER + next(3.8, 4.2), 0.0)];
     let mut y = 0.0f32;
-    let mut at_hi = true;
-    while y < H - 2.0 {
-        let drop = next(6.0, 9.0).min(H - y);
-        let amp = next(0.5, 0.9).min(drop * 0.09);
+    let mut at_hi = false;
+    while y < H {
+        let fold = next(27.0, 31.0).to_radians();
+        let amp = next(3.8, 4.2);
+        let drop = 2.0 * amp / ((std::f32::consts::PI - fold) / 2.0).tan();
         y += drop;
-        points.push(roughr::Point2D::new(
-            CENTER + if at_hi { amp } else { -amp },
-            y,
-        ));
+        points.push((CENTER + if at_hi { amp } else { -amp }, y));
         at_hi = !at_hi;
     }
-    // The walk ends where it started, so one tile meets the next without a seam — and the tail is lengthened
-    // until that last fold is no wider than the rest. A cramped closing segment folds sharply: a 3.4px tail
-    // measured 32.9° where the walk itself stays under 27°.
-    while points.len() > 2 && H - points[points.len() - 1].y < 5.0 {
+    // Trim back to a whole number of folds, so the seam is one hand's rhythm and not a jump, then stretch the
+    // walk by the last few percent to land exactly on the strip's edge. Stretching moves every fold by about a
+    // degree; ending on a half-fold would put a wide kink at the seam.
+    let start_side = points[0].0 > CENTER;
+    while points.len() > 2 && (points[points.len() - 1].0 > CENTER) != start_side {
         points.pop();
     }
-    points.push(roughr::Point2D::new(CENTER, H));
+    let reached = points[points.len() - 1].1;
+    if reached > 0.0 {
+        for point in &mut points {
+            point.1 *= H / reached;
+        }
+    }
+    points
+}
+
+/// One strip along one axis. `along` is the length of the walk's axis, `across` the bar's; the walk is handed
+/// over in `(across, along)` order, and `horizontal` swaps the two on the way into the picture.
+fn strip_svg(points: &[(f32, f32)], ink: &str, seed: u64, horizontal: bool) -> String {
+    const ACROSS: f32 = 12.0;
+    const ALONG: f32 = 160.0;
+    let Ok(opts) = OptionsBuilder::default()
+        .seed(seed)
+        .roughness(0.35)
+        .bowing(0.15)
+        .disable_multi_stroke(true)
+        .build()
+    else {
+        return String::new();
+    };
+    let pts: Vec<roughr::Point2D<f32>> = points
+        .iter()
+        .map(|(across, along)| {
+            if horizontal {
+                roughr::Point2D::new(*along, *across)
+            } else {
+                roughr::Point2D::new(*across, *along)
+            }
+        })
+        .collect();
+    let (w, h) = if horizontal {
+        (ALONG, ACROSS)
+    } else {
+        (ACROSS, ALONG)
+    };
     let passes: String = Generator::default()
-        .linear_path(&points, false, &Some(opts))
+        .linear_path(&pts, false, &Some(opts))
         .sets
         .iter()
         .filter(|s| s.op_set_type == OpSetType::Path)
         .map(ops_to_d)
         .filter(|d| !d.is_empty())
-        .map(|d| format!("<path stroke-width='1.3' d='{d}'/>"))
+        .map(|d| format!("<path stroke-width='1.2' d='{d}'/>"))
         .collect();
     let svg = format!(
-        "<svg xmlns='http://www.w3.org/2000/svg' width='{W}' height='{H}' viewBox='0 0 {W} {H}' \
+        "<svg xmlns='http://www.w3.org/2000/svg' width='{w}' height='{h}' viewBox='0 0 {w} {h}' \
          preserveAspectRatio='none'><g fill='none' stroke='{ink}' stroke-linecap='round' \
          stroke-linejoin='round'>{passes}</g></svg>"
     );
@@ -253,8 +273,25 @@ pub fn scroll_strip(seed: u64, ink: &str) -> String {
     format!("url(\"data:image/svg+xml,{encoded}\")")
 }
 
-/// Hand the strip to CSS as custom properties on the document root: two inks, because a background image cannot
-/// read `--fg`, and the tile height, because CSS cannot measure an image it only repeats.
+/// The scrollbar's strip, down the bar. A scrollbar has no element to host a layer, so the pen leaves Rust as a
+/// picture: an irregular sawtooth walked down a 160px strip that CSS repeats. Two things make it a drawing rather
+/// than a pattern — the walk drifts (the fold, the swing and the step all vary), and the seed is the clock, not the
+/// page, so the strip is drawn again on every load. A scrollbar that wobbles exactly the same way every time is a
+/// stamp.
+#[must_use]
+pub fn scroll_strip(seed: u64, ink: &str) -> String {
+    strip_svg(&strip_walk(seed), ink, seed, false)
+}
+
+/// The same walk, along the bar: a horizontal scrollbar carries the shape a vertical one does, turned.
+#[must_use]
+pub fn scroll_strip_horizontal(seed: u64, ink: &str) -> String {
+    strip_svg(&strip_walk(seed), ink, seed, true)
+}
+
+/// Hand the strips to CSS as custom properties on the document root: four inks (a background image cannot read
+/// `--fg`, so each orientation carries its own copy per scheme) and the tile length, because CSS cannot measure an
+/// image it only repeats.
 pub fn paint_scroll_strip(root: &web_sys::Element) {
     let Some(el) = root.dyn_ref::<web_sys::HtmlElement>() else {
         tracing::warn!("scroll strip: the document root is not an HTML element");
@@ -262,11 +299,18 @@ pub fn paint_scroll_strip(root: &web_sys::Element) {
     };
     let seed = (js_sys::Math::random() * u64::MAX as f64) as u64 | 1;
     let style = el.style();
-    for (var, ink) in [
-        ("--rough-strip", "#2e2e2e"),
-        ("--rough-strip-dark", "#f2f2f2"),
+    for (var, ink, horizontal) in [
+        ("--rough-strip", "#2e2e2e", false),
+        ("--rough-strip-dark", "#f2f2f2", false),
+        ("--rough-strip-hz", "#2e2e2e", true),
+        ("--rough-strip-hz-dark", "#f2f2f2", true),
     ] {
-        if style.set_property(var, &scroll_strip(seed, ink)).is_err() {
+        let strip = if horizontal {
+            scroll_strip_horizontal(seed, ink)
+        } else {
+            scroll_strip(seed, ink)
+        };
+        if style.set_property(var, &strip).is_err() {
             tracing::warn!("scroll strip: cannot set {var}");
         }
     }
@@ -302,7 +346,13 @@ pub fn clear_scroll_strip(root: &web_sys::Element) {
         return;
     };
     let style = el.style();
-    for var in ["--rough-strip", "--rough-strip-dark", "--rough-strip-h"] {
+    for var in [
+        "--rough-strip",
+        "--rough-strip-dark",
+        "--rough-strip-hz",
+        "--rough-strip-hz-dark",
+        "--rough-strip-h",
+    ] {
         style.remove_property(var).ok();
     }
 }
@@ -539,7 +589,8 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
 #[cfg(test)]
 mod tests {
     use super::{
-        border_paths, check_paths, mark_paths, ops_to_d, scroll_strip, seed_for, shadow_cut,
+        border_paths, check_paths, mark_paths, ops_to_d, scroll_strip, scroll_strip_horizontal,
+        seed_for, shadow_cut,
     };
     use roughr::core::{Op, OpSet, OpSetType, OpType};
 
@@ -645,11 +696,7 @@ mod tests {
             !strip.contains('<') && !strip.contains('#'),
             "the markup has to be escaped for a url(): {strip:.40}"
         );
-        let d = strip
-            .split("d='")
-            .nth(1)
-            .and_then(|t| t.split('\'').next())
-            .unwrap_or_default();
+        let d = path_of(&strip);
         let nums: Vec<f32> = d
             .split_whitespace()
             .filter_map(|w| w.parse::<f32>().ok())
@@ -671,20 +718,45 @@ mod tests {
             "a new seed has to be a new walk"
         );
 
-        // The tape is squashed tight: short steps, and no fold wider than 30°. Checked on every seed, since the
-        // amplitude is derived from the step rather than fixed.
+        // The fold is the angle *at* the fold, and it is acute: a squashed strip of tape folds sharply, never
+        // into a straight run. Checked over every seed, since the step is derived from the fold and then nudged
+        // by the pen's own wobble.
         for seed in 1..=40u64 {
-            let svg = scroll_strip(seed, "#2e2e2e");
-            let d = svg
-                .split("d='")
-                .nth(1)
-                .and_then(|t| t.split('\'').next())
-                .unwrap_or_default();
-            let v = vertices(d);
-            assert!(v.len() > 16, "a strip of short steps: {} vertices", v.len());
-            let worst = folds(&v);
-            assert!(worst < 30.5, "seed {seed} folds at {worst:.1}°");
+            let v = vertices(&path_of(&scroll_strip(seed, "#2e2e2e")));
+            assert!(v.len() > 60, "a strip of short steps: {} vertices", v.len());
+            let (tightest, widest) = folds(&v);
+            assert!(
+                (20.0..=36.0).contains(&widest),
+                "seed {seed}: folds run {tightest:.1}°..{widest:.1}°, want about 30°"
+            );
         }
+    }
+
+    #[test]
+    fn the_strip_is_the_same_drawing_in_both_directions() {
+        // A horizontal scrollbar is not a second drawing: it is the same walk, handed over along the other axis.
+        let vertical = scroll_strip(7, "#2e2e2e");
+        let horizontal = scroll_strip_horizontal(7, "#2e2e2e");
+        assert!(vertical.contains("width='12' height='160'"), "vertical box");
+        assert!(
+            horizontal.contains("width='160' height='12'"),
+            "horizontal box"
+        );
+        // The walk is one vector, handed over twice, so the two drawings match to within what the pen's own
+        // wobble costs: roughr spends its roughness along the picture's own axes, so the turned copy lands a
+        // fraction of a degree off — measured at most 0.6° over 40 seeds.
+        let (_, wv) = folds(&vertices(&path_of(&vertical)));
+        let (_, wh) = folds(&vertices(&path_of(&horizontal)));
+        assert!(
+            (wv - wh).abs() < 2.0,
+            "the turned copy drifts: {wv} vs {wh}"
+        );
+        let nv = vertices(&path_of(&vertical)).len();
+        let nh = vertices(&path_of(&horizontal)).len();
+        assert!(
+            nv.abs_diff(nh) <= 1,
+            "the turned copy has a different number of corners: {nv} vs {nh}"
+        );
     }
 
     /// Where each segment ends: the last pair of every `C`/`L`. Moves are skipped on purpose — roughr opens
@@ -719,10 +791,21 @@ mod tests {
         out
     }
 
-    /// The widest fold in the walk, in degrees, measured from straight. roughr draws every edge twice — the
-    /// second pass a hair to one side — so the corners first collapse to one vertex each; without that the
+    /// The path inside a strip's data URI.
+    fn path_of(strip: &str) -> String {
+        strip
+            .split("d='")
+            .nth(1)
+            .and_then(|t| t.split('\'').next())
+            .unwrap_or_default()
+            .to_owned()
+    }
+
+    /// The tightest and widest fold in the walk, as the angle *at* the fold: a straighter run is a wider (more
+    /// obtuse) fold, and a squashed strip wants them all acute — about 30°. roughr draws every edge twice, the
+    /// second pass a hair to one side, so the corners first collapse to one vertex each; without that the
     /// measurement is of a 0.1px doubling, not of the walk.
-    fn folds(v: &[(f32, f32)]) -> f32 {
+    fn folds(v: &[(f32, f32)]) -> (f32, f32) {
         let mut walk: Vec<(f32, f32)> = Vec::new();
         for p in v {
             match walk.last() {
@@ -732,19 +815,24 @@ mod tests {
         }
         let v = &walk[..];
         let mut worst = 0.0f32;
+        let mut best = 180.0f32;
         for w in v.windows(3) {
             let (ax, ay) = (w[0].0 - w[1].0, w[0].1 - w[1].1);
             let (bx, by) = (w[2].0 - w[1].0, w[2].1 - w[1].1);
             let (na, nb) = ((ax * ax + ay * ay).sqrt(), (bx * bx + by * by).sqrt());
             if na > 0.01 && nb > 0.01 {
                 let cos = ((ax * bx + ay * by) / (na * nb)).clamp(-1.0, 1.0);
-                worst = worst.max(std::f32::consts::PI - cos.acos());
+                // `a`/`b` point from the corner outwards, so their angle IS the fold: straight is 180°, a
+                // sharp fold is small.
+                let fold = cos.acos().to_degrees();
+                worst = worst.max(fold);
+                best = best.min(fold);
             }
         }
         if worst.is_finite() {
-            worst.to_degrees()
+            (best, worst)
         } else {
-            0.0
+            (0.0, 0.0)
         }
     }
 
