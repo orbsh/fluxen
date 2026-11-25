@@ -131,6 +131,23 @@ pub fn check_paths(w: f32, h: f32, seed: u64) -> Vec<String> {
     paths
 }
 
+/// The hole a shadow is hidden by: everything outside the box, nothing inside it. A shadow is cast by the box
+/// and covered by it, so the inside of the casting box has to stay blank — a stroke laid over the box is not
+/// covered by anything, which is why the same outline shifted two pixels read as a doubled edge instead of a
+/// shadow. An even-odd clip does the covering: outer rectangle minus the box.
+#[must_use]
+pub fn shadow_cut(w: f32, h: f32) -> String {
+    const OUT: f32 = 8.0;
+    format!(
+        "M {} {} H {} V {} H {} Z M 0 0 H {w} V {h} H 0 Z",
+        -OUT,
+        -OUT,
+        w + OUT,
+        h + OUT,
+        -OUT
+    )
+}
+
 /// One op set as SVG path data. Three ops are all a stroked outline uses; an op
 /// whose arity is anything else is skipped rather than trusted — a border that
 /// misses a segment still looks hand-drawn, a panic does not.
@@ -266,6 +283,8 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
     // box drawn twice — so under the pen it is the same box drawn twice, in a lighter ink, with its own hand.
     // Nothing in a sketch is blurred; a shadow that is a blur is the one thing the skin cannot draw.
     let shadows = RwSignal::new(Vec::<String>::new());
+    let cut = RwSignal::new(String::new());
+    let cut_id = format!("rough-cut-{seed:x}");
     let view_box = RwSignal::new(String::new());
 
     Effect::new(move |_| {
@@ -303,6 +322,7 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
             host_mark.set_attribute("data-rough", "ready").ok();
             edges.set(d);
             shadows.set(border_paths(w, h, seed.rotate_left(41) | 1));
+            cut.set(shadow_cut(w, h));
             marks.set(mark_paths(w, h, seed));
             if check {
                 checks.set(check_paths(w, h, seed));
@@ -348,7 +368,24 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
                 .into_iter()
                 .map(|d| leptos::svg::path().class("edge").attr("d", d).into_any())
                 .collect_view();
-            let shade = leptos::svg::g().class("shadow").child(shadow);
+            // Two groups, and the nesting is the point: the clip is what hides the shadow, so it has to sit in
+            // the box's own untransformed space — a clip on the same element the CSS offsets would travel with
+            // the offset, the hole would follow the shadow, and nothing would ever be covered.
+            let shade = leptos::svg::g()
+                .class("shade")
+                .attr("clip-path", format!("url(#{cut_id})"))
+                .child(leptos::svg::g().class("shadow").child(shadow));
+            // The clip lives in `defs`: a shadow that is not cut draws its own box's top and left edges again,
+            // two pixels in, and that is a double outline — the one thing the user sees first.
+            let cut_path = leptos::svg::path()
+                .attr("d", move || cut.get())
+                .attr("clip-rule", "evenodd");
+            let defs = leptos::svg::defs().child(
+                leptos::svg::clipPath()
+                    .attr("id", cut_id.clone())
+                    .attr("clipPathUnits", "userSpaceOnUse")
+                    .child(cut_path),
+            );
             let mark = marks
                 .get()
                 .into_iter()
@@ -359,7 +396,8 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
                 .get()
                 .into_iter()
                 .map(|d| leptos::svg::path().class("check").attr("d", d).into_any());
-            std::iter::once(shade.into_any())
+            std::iter::once(defs.into_any())
+                .chain(std::iter::once(shade.into_any()))
                 .chain(edge)
                 .chain(mark)
                 .chain(tick)
@@ -370,7 +408,7 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
 
 #[cfg(test)]
 mod tests {
-    use super::{border_paths, check_paths, mark_paths, ops_to_d, seed_for};
+    use super::{border_paths, check_paths, mark_paths, ops_to_d, seed_for, shadow_cut};
     use roughr::core::{Op, OpSet, OpSetType, OpType};
 
     #[test]
@@ -418,6 +456,25 @@ mod tests {
         );
         assert_eq!(marks, mark_paths(120.0, 60.0, 7));
         assert_ne!(marks, mark_paths(120.0, 60.0, 8));
+    }
+
+    #[test]
+    fn the_shadow_is_cut_out_of_its_own_box() {
+        let cut = shadow_cut(120.0, 60.0);
+        // Two subpaths, even-odd: the outside, and the box that has to stay blank.
+        assert_eq!(
+            cut.matches('M').count(),
+            2,
+            "a cut is outside minus inside: {cut}"
+        );
+        assert!(
+            cut.contains("H 120 V 60 H 0 Z"),
+            "the hole is the box: {cut}"
+        );
+        assert!(
+            cut.contains("-8 -8"),
+            "the outside reaches past the stroke: {cut}"
+        );
     }
 
     #[test]
