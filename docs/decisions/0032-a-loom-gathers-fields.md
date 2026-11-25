@@ -54,7 +54,7 @@ so a page still carrying the old `sink` hears about it instead of quietly losing
 refused that dead shape in its own build step (reflux's `_check_uplinks`) drops it at the same time, because it
 was the same rule kept in a second place. Tracked as scratch ticket #470.
 
-## 3. Timing lives on the loom, and it is a list
+## 3. When the group leaves lives on the loom; how often a keystroke is heard lives on the field
 
 When to send is one question per submission, so it belongs where the exit is.
 Modes combine — `submit: [enter, button]` is a chat box, `[change]` is live
@@ -66,6 +66,11 @@ group leaves; they are separate axes and separate fields.
 The mode is resolved by the nearest enclosing loom that declares it: one
 interaction, one send. Nesting therefore cannot multiply uplinks, and a loom
 that wants the whole object live just leaves the inner loom without `change`.
+
+The other half of timing is the field's: `emit` (§8) says how often a keystroke
+reaches the loom, which is how often a `[change]` submit can fire at all. Two
+owners, two claims — a field cannot create a submission, and a loom cannot make
+typing arrive faster than the field says.
 
 ## 4. Looms nest, and the walk stops there
 
@@ -140,13 +145,40 @@ This count is **local state of the page**, not a permission. It stops the same r
 authority on whether a thing may still change is the far side, and it still says no. Nothing about it is
 persisted: a reload starts the count again.
 
-## Rejected: timing on the field
+## Timing on the field: a rate, not an exit
 
-`instant: true` on an input (the shape `FormAttr` hinted at) is the alternative we
-did not take. It puts the submission's clock on one field, so one live field drags
-every field of the form along: the sender must still assemble the whole object,
-and every other field silently receives an exit it never declared. Timing is a
-property of the group, so it lives on the group.
+`instant: true` on an input — the shape `FormAttr` hinted at — was rejected, and it should have been: a
+field that declares "I submit" hands every other field of the group an exit it never asked for, because
+a submission packs the whole object.
+
+`emit` (§8) is a different claim, and it survived that objection. It does not say a submission happens;
+it says how often one keystroke is *heard*, so it can only ever reduce sends. The loom still owns the
+exit and still decides whether a change is a send at all (`submit: [change]`) — which is why a field with
+`emit` and a loom with only `[enter]` is not a contradiction but the most common shape: the value is heard
+as it settles, the send waits for Enter.
+
+What the split buys is that the two knobs answer the two questions separately. A search box wants
+`{debounce: 300}` and one frame per pause; a live preview wants `{throttle: 50}` so it keeps moving without
+a frame per letter; a composer wants the 250 ms default and Enter to flush it immediately (a submit cancels
+whatever is pending and packs what is on screen, so `[enter, change]` never sends a value older than the
+keypress that preceded it).
+
+## 8. A field is heard at most as often as it says
+
+`emit` is the field's clock: `{debounce: ms}` notifies once the typing has been quiet that long, carrying the
+last value; `{throttle: ms}` notifies at once and then at most once per window, the window's last value
+landing when it closes. Closed and one arm at a time — the two answer different questions, and a frame asking
+for both is asking for a shape nobody uses (`{debounce: 1, throttle: 2}` does not decode).
+
+What is timed is only the *notification*: the field's own signal is written on the keystroke, so typing never
+lags behind a window. Absent means `{debounce: 250}`, and that default is what makes `submit: [change]` usable
+at all — without it a per-keystroke submit spends a `sends: 1` grant on the first character, clears a
+`reset: clear` box mid-word, and puts one frame per letter on the wire. `{debounce: 0}` is the way back to a
+frame per keystroke, for the frames that want it.
+
+Two rules keep the clock honest. A send cancels whatever is pending — `submit` packs the fields' current
+values, so a flush is just "send now", and Enter or a button press never carries a stale value. A reset cancels
+too, because the value a pending timer would carry is the one the reset just cleared.
 
 ## What it costs
 

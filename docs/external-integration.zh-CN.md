@@ -131,7 +131,9 @@ data: { type: text, source: {default: "hello"} }
 1. **组件发射。** 节点的写口是 `sink`：`Sink { dest, scope, path }`（ADR 0031 §2）。有写口的节点经
    `use_target` 拿到一个闭包，它调 `ctx.emit(&sink, id, payload)`；没有 `sink` 的节点拿不到闭包，
    它只读。`id` 是发射节点自己的 id（没有则 `None`）；`payload` 是该组件产出的东西——表单值、
-   拖拽货物、页码。`dest` 缺席的 sink 无处可去：`emit` 返回 false，什么也不发。
+   拖拽货物、页码。`dest` 缺席的 sink 无处可去：`emit` 返回 false，什么也不发。`input` 的改动按它自己的
+   时钟到达 loom（`emit`：缺省 250ms 静默，另有 `{throttle: ms}` 与 `{debounce: 0}`，ADR 0032 §8），所以
+   `submit: [change]` 发几帧是生产端选的速率，不是击键次数。
 2. **`Event` 上线。** `ctx.send` → `Transport::emit(transport::Event)` → `WsTransport::emit`：组装
    `content::Outflow { dest, id?, data }`，用页面构建时钉住的编码（JSON → text 帧，CBOR → 二进制
    帧）编码后发出。`send` 是 future：socket 尚在连接时 gloo 的 sink 挂起、open 时唤醒，所以抢在

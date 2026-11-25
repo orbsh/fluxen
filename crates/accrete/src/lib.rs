@@ -542,6 +542,69 @@ impl SubmitSet {
     }
 }
 
+/// How a field's change reaches the loom (ADR 0032 §8). The keystroke updates the field's own copy at
+/// once — what this decides is when the *loom* hears about it, which is what `submit: [change]` turns
+/// into frames. Closed, and one arm at a time: debounce and throttle answer different questions (wait
+/// for quiet, or keep a cadence), and a frame asking for both is asking for a shape nobody wants.
+///
+/// Absent means `{debounce: 250}`: typing stays instant (the display is the field's own signal), while
+/// a per-keystroke `[change]` submit becomes one frame per pause instead of one frame per letter —
+/// without it a `sends: 1` loom spends its only send on the first character. `{debounce: 0}` is the
+/// way back to "every keystroke, at once".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(untagged)]
+pub enum Emit {
+    Debounce(Debounce),
+    Throttle(Throttle),
+}
+
+impl Default for Emit {
+    /// `{debounce: 250}` — what a field does when it says nothing.
+    fn default() -> Self {
+        Self::Debounce(Debounce { debounce: 250 })
+    }
+}
+
+impl Emit {
+    /// The window in milliseconds. `0` means "now": debounce then notifies on the keystroke itself,
+    /// throttle then has no window to speak of.
+    pub fn millis(self) -> u32 {
+        match self {
+            Self::Debounce(d) => d.debounce,
+            Self::Throttle(t) => t.throttle,
+        }
+    }
+
+    pub fn is_throttle(self) -> bool {
+        matches!(self, Self::Throttle(_))
+    }
+
+    /// The change reaches the loom on the event itself. Not a wire default — it is what a node whose
+    /// change is already discreet (a `select` option click) uses, so it never inherits the field's
+    /// 250 ms debounce.
+    pub const IMMEDIATE: Emit = Emit::Debounce(Debounce { debounce: 0 });
+}
+
+/// `{debounce: ms}` — the change reaches the loom once the field has been quiet that long, carrying the
+/// last value. The right shape for a search box: the reader stops, the frame leaves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Debounce {
+    pub debounce: u32,
+}
+
+/// `{throttle: ms}` — the first change goes at once and the rest coalesce to at most one per window,
+/// the window's last value landing at its end. The right shape for a live preview that must keep
+/// moving while the reader types, without a frame per letter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Throttle {
+    pub throttle: u32,
+}
+
 fn submit_is_default(s: &SubmitSet) -> bool {
     s.modes() == [SubmitMode::Enter]
 }
@@ -940,6 +1003,18 @@ pub struct Input {
     /// `textarea` used to carry on its own type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placeholder: Option<Source>,
+    /// When this field's typing reaches the loom (ADR 0032 §8). Absent = `{debounce: 250}`, which is
+    /// what makes a per-keystroke `submit: [change]` bearable; `{debounce: 0}` is a frame per letter.
+    /// Timing, not addressing: `source`/`tag` say where the value lives, this says when it is heard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emit: Option<Emit>,
+}
+
+impl Input {
+    /// The field's timing, with the default filled in — the renderer's entry point.
+    pub fn emission(&self) -> Emit {
+        self.emit.unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
