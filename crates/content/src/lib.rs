@@ -1,11 +1,11 @@
+//! A downlink frame IS the **action list** itself (ADR 0021 decision 6): there is no envelope.
+//! If the host needs its own `ev` / `sender` / `created`, it carries them in the host's own frame — the three hosts
+//! (stage / prism / reflux) each have their own, and they align only at the `Content` layer.
+
 pub mod codec;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-/// A downlink frame IS the **action list** itself (ADR 0021 decision 6): there is no envelope.
-/// If the host needs its own `ev` / `sender` / `created`, it carries them in the host's own frame — the three hosts
-/// (stage / prism / reflux) each have their own, and they align only at the `Content` layer.
 
 /// The two dest names the transport owns (ADR 0044). They are not app events: an uplink `__ping__` is
 /// answered with a downlink `__pong__` by the host, and neither ever reaches a handler or a slot. The

@@ -8,7 +8,7 @@
 //! - the rendering itself: `Ctx` (layout / data / list / vals / drag signals), `render::dispatch`
 //!   and the components.
 //!
-//! It deliberately does NOT know: the page shell (`#main` attributes, `window.fluxen.send`), any
+//! It deliberately does NOT know: the page shell (the mount element and its options, `window.fluxen.send`), any
 //! concrete transport implementation, or the application's layout. Those are the boot's job and
 //! live in `crates/ui_leptos` — the reference host — so that a host wrapping this core in its own
 //! binary (prism) sits in exactly the same position as our own loom. See

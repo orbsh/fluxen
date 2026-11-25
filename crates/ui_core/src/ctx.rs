@@ -35,7 +35,7 @@ pub type DataSlot = RwSignal<Option<std::sync::Arc<Accrete>>>;
 /// it lives on a plane separate from data (Accrete).
 pub type ValueSlot = RwSignal<Option<Value>>;
 
-/// The slot a page's options live in unless `#main` names another (ADR 0038 §2, revised): ONE slot holding
+/// The slot a page's options live in unless the mount options name another (ADR 0038 §2, revised): ONE slot holding
 /// one object whose members are the options. An option is not a kind of thing — it is a value, read through
 /// the ordinary planes with the ordinary `path`, which is why nothing below it needs machinery of its own.
 pub const DEFAULT_CONFIG_SLOT: &str = "__CONFIG__";
@@ -50,7 +50,7 @@ pub struct Ctx {
     /// local plane: named Value slots shared by where `kind: local` events land and by their subscription.
     pub vals: RwSignal<HashMap<String, ValueSlot>>,
     /// The name of the slot this page's options live in (ADR 0038 §2, revised); `None` when the page asked
-    /// for none (`#main[data-config=""]`). Options are not a plane of their own: the slot is a slot, the object
+    /// for none (`config: ""` in the mount options). Options are not a plane of their own: the slot is a slot, the object
     /// in it is a value, and the page's own half is the local plane every other control already writes.
     pub config: RwSignal<Option<String>>,
     /// Drag session (ADR 0034): `Some` means "a drag is in flight", and what it holds is that source frame node
@@ -262,7 +262,7 @@ impl Ctx {
         self.config.get_untracked()
     }
 
-    /// Point the page's options at another slot — `#main[data-config]` — or turn them off.
+    /// Point the page's options at another slot — `config` in the mount options — or turn them off.
     pub fn set_config_slot(&self, name: Option<String>) {
         self.config.set(name);
     }

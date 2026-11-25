@@ -25,7 +25,7 @@ use content::{Outflow, PING_DEST};
 use futures::channel::mpsc;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use transport::reconnect::{Heartbeat, Policy};
+use transport::reconnect::Heartbeat;
 use transport::{Event, Transport};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -37,7 +37,7 @@ use wasm_bindgen_futures::spawn_local;
 const OUTBOX_CAP: usize = 256;
 
 /// What the boot hands over: the two halves, each optional, already validated (ADR 0044 §2). `None` is off —
-/// the page said so through `data-transport`, and the transport is not going to second-guess it.
+/// the page said so in its transport policy, and the transport is not going to second-guess it.
 pub use transport::reconnect::Policy as LiveConfig;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -306,7 +306,6 @@ fn connect(
     {
         let shared = Rc::clone(shared);
         let tx = tx.clone();
-        let codec = codec.clone();
         let onmessage =
             Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
                 let data = e.data();

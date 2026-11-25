@@ -10,7 +10,7 @@ that §3 hands to whoever owns it — see ADR 0044).
 
 `Transport` is two methods (`emit`, `on`) over raw bytes, and the trait is 31 lines. But the only way to use
 something other than our WebSocket is to write a **Rust** boot: implement the trait and copy `mount()`'s assembly
-(`#main` attributes, the codec, `Ctx::new`, `mount_to`, `window.fluxen.send`) — 169 lines, every host, every time.
+(the renderer's boot: reading its settings, the codec, `Ctx::new`, `mount_to`, `window.fluxen.send`) — 169 lines, every host, every time.
 
 The transports people actually ask for are the ones a browser `WebSocket` cannot express: POST + SSE, a socket
 shared with the rest of the page, auth headers, retry and backoff policies the host already owns, an existing
@@ -57,7 +57,7 @@ Five rules, all of them deliberate:
 - **Read once, at mount.** The transport is chosen before `Ctx::new`, because `Ctx::new` consumes it. There is no
   "swap the transport later": replacing a transport under a live reactive root means replaying state we do not keep.
 - **Bytestream only.** The hook moves bytes. `ActiveCodec` still lives in Rust and still comes from
-  `#main[data-codec]` / `?codec=` (default CBOR); the boot encodes uplink and decodes downlink. A hook that also
+  `mount(el, {codec})` / `?codec=` (default CBOR); the boot encodes uplink and decodes downlink. A hook that also
   chose the codec would make "wrong bytes, blank page" the default failure.
 - **Present but malformed is a mount error**, named in the console. Never a silent fallback to our WebSocket: a page
   whose JS believes it owns the socket while wasm opens its own is the worst of both worlds, and it fails invisibly.

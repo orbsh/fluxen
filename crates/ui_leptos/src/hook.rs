@@ -26,10 +26,18 @@ pub fn from_window(codec: ActiveCodec) -> Result<Option<Rc<dyn Transport>>, Stri
     let Some(win) = web_sys::window() else {
         return Ok(None);
     };
-    let hook = match js_sys::Reflect::get(&win, &JsValue::from_str("fluxenTransport")) {
-        Ok(v) if !v.is_undefined() && !v.is_null() => v,
-        _ => return Ok(None),
-    };
+    match js_sys::Reflect::get(&win, &JsValue::from_str("fluxenTransport")) {
+        Ok(v) if !v.is_undefined() && !v.is_null() => wrap(v, codec).map(Some),
+        _ => Ok(None),
+    }
+}
+
+/// Wrap one hook object — `window.fluxenTransport`, or the `transport` field of a `mount(el, options)`
+/// call (ADR 0045). Same shape, same refusal, so a page cannot get a second dialect of "hook" between the
+/// two doors.
+///
+/// `Err` means the hook is wrong: the caller must refuse to mount.
+pub fn wrap(hook: JsValue, codec: ActiveCodec) -> Result<Rc<dyn Transport>, String> {
     let field = |name: &str| js_sys::Reflect::get(&hook, &JsValue::from_str(name)).ok();
     let emit = field("emit").filter(JsValue::is_function);
     let subscribe = field("subscribe").filter(JsValue::is_function);
@@ -72,12 +80,12 @@ pub fn from_window(codec: ActiveCodec) -> Result<Option<Rc<dyn Transport>>, Stri
     // The sink outlives this call: the hook keeps the function for the page's lifetime.
     push.forget();
 
-    Ok(Some(Rc::new(HookTransport {
+    Ok(Rc::new(HookTransport {
         hook,
         emit,
         rx: Rc::new(RefCell::new(rx)),
         codec,
-    })))
+    }))
 }
 
 struct HookTransport {

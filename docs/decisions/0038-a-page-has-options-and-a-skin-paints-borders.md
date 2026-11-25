@@ -19,7 +19,7 @@ What is lost with it, stated now rather than discovered later: **the far side ca
 
 A page option is a value: no row identity, no node tree, and it has to be answerable as a whole — "what is this page configured as" dumps to one object. Everything an option needs already exists for a value in a slot: the far side writes the data plane, the page writes its own half, and a `both` read takes the page's member first and the far side's behind it (ADR 0031 §1). So options are **one slot**, not a namespace of their own.
 
-**Decision.** The page's options live in ONE slot whose name `#main[data-config]` gives — absent means `__CONFIG__`, an empty attribute means this page has no options — holding ONE object whose members are the options. Members are decided **member by member**: the local plane first, the data plane behind it, so a control that owns `sketch` leaves `density` to the producer. `Ctx::config_get(member)` is that read; `Ctx::mirror_config` (§3) reads the same merge.
+**Decision.** The page's options live in ONE slot whose name the mount options give (`config`, ADR 0045) — absent means `__CONFIG__`, an empty string means this page has no options — holding ONE object whose members are the options. Members are decided **member by member**: the local plane first, the data plane behind it, so a control that owns `sketch` leaves `density` to the producer. `Ctx::config_get(member)` is that read; `Ctx::mirror_config` (§3) reads the same merge.
 
 Two writers, both ordinary:
 
@@ -32,7 +32,7 @@ This is one capability, not a config special case: a sink may address inside the
 
 **A switch is not a buffer.** A text field never reads the slot it writes — an echo would undo the keystroke — so its exit is Enter. A `bool` field is a different kind of control: its value *is* its display, and a write is idempotent (checked = value), so it needs no Enter to press. What differs is the **trigger**, not the channel: a loom holding a `kind: bool` field names `submit: [change]` and its change is its exit (ADR 0032 §3).
 
-What it costs, stated: **one signal for the whole option object** — a write to one member reruns every reader of the object, where the retired per-option signals reran only that option's readers (with a handful of page options that is the cheaper trade, and it is why the object is one slot); and **one reserved-looking name in the application's slot space**, which `data-config` is the escape from — the default is `__CONFIG__` precisely because no application would name anything that.
+What it costs, stated: **one signal for the whole option object** — a write to one member reruns every reader of the object, where the retired per-option signals reran only that option's readers (with a handful of page options that is the cheaper trade, and it is why the object is one slot); and **one reserved-looking name in the application's slot space**, which the mount option `config` is the escape from — the default is `__CONFIG__` precisely because no application would name anything that.
 
 History, for the record: this replaced `action: config` + `Content::Config`/`ConfigOp`, `Ctx.config` (`config` op merged per member, wrote only the remote half, dropped equal values), `ConfigSlot`/`ConfigValue`, `set_config`, and the per-option mirror effects. Nothing outside this repository ever sent a `config` frame.
 
@@ -94,7 +94,7 @@ What the earlier version of this section refused — a frame writing options —
 ## Order
 
 1. Delete `inject` — variant, op, arm, guard, tests, example, documentation rows, ADR 0011 status. (Done in this change.)
-2. The option slot: `data-config` on `#main`, `config_get`/`config_members`, a sink `path` writing into the local plane, the per-member fallback in `hooks::value_of`, and the bool read a checkbox needs. (Revised: the `config` op, `Ctx.config`, `set_config` and the per-option signals are gone.)
+2. The option slot: `config` in the mount options, `config_get`/`config_members`, a sink `path` writing into the local plane, the per-member fallback in `hooks::value_of`, and the bool read a checkbox needs. (Revised: the `config` op, `Ctx.config`, `set_config` and the per-option signals are gone.)
 3. The `data-<member>` mirror on the document root, the skin block in `core.css`, and the bar that owns `sketch` from the page's side. Live check: the bar's checkbox flips `html[data-sketch]`, the drawn borders appear and go, and the page returns to exactly its pre-skin state.
 4. `rough_border` in ui_core, `roughr` behind a wasm target dependency, the size probe — the measured delta goes into this ADR before anything is attached.
 5. Attach at the five widgets. Gates: `normal` renders no observer and no extra node; `sketch` covers `examples/yaml` (tabs, form, login, table, chart, forcegraph); frames per second with a 200-row list.

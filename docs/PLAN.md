@@ -33,7 +33,7 @@
 - [x] 25 — 渲染器的发布产物：一份页面能直接引用的 UI bundle（tag `v*` → release 资产）— 2026-10-20
 - [x] 26 — Canvas 的模块选项与 forcegraph 变体 — ADR 0017 — 2026-10-23
 - [x] 27 — 删 `inject`：op / 消费臂 / 同值守卫 / 测试 / 示例帧 / wire 文档行 — ADR 0031 §2、0038 §1 — 2026-11-24
-- [x] 28 — 页面选项就是槽：`#main[data-config]` 指定槽名（默认 `__CONFIG__`），选项对象是节点的载荷（`source.default`）；`sink` 带 `path` 写进 local 面并按成员合并，读侧按成员回落；`config` op / `Ctx.config` / `set_config` / 每个选项一个 signal 全部退役 — ADR 0038 §2 — 2026-11-24
+- [x] 28 — 页面选项就是槽：挂载选项的 `config` 指定槽名（默认 `__CONFIG__`），选项对象是节点的载荷（`source.default`）；`sink` 带 `path` 写进 local 面并按成员合并，读侧按成员回落；`config` op / `Ctx.config` / `set_config` / 每个选项一个 signal 全部退役 — ADR 0038 §2 — 2026-11-24
 - [x] 29 — 皮肤：`config.skin` 镜像到 `<html data-*>` + roughr 实时画边（frame / panel / loom；帧自己声明 `is-border` 才挂）— ADR 0038 §3-4 — 2026-11-24
 - [x] 30 — 开关落在控件本身：`bool` 字段读自己写的槽、change 即出口（文本字段仍以 Enter 为出口），复选框读 `checked()` 而非 `value()`；示例把它放进图的右下角（`panel place: anchor` 浮层，卡片向上开，占图的空边角），shell 不加任何栏 — ADR 0030、0038 §2、§5 — 2026-11-24
 - [x] 31 — 字段没有自己的上行：无 tag 的 sink 只剩本地落地（remote/both 报警告），清空改由 loom 的 `reset: keep|clear|default` 决定；`sends: n` 每发一次减一、为 0 锁定（字段 disabled、拒发），缺省/-1 无限 — ADR 0032 §2、§6、§7 — 2026-11-24
@@ -44,12 +44,13 @@
 - [x] 35 — `move` 动作：把一个**已经在**列表里的行挪到另一个位置，行本身不重建 — ADR 0005 加一节 — 2026-11-24
 - [x] 36 — 节点改名 `bundle` → `loom`：`bundle` 只说"打包"，对"收集输入"与"字段按 `tag` 命名"两层都沉默，读起来又像是 `frame`/`panel`/`tiles` 那一类"装东西的盒子"；`loom` 一次说出三件事——线=字段、织法=`tag`→键、布=送出的对象，且织机天然可嵌套（ADR 0032 §4）。`bus` 否（Prism 自己就是总线、共享通路不属于哪一组、总线不嵌套）、`trunk` 否（本仓构建工具、git 主干、方向朝根而载荷离树） — ADR 0032 §1 — 2026-11-25
 - [x] 37 — 字段的时钟：`input.emit` = `{debounce: ms}` | `{throttle: ms}`，闭枚举互斥，缺省 `{debounce: 250}`；`{debounce: 0}` 回到"每键一帧"。被定时的只有"通知 loom"，字段自己的显示信号照旧每键同步写，所以打字不等窗口；`submit` 先取消挂起的窗口再打包（Enter／按钮永远送屏幕上的值），`reset` 也取消（不让旧值复活） — ADR 0032 §8（§3 加"两个 owner"段）— 2026-11-25
-- [x] 38 — 传输钩子 + 活着的 socket：`window.fluxenTransport = {emit, subscribe, close?}` 在 mount 前读一次（形状不对=mount 报错，不回退）；默认路径换成 `LiveWs`（探针 `__ping__`→`__pong__`、5s 静默问一次、10s 静默判死自己关、重连 500ms 起翻倍到 10s 封顶、抖动 20%、离线帧排队 256 上限）；整条策略是一个 `#main` 的 `data-transport` 对象（`{"heartbeat":5000,"dead":10000,"retry":{"base":500,"max":10000,"jitter":20}}`；`heartbeat:0` 关心跳、`retry:false` 关重连、未知键/坏 JSON/死窗≤探针窗都是 mount 报错）；stage 按到达编码回 pong 且不转发，reflux 在 dispatch 前回 pong（不进 handler/refused/log）；与服务端自带心跳的分工写在 ADR 0044 §4（客户端先放手，服务端窗口是它的几倍）— ADR 0040 §3.1 加节 + ADR 0044 — 2026-11-25
+- [x] 38 — 传输钩子 + 活着的 socket：`window.fluxenTransport = {emit, subscribe, close?}` 在 mount 前读一次（形状不对=mount 报错，不回退）；默认路径换成 `LiveWs`（探针 `__ping__`→`__pong__`、5s 静默问一次、10s 静默判死自己关、重连 500ms 起翻倍到 10s 封顶、抖动 20%、离线帧排队 256 上限）；整条策略是挂载调用里的 `policy` 对象（`{heartbeat:5000,dead:10000,retry:{base:500,max:10000,jitter:20}}`；`heartbeat:0` 关心跳、`retry:false` 关重连、未知键/坏值/死窗≤探针窗都拒绝挂载）；stage 按到达编码回 pong 且不转发，reflux 在 dispatch 前回 pong（不进 handler/refused/log）；与服务端自带心跳的分工写在 ADR 0044 §4（客户端先放手，服务端窗口是它的几倍）— ADR 0040 §3.1 加节 + ADR 0044 — 2026-11-25
   - 帧形状 `{"action": "move", "slot": <列表槽>, "id": <行的 id>, "position": ±n}`；`position` 与 `append` 同向（`0` 尾、`+n` 从尾往里数、`-n` 从头往里数），但**按"把这一行先拎出来"的列表计数**（`len - 1`）——否则"删之前数还是删之后数"两条都自洽，实现和人读的会是两条。
   - 域：行必须在列表里（不在就拒收，与 `append` 拒重复 id 是同一条边界）；`position` 越界由渲染器拒（`move_index`，与 `append_index` 并列，域比 `append` 少一格）。
   - 渲染器：改的是信号里的行序，diff 交给 keyed 列表（`components/tiles.rs` 的 `tachys::view::keyed`）——id 没变的行复用节点，所以焦点、动画、滚动位置都不丢；非 keyed 的容器按"重建子树"兜底，语义仍正确。今天要重排只有"删光再插回"，中间态一旦渲染，节点就真的没了。
   - 连带：`content::Content` 加 `Move(MoveOp)`（`crates/content/src/lib.rs` 的七动作集变八）；`stage -- schema` 导出；ADR 0005 补一节（`append` 的 position 记法在那儿，`move` 沿用并说明域）；下游 reflux 的 `wire.move()` 与 `Slot.move(id, position)`，`docs/ideas/reactive-signals.md` §七那条"wire 没有 move"的天花板随之撤掉。
   - 判据：一个十行列表把最后一行挪到最前，帧里只有一条 `move`（不是十条 remove/append），页面上那一行的输入框焦点还在。
+- [x] 39 — 一个门：页面用 `mount(element, options)` 启动，`data-*` 那套属性全部退役（`data-host`/`data-path`/`data-codec`/`data-token`/`data-config`/`data-transport`），随之消失的是"两个来源打架时谁赢"的整台机器（逐字段优先级 + 冲突告警 + 空值语义）。配置只剩两个来源：地址（`?token=`/`?codec=`）与调用，调用静默覆盖地址；值不可用就拒绝挂载（未知键/坏 codec/不以 `/` 开头的 path/自相矛盾的 policy），绝不降级成缺省。默认目标改成**我们的** id `#fluxen`（`#main` 是宿主的地标，不再当魔法 id，也就不需要 `__fluxenAutoMount` 这种撤销开关）；`transport` 作为选项按值传，与 `window.fluxenTransport` 同一个 `hook::wrap`。产物从 bin 变成 lib（cdylib，一个 wasm 同时带 `#[wasm_bindgen(start)]` 的 `#fluxen` 默认挂载与导出的 `mount`），`src/main.rs` 删除。真浏览器验证五页：`#fluxen` 默认路径渲染、`mount(#app, {codec:'json'})` 渲染、`policy:{heartbeat:0}` 静默 7 秒零探针、坏 codec 被 promise 拒绝并写明原因、hook 按值传入后无 `__fluxenConn` 且能渲染 hook 推的帧 — ADR 0045 — 2026-11-25
 
 ## 开着
 
