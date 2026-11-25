@@ -38,13 +38,26 @@ sink:   { dest: "message", scope: both, path: "/body" }                      # S
 - `Sink { dest?, scope = remote, path? }` — where a value goes, who is authoritative about it, which member it
   owns.
 - `dest` is the same word the outflow carries (ADR 0023), so emitting is a pass-through instead of a translation.
-  A `sink` with no `dest` is a marker without an address — a button saying "I am the confirm key" — and stays
-  legal, exactly as `sink: {}` was.
+  A `sink` with no `dest` stays legal — it is an address-less write, and validation accepts it — but it no
+  longer has a job: it was how a button said "I am the confirm key", and `Button` has no `sink` at all
+  (amended 2026-11-25, §2a below).
 - Both refuse unknown keys, so the two shapes that used to decode and mean nothing now fail loudly:
   `sink: {slot: "x"}` (a write with a read's address) and `sink: {dest: "x", default: 1}` (a write with a read's
   fallback).
 - What did **not** change: `scope` is one closed enumeration on both sides (`remote | local | both`, ADR 0031 §1),
   and `slot` still means the same thing wherever it appears — the page-side name a value lives under.
+
+### 2a. The button's marker is gone (amended 2026-11-25)
+
+`Button` had a `sink` that was never a channel: the renderer read only whether it was present, to decide
+"draw this button at all", and the press went to the enclosing bundle's sink, payload and id
+(`ui_core::hooks::submit`). So the field's `dest`, `scope` and `path` were dead, and the demo layer had to
+write an inert address into every confirm key just to make the button visible.
+
+The information was already in one place: `bundle.attrs.submit` names the timing, and `nearest(bundle,
+SubmitMode::Button)` finds the bundle a button belongs to. A button therefore carries `id`, `attrs` and
+`source` (its label) — nothing else. Outside a button-submitting bundle it draws nothing, exactly as before,
+and the decision is no longer the button's to make.
 
 ## 3. What it deletes
 

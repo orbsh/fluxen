@@ -93,9 +93,10 @@ fn has_retired_key(v: &serde_yaml::Value) -> bool {
 /// it does not support" error is reported loudly here, rather than inside serde.
 ///
 /// `input` and `select` are not in the list: they no longer have the field at all and refuse it in serde (ADR 0032 §2), so this
-/// check would never see them get that far.
+/// check would never see them get that far. Neither is `button`: its sink was a confirm-key marker, not a channel, and ADR 0039 §2
+/// dropped it — the enclosing bundle's `submit` set is what names the timing.
 fn illegal_channel(v: &serde_yaml::Value) -> Option<String> {
-    const WRITERS: &[&str] = &["button", "bundle", "frame"];
+    const WRITERS: &[&str] = &["bundle", "frame"];
     match v {
         serde_yaml::Value::Mapping(m) => {
             let kind = m.get("type").and_then(|t| t.as_str());

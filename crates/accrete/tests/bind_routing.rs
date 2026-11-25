@@ -105,7 +105,8 @@ fn a_sink_names_a_dest_and_has_no_default() {
         serde_json::from_value::<accrete::Sink>(json!({"slot": "x"})).is_err(),
         "a sink addresses a dest, not a slot"
     );
-    // A button's "I am the confirm key" marker is an empty sink, and stays one.
+    // A sink without a dest is legal and means "no address"; a button no longer needs one at all
+    // (ADR 0039 §2 amended) — the enclosing bundle's `submit` names the timing.
     let marker = sink(json!({}));
     assert_eq!(marker.dest, None);
 }
