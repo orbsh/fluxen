@@ -167,7 +167,7 @@ python3 scripts/ui_dist.py --no-build # 装配已有的 crates/ui_leptos/dist
   `index.html`）
 - `SHA256SUMS`，以及 `fluxen-ui-<tag>.tar.gz`（同样五件 + manifest）
 
-按 tag 取用（例如 `https://github.com/orbsh/fluxen/releases/download/v0.3.2/manifest.json`），把五件
+按 tag 取用（例如 `https://github.com/orbsh/fluxen/releases/download/v0.3.3/manifest.json`），把五件
 拷进你的静态根，`/` 就是一个能用的页面：入口文档把 fluxen 挂到 `<div id="fluxen">`，用它的默认值
 （`path: /channel`、`codec: json`），宿主什么都不用配。
 

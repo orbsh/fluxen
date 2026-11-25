@@ -204,7 +204,7 @@ A `v*` tag runs the same script in CI (`.github/workflows/ui-release.yml`) and p
   `assets/custom.css`, `index.html`)
 - `SHA256SUMS`, and `fluxen-ui-<tag>.tar.gz` (the same five plus the manifest)
 
-Fetch by tag — e.g. `https://github.com/orbsh/fluxen/releases/download/v0.3.2/manifest.json` — copy
+Fetch by tag — e.g. `https://github.com/orbsh/fluxen/releases/download/v0.3.3/manifest.json` — copy
 the five files into your static root and `/` is a working page: the entry document mounts fluxen into
 `<div id="fluxen">` on its defaults (`path: /channel`, `codec: json`), so the host configures nothing.
 
