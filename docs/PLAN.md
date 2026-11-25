@@ -1,6 +1,6 @@
 # PLAN
 
-决策在 `docs/decisions/`（ADR 0003 … 0038）；本文件是索引——什么时候落了什么、什么还开着、宿主必须知道什么。
+决策在 `docs/decisions/`（ADR 0003 … 0040）；本文件是索引——什么时候落了什么、什么还开着、宿主必须知道什么。
 
 ## 执行中的计划（2026-09 … 2026-10）
 
@@ -66,6 +66,7 @@
 - [x] 信封归宿主 — ADR 0021 决策 6
 - [x] 线上槽位的词是 `slot` — ADR 0022
 - [x] 上行目标叫 `dest` — ADR 0023
+- [ ] 传输是一个运行时钩子：`window.fluxenTransport = { emit, subscribe, close? }`，mount 前读一次、只搬字节（codec 仍归 Rust）、形状不对即 mount 报错且不静默回退、重连归钩子；默认路径仍是 `WsTransport`，reflux/prism 不装钩子 — ADR 0040 — 待做
 
 ## 已修 — 这条路付过的代价
 
