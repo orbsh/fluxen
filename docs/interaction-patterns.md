@@ -40,7 +40,7 @@ A button or a form is the same case: a click sends an event, the application ans
 
 Rows share one list; what distinguishes them is a value the row carries — a `selector` (`user` / `assistant`, and a name of its own for anything else that earns a bubble). The list's item template matches on it and decides the container: end-aligned and accented for the person, stretched and plain for the answer. That decision **belongs to the layout**, which the application serves; the frames carry rows and selectors, never class lists.
 
-Row identity lives in the data (`data.id`), a reusable layout lives in `rack.item` (ADR 0020), and arrangement lives in `attrs.view` (ADR 0024). The application decides what a row is and what it holds; the renderer decides how those rows are arranged and how they enter and leave.
+Row identity lives in the data (`data.id`), a reusable layout lives in `tiles`'s `children` (ADR 0020), and arrangement lives in that node's own fields — `window`, `step`, `dir`, `wrap` (ADR 0024, ADR 0031 §4). The application decides what a row is and what it holds; the renderer decides how those rows are arranged and how they enter and leave.
 
 ## 4. One field, several ways to send it
 

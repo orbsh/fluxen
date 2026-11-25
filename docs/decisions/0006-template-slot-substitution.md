@@ -69,7 +69,7 @@ accrete 的 self-dev-dependency feature 组合、stage 的 `template` feature
 ### 5. 示例迁移
 
 - `01.segment.tmpl.yaml`：`{% for %}` 构造 `children` 数组的逻辑上移
-  ——body 改为 `{"type":"case","children":{{kids}},...}`，注册帧改写，
+  ——body 改为 `{"type":"frame","children":{{kids}},...}`，注册帧改写，
   `01.segment.render.yaml` 的 `data` 里由生产端给出完整 `kids` 数组。
 - `00.chat_layout.yaml` / `12.placeholder.yaml`：`{{var}}` 插值同形，
   零改动。
@@ -82,7 +82,7 @@ accrete 的 self-dev-dependency feature 组合、stage 的 `template` feature
   `RwLock<HashMap<String, String>>`。
 - 主包 wasm 体积下降（minijinja 不进 wasm 侧的程度未实测，方向确定）。
 - 模板语言表面收窄是刻意的：fluxen 的哲学是封闭词汇表 + 生产端组装，
-  模板引擎的控制流与这条原则相抵。将来若真需要循环复用，正解是 rack
+  模板引擎的控制流与这条原则相抵。将来若真需要循环复用，正解是 `tiles`
   + data 槽（现成机制），不是给模板重新加语法。
 - `stage schema` 不受影响（template 变体常开后 schema 反而更稳定，
   不再随 feature 组合变化）。

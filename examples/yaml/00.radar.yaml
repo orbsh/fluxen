@@ -20,7 +20,7 @@
 #   Top: the change in department averages, all three departments in one coordinate system (color = dept), shape: smooth for smoothed
 #       curves, with the data being mock values from a random walk. This file carries only the first 15 days (09-03…09-17);
 #       the last 15 days (09-18…10-02) are patched day by day into the `trend` slot
-#       (/bind/value/default/data) as appends (see below).
+#       (/source/default/data) as appends (see below).
 #   Middle: three independent charts side by side in equal thirds (a three-column grid, one radar coordinate system per department; each bound to
 #       a radar_* slot, with the spec in the set frames at the end of the file),
 #       one closed polygon per person within a department — area with a semi-transparent fill (fillOpacity 0.15 +
@@ -38,7 +38,7 @@
 #       `range` (the example at the time was [-1/6, 2/3] for 6 dimensions) also spaces them out, but leaves a 60° gap
 #       and pushes the last dimension against the canvas edge — the label is clipped and there is no hoverable mark near that axis.
 #   Bottom: the summary row (text, bound to the `summary` slot, starting from an empty string); the demo script patches it into the slot token by token
-#       at /bind/value/default as appends.
+#       at /source/default as appends.
 # Streaming content (day-by-day data, token-by-token summaries) all goes through data slots: writing a layout node re-renders the whole row and
 #   re-mounts the module host (measured, see docs/PLAN.md), whereas a slot write only notifies that slot's subscribers. The row carries no id:
 #   this file can be /send-ed repeatedly (no id = a positional row, so repeated pushes do not conflict), and appends are not row-addressed.

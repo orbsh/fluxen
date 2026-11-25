@@ -23,6 +23,6 @@
 - action: patch
   slot: chat
   id: s2
-  path: /children/0/bind/value/default
+  path: /children/0/source/default
   op: replace
   value: ===

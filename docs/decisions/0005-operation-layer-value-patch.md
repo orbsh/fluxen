@@ -8,13 +8,13 @@
 
 下行 `Content` 现有四个动作（create/tmpl/set/join），更新机制依赖 join +
 `Method`（Replace/Concat/Delete）的**位置合并**：`merge.rs` 用 `zip_longest`
-按索引逐层配对 children，bind default 按策略合并。复盘发现三个问题：
+按索引逐层配对 children，`source.default` 按策略合并。复盘发现三个问题：
 
 1. **粒度太粗**。要改深层一个值，帧必须携带从根到目标的完整前缀结构
    （zip 需要逐层占位）；token 流每帧重发整段前缀，O(树) 带宽。
 2. **位置寻址脆弱**。children 靠索引配对，布局一旦增删兄弟节点，旧帧
    全部错位——结构性缺陷，不是实现问题。
-3. **合并覆盖不全**。`merge` 只处理 bind default 与 children，**attrs 完全
+3. **合并覆盖不全**。`merge` 只处理 `source.default` 与 children，**attrs 完全
    不参与合并**：改一个 class 只能整棵重发。
 
 同时数据平面的两条寻址通道已被验证良好：Set 的事件名（具名槽整体替换）、

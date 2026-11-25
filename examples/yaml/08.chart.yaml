@@ -53,12 +53,12 @@
   id: stream-chart
   # op:append on an array = push onto the tail (ADR 0005's streaming accumulation semantics):
   # each team adds a 12th day, simulating live point appends.
-  path: /bind/value/default/data
+  path: /source/default/data
   op: append
   value: {day: Dec 12, value: 49, team: TEAM A}
 - action: patch
   slot: chat
   id: stream-chart
-  path: /bind/value/default/data
+  path: /source/default/data
   op: append
   value: {day: Dec 12, value: 58, team: TEAM B}

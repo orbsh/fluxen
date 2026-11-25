@@ -21,7 +21,7 @@ fluxen 从 fluxora 拆出时同时带了两个渲染后端：`ui_dixous`（Dioxu
 
 删除 `ui_dixous` / `ui_dixous_macro`，Leptos 为唯一渲染后端。同时清除
 accrete DSL 中一切 Dioxus 痕迹：`feature = "dioxus"`、`derive(Props)`、
-`BindVariant::Field/Submit` 内嵌的 `Signal<Value>` 字段。
+以及当时表单那层变体里内嵌的 `Signal<Value>` 字段（今天字段是带 `tag` 的节点，由 `loom` 打包，ADR 0032）。
 
 ## 理由
 
@@ -57,7 +57,7 @@ accrete DSL 中一切 Dioxus 痕迹：`feature = "dioxus"`、`derive(Props)`、
 
 - workspace 联合构建恢复绿色；`cargo test --workspace` 与 wasm 目标构建
   均通过（2026-09-25 验证）。
-- `BindVariant::Field` 不再携带信号，表单归属经 `Ctx.form` 克隆链传递
+- 表单不再有携带信号的变体：字段是带 `tag` 的节点，归属经 `Ctx.form` 克隆链传递
   （见 ui_leptos hooks/ctx 实现）。
 - ADR 0001 中 "`transport-ws` 是两个 UI crate 的默认依赖" 的表述就此过时，
   历史文本保留不改，以本文为准。

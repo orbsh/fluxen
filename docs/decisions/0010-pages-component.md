@@ -1,6 +1,6 @@
 # ADR 0010: Pages 组件——id 字典 + 事件包装形状统一
 
-状态：已接受（2026-10-02 实施完毕，e2e 通过）
+状态：已接受（2026-10-02 实施完毕，e2e 通过）。**节点名已并入 `tiles`**（ADR 0031 §4：`window` 说显示几行、`step` 说谁在推进）；下文按终态的 `tiles` 写。
 日期：2026-10-01
 仓库：fluxen
 
@@ -53,23 +53,24 @@ path 仍是订阅侧字段、发射侧忽略）。Event/Field/Submit 行为不�
 ### 2. 新 Accrete 变体 Pages
 
 ```rust
-Pages {
+Tiles {
     id: Option<String>,
-    attrs: Option<ClassAttr>,
-    bind: Option<HashMap<String, Bind>>,
-    #[serde(default)]
-    display: PagesDisplay,     // Render（默认）| Dom
+    attrs: Option<TilesAttr>,
+    source: Option<Source>,    // 页面行的来源：list 平面，槽名即字典键
+    window: Option<Window>,    // 同时显示几行（`{size: 1}` 是"一页"）
+    step: Option<Step>,        // 谁在推进（`{slot: page}` 由另一个值槽推进）
 }
 ```
 
-wire tag `pages`，derive 门控照 rack 抄。bind 固定两个键：
+两个通道，一个方向一个（ADR 0039）：
 
-- `"value"` → `kind: source`（list 平面）：页面行的来源。行 = 任意
-  Accrete 节点，`id` 即字典键（复用 rack 的键纪律：无 id 行退位置
-  `#{idx}`）。服务端用现有 append/set 逐页喂，patch 可只动一页的子树。
-- `"select"` → `kind: local`（或 `source`）+ `path`：选中信号订阅。
-  tracked 读槽、按 path 提键；path 缺省 = 整值（提取的 Value 转字符串
-  作键；非字符串 = warn + 不切换）。
+- `source`（list 平面）：页面行的来源。行 = 任意 Accrete 节点，`id` 即字典键
+  （复用 `tiles` 的键纪律：无 id 行退位置 `#{idx}`）。服务端用现有
+  `append`/`set` 逐页喂，`patch` 可只动一页的子树。
+- 选中的是谁：一个节点只有一个 `source`、一个 `sink`，所以这不是本节点的第二个键，
+  而是 `step: {slot: page}` 指向的另一个值槽——菜单把点击写进那个槽
+  （`sink: {dest: page, scope: local}`），这里 tracked 读它、按 `path` 提键；`path`
+  缺省 = 整值（提取的值转字符串作键；非字符串 = warn + 不切换）。
 
 未命中键 = warn + 空白（对齐 miss-warn-drop）；信号未写入 = 空白。
 
@@ -81,21 +82,21 @@ wire tag `pages`，derive 门控照 rack 抄。bind 固定两个键：
   （`display:none`）。状态全保——chat 页滚回原处、canvas 不重建；
   代价是全部行的渲染与内存常驻，生产端自选。
 
-占满空间（实施期追加裁决 2026-10-02，同 case/rack 模式）：pages 容器
+占满空间（实施期追加裁决 2026-10-02，同 `frame`/`tiles` 模式）：容器
 `f` + `col`（进 use_common_css 类型表，可被自身 attrs.horizontal 推翻），
 命中页包壳 `page f` 占满剩余空间；隐藏页不带 `f`——同 div 上 `.f` 与
 `.hide` 冲突（实测 display 被算回 flex），互斥直接做进 class 切换。
 
 字典在渲染层维护（`RwSignal<HashMap<String, Accrete>>` 派生自 list
-槽，非 wire 概念），与 Ctx 槽平面无关——Ctx 平面仍是 data/list/vals
-三个，不再增多。
+槽，非 wire 概念），与 Ctx 槽平面无关——Ctx 平面仍是 data / list / 值
+三个（`slot_for_data` / `slot_for_list` / `slot_for_value`），不再增多。
 
 ### 4. 示例与验证
 
 - 15.tabs.yaml 重写为诚实形态：菜单 = list 槽的短标签行；页面 =
   另一批内容互异的行（首页=文本块、文档=表单、关于=chat 样例行）；
-  select `kind: local, slot: page`；Pages `bind.value→source: pages`、
-  `bind.select→{kind: local, slot: page, path: /data}`；标题用同 path
+  select `sink: {dest: page, scope: local}`；`tiles` 是 `source: {slot: pages}` +
+  `window: {size: 1}` + `step: {slot: page}`；标题用同一路径
   演示"同事件两处取件"。
 - 测试：emit 包装形状单测（Local 带/不带 event、id 透传）；Pages
   键提取与未命中 warn 单测；display 两模式的 DOM 取证（dom 模式：
@@ -107,7 +108,7 @@ wire tag `pages`，derive 门控照 rack 抄。bind 固定两个键：
 - 路由/历史同步（地址栏）：仍是 ADR 0008 §5 的独立后置单元。
 - 键模板/动态 path：查找在 Pages 私有字典里，不需要寻址语法变复杂。
 - Pages 多信号源/优先级：一 value 一 select，两键定死。
-- rack 的定位/滚动 API（scroll-to 某行）：无真实需求前不加。
+- `tiles` 的定位/滚动 API（scroll-to 某行）：无真实需求前不加。
 
 ## 后果
 

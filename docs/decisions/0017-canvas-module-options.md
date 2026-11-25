@@ -16,15 +16,15 @@
 1. 需要一个力导向关系图的渲染器（k10r 的 `docs/kg-demo-3d.html` 是实测过的参考实现）。
 2. 这类渲染器自己的配置项（节点/边的基础尺寸、力参数、配色……）**不进 DSL**。
 
-ADR 0007 的 Canvas 只有 `id / url / attrs / bind`：`attrs` 是尺寸与 CSS 钩子，
-`bind["value"]` 是**数据区**（流式载荷）。渲染器的静态配置没有落点。三条候选：
+ADR 0007 的 Canvas 只有 `id / url / attrs / source / sink`：`attrs` 是尺寸与 CSS 钩子，
+`source` 是**数据区**（流式载荷）。渲染器的静态配置没有落点。三条候选：
 
 - **每个渲染器一个 Accrete 变体**（`Graph { nodeSize, linkWidth, … }`）——否决。DSL 的
   封闭词汇表会被外部库的词表逐个污染：换一个图库就改一次 wire，核心还得理解它不认识
   的键。用户裁决的原话就是这个意思（"这种属于变体的不要放在 accrete 中"）。
 - **capability/registry 抽象**——ADR 0007 已否决过（为想象中的插件市场预付成本），
   不复活。
-- **塞进数据区**（`bind["value"].default.options`）——否决。数据区是流：配置会跟着
+- **塞进数据区**（`source.default.options`）——否决。数据区是流：配置会跟着
   每一帧载荷重推，槽写入也会把配置一起改掉；配置与数据是两条生命周期不同的腿。
 
 ## 决策
@@ -37,7 +37,8 @@ Canvas {
     url: String,
     attrs: Option<SizeAttr>,
     options: Option<Value>,        // wire tag `options`，缺省不出现
-    bind: Option<HashMap<String, Bind>>,
+    source: Option<Source>,
+    sink: Option<Sink>,
 }
 ```
 

@@ -28,9 +28,9 @@
 1. `case` 改名 `frame`（结构体 `Case` → `Frame`，`CaseAttr` → `FrameAttr`）。
 2. 删 `placeholder`。它的行为并入 `frame`：
 
-       bind.value.kind = source   槽有值 → 画槽里的树（一次性淡入淡出）
-                                  槽空   → 画 children（默认内容）
-       无 bind                    画 children
+       source 有值   槽有节点 → 画槽里的树（一次性淡入淡出）
+       槽空          → 画 children（默认内容）
+       无 source     → 画 children
 
 3. `attrs` 统一用 `FrameAttr`（`class`/`selector`/`horizontal`/`grid`），所以原来
    `placeholder` 撑不起的 grid 布局现在一条路都通。

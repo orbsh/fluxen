@@ -3,7 +3,7 @@
 # 1) append one panel to the layout root = an explicitly declared mount point; visibility has a single rule:
 #    visible as soon as the bound local slot `login_modal` is non-empty (ADR 0012 "empty means absent").
 # 2) the trigger input goes in a chat row (enter writes the slot = open). The content grows right inside the panel —
-#    portal is gone: slots are global, whoever binds one shows it, there is no need to carry the subtree elsewhere.
+#    portal is gone: slots are global, whoever reads one shows it, there is no need to carry the subtree elsewhere.
 #    Clicking the blurred area outside the card closes it = clears that slot; once the slot has been empty, enter reopens it
 #    (the next write is bound to be a new value, so "don't write equal values" cannot block it by mistake).
 # Prerequisites: send 00.main.yaml first.
