@@ -22,10 +22,10 @@
    back to the initial value HERE instead of leaking down the tree meaning something else.
 
    Only SINGLE typed values are registered. Lists are not: `--tile-fields` is a track list
-   (`minmax(0, 1fr) 5rem`) and `--shadow-width` is a shadow-offset list (`2px 2px 0 0`) — no
-   property syntax describes either, and registering one as `<length>` would invalidate every
-   real value it is ever given. `--shadow-color` is left unregistered too: it is consumed by the
-   relative-color function in `.is-shadow` (`oklch(from …)`), not by `calc`.
+   (`minmax(0, 1fr) 5rem`) — no property syntax describes it, and registering it as `<length>` would
+   invalidate every real value it is ever given. `--shadow-color` and `--shadow-ink` are left
+   unregistered too: they are consumed by the relative-colour function in `.is-shadow`
+   (`oklch(from …)`), not by `calc`.
 
    `--input-round`'s token is `0.35em`, but an `@property` initial value must be computationally
    independent — no font-relative units — so its initial is `0px` and the token in `:root` stays
@@ -974,32 +974,40 @@
         }
     }
 
+    /* A shadow is a soft thing: two layers, straight down, low alpha, blurred — Tailwind's `shadow` at rest
+       and `shadow-md` under the pointer, spreads and all. Nothing here is offset by a flat 2px: that is a
+       drawing of a shadow, not a shadow, and it reads as a cartoon. The alpha is the only thing this sheet
+       decides for itself (0.1, Tailwind's); the colour comes from the role, so an accent button casts an
+       accent-tinted shadow and everything else casts black. */
     .is-shadow {
         --csstools-color-scheme--light: initial;
-        --shadow-color: var(--disabled);
-        --shadow-color-calc: oklch(
-            from var(--shadow-color) l c h / calc(alpha - 0.2)
-        );
-        --shadow-width: 2px 2px 0px 0px;
+        --shadow-color: oklch(0 0 0);
+        --shadow-ink: oklch(from var(--shadow-color) l c h / 0.1);
         box-shadow:
-            var(--shadow-width) var(--shadow-color-calc),
-            0px 0px 2px 0px var(--shadow-color-calc);
-        transition: all 0.1s ease-in-out 0s;
+            0 1px 3px 0 var(--shadow-ink),
+            0 1px 2px -1px var(--shadow-ink);
+        transition: box-shadow 0.15s ease-in-out 0s;
 
         &:hover {
-            --shadow-width: 4px 4px 0px 0px;
+            box-shadow:
+                0 4px 6px -1px var(--shadow-ink),
+                0 2px 4px -2px var(--shadow-ink);
         }
     }
 
-    /* Buttons throw their shadow the other way: 4px at rest, 2px under the pointer — the inverse
-       of the rule above. It has to live in THIS layer: as a components-layer rule it lost to
-       `.is-shadow` for the only reason layers have, not specificity, so it never applied once.
-       Same layer, higher specificity (`.button.is-shadow` over `.is-shadow`), so it now does. */
+    /* Buttons throw their shadow the other way: the lifted pair at rest, the tight pair under the pointer —
+       the inverse of the rule above, which is what a press looks like. It has to live in THIS layer: as a
+       components-layer rule it lost to `.is-shadow` for the only reason layers have, not specificity, so it
+       never applied once. Same layer, higher specificity (`.button.is-shadow` over `.is-shadow`), so it does. */
     .button.is-shadow {
-        --shadow-width: 4px 4px 0px 0px;
+        box-shadow:
+            0 4px 6px -1px var(--shadow-ink),
+            0 2px 4px -2px var(--shadow-ink);
 
         &:hover {
-            --shadow-width: 2px 2px 0px 0px;
+            box-shadow:
+                0 1px 3px 0 var(--shadow-ink),
+                0 1px 2px -1px var(--shadow-ink);
         }
     }
 
@@ -1415,10 +1423,10 @@
         height: 1.15em;
     }
 
-    /* A shadow is a line too. Normal mode throws a hard 2px offset (`--shadow-width`), so under the pen the
-       box is simply drawn a second time, two pixels down and right, in a lighter ink — the way wired.js draws
-       it, and the reason nothing in the skin is blurred. The lift on hover is the same move, one step further,
-       which in normal mode is the offset growing. */
+    /* A shadow is a line too. Normal mode casts a soft one (`shadow` in `.is-shadow`) and a blur is the one
+       thing a pen cannot draw, so the skin answers in the only vocabulary it has: the box drawn a second time,
+       two pixels down and right, in a lighter ink — the way wired.js does it, and the reason nothing in the
+       skin is blurred. Hover lifts it one step further, which is what the soft pair does too. */
     html[data-sketch="true"] svg.rough g.shadow {
         transform: translate(2px, 2px);
         opacity: 0.35;

@@ -279,9 +279,9 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
     let edges = RwSignal::new(Vec::<String>::new());
     let marks = RwSignal::new(Vec::<String>::new());
     let checks = RwSignal::new(Vec::<String>::new());
-    // The shadow is geometry too: normal mode throws a hard 2px offset (`--shadow-width`), which is the same
-    // box drawn twice — so under the pen it is the same box drawn twice, in a lighter ink, with its own hand.
-    // Nothing in a sketch is blurred; a shadow that is a blur is the one thing the skin cannot draw.
+    // The shadow is geometry too. Normal mode casts a soft one (Tailwind's two-layer `shadow`), and a blur is
+    // the one thing a pen cannot draw — so the skin answers with the only thing it can: the box drawn again,
+    // offset, in a lighter ink, with its own hand. Nothing in a sketch is blurred.
     let shadows = RwSignal::new(Vec::<String>::new());
     let cut = RwSignal::new(String::new());
     let cut_id = format!("rough-cut-{seed:x}");
