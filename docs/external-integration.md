@@ -192,17 +192,40 @@ Decision (2026-10-29): split `ui_leptos` into
 - **`boot`** — the `#main` reader, the WS transport wiring, `mount()`, `window.fluxen.send`.
 
 `fluxen` then has something to be a facade about: it re-exports `ui-core` always, and `boot` behind
-a feature. The two consumption styles get names instead of folklore:
+a feature. The three consumption styles get names instead of folklore:
 
 | style | who | reuses | supplies |
 |:--|:--|:--|:--|
 | core + own boot | nobody today (the road is there for a host that wraps the core in-process) | `ui-core`, `accrete`, `content`, `forcegraph`, `ui-assets` | its own transport, its own page entry |
 | boot + own frames | prism (Rust, serves the artifact), reflux (Python, pinned loom) | the loom built from the example boot (`#main`, WS, `window.fluxen.send`) | the frames, over its own socket; prism also the static root and `/app.css` |
+| our boot + your transport | a host that needs a JS transport (ADR 0040) | the loom built from the example boot (`#main`, `Ctx`, `mount_to`, `window.fluxen.send`) | only the transport: `window.fluxenTransport`'s `emit`/`subscribe`/`close?`, bytes in and out; the codec stays in Rust |
 
 The test for the two rows is who builds the socket, not who writes Rust: what prism writes in Rust is
 the **producer** (gateway, identity, turns). On the renderer's side it serves the artifact, exactly as
 reflux does — `crates/prism`'s only fluxen dependency is `content` (the wire vocabulary), with no
 `ui-core` and no boot of its own.
+
+### A third style: keep our boot, replace only the transport
+
+A host that needs POST + SSE, one socket shared with the rest of its page, auth headers, or its own retry and
+backoff does not have to write a Rust boot — and does not have to build a second `ui-core` wasm either (what that
+costs is ADR 0040 §2: it does not move the boot out of Rust, it only adds an ABI, a second codec home and a second
+artifact). Instead, one global hook:
+
+```
+window.fluxenTransport = {
+  emit(bytes)      { /* one uplink frame, already encoded */ },
+  subscribe(push)  { /* take the sink; hand every downlink frame to push(bytes) */ },
+  close?()         { /* optional */ },
+}
+```
+
+Five rules: **read once, before mount** (`Ctx::new` consumes the transport, so it cannot be swapped later);
+**bytes only** — the codec stays in Rust and still comes from `#main[data-codec]` / `?codec=`; **present but
+malformed is a mount error**, never a silent fall back to our WebSocket (which would leave a page believing JS owns
+the socket while wasm opened its own); **retry belongs to the hook** — the framework never retries; and
+`window.fluxen.send` exists in both modes, so page code never learns which transport is running. The only cost is
+one extra JS↔wasm crossing per frame in hook mode, and nothing at all on the default path.
 
 ## 5. Worked example — prism, the venue
 
@@ -210,10 +233,11 @@ Prism is a WS connection plane (gateway, identity, turns). Its renderer leg is `
 speaks **this** wire — not prism's own `{ev, args}` verb frames (those stay on `/ws`, the programmatic
 leg for the CLI and peers — the stage precedent: `/channel` for the page, `/cli` for peers):
 
-- **Layout.** The client's first uplink is `Outflow { dest: "init" }`. Prism answers with the
-  layout as ordinary `create` frames: a `file:` source delivers the YAML frame list verbatim, an
-  `uplink:` source submits to a global booth and forwards what it returns. There is no layout
-  envelope and no second shape — the layout is just the first view operation.
+- **Layout.** The moment the socket opens prism pushes, waiting for no uplink: the credential
+  fact first, then the shell (`shell.yaml`'s `create`: navigation plus one empty region per
+  island), then this viewer's data frame, and finally announces `ui:connect` on the plane —
+  whichever booth declared it answers with ordinary frames. There is no "ask for the layout" verb
+  and no layout envelope: the layout is the connection's answer.
 - **Prism's own verbs** ride its **own** leg and its own shape (`{ev, args}` on `/ws`), not the
   renderer's: the render leg carries action lists only and decodes nothing else (decision 6). Prism's
   verbs therefore stay entirely on prism's side, and a client that cares (a login form) reads them
