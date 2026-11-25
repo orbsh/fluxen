@@ -180,3 +180,25 @@ python3 scripts/ui_dist.py --no-build # 装配已有的 crates/ui_leptos/dist
 
 不含：`assets/3dbrowser`、`assets/splatviewer`、`assets/monaco`、`assets/mermaid.min.js`、
 `assets/g2chart`。这些是模块媒体，只有帧点名时才加载，由部署侧自行组装（见 Dockerfile）。
+
+### 宿主接管那五个口子
+
+```js
+await mount(document.querySelector('#app'), {
+  codec: 'json',
+  query: { token },                       // 会话就是查询参数，不是特殊设置（ADR 0046）
+  hooks: {
+    // 每次 socket 打开（含重连）。句柄就是 window.fluxen.send，也是页面发第一条的地方。
+    open: (send) => send('identify', { token }),
+    close: () => {},
+    // 整页被替换（create）：手上的 DOM 引用过期了。
+    create: (root) => {},
+    // 槽的值：一次渲染 pass 里同名只报最新一次；订阅时补发当前值。
+    slots: { 'ui:token': (token) => localStorage.setItem('token', token) },
+    // 上行：编码前同步改载荷；返回 null 表示不改。凭证不需要在这里——它是连接级事实。
+    dests: { '*': (dest, data) => ({ ...data, trace: myTrace() }) },
+  },
+});
+```
+
+全部语义见 [ADR 0047](docs/decisions/0047-one-table-four-seams.md)。
