@@ -169,7 +169,7 @@ python3 scripts/ui_dist.py --no-build # 装配已有的 crates/ui_leptos/dist
 
 按 tag 取用（例如 `https://github.com/orbsh/fluxen/releases/download/v0.3.3/manifest.json`），把五件
 拷进你的静态根，`/` 就是一个能用的页面：入口文档把 fluxen 挂到 `<div id="fluxen">`，用它的默认值
-（`path: /channel`、`codec: json`），宿主什么都不用配。
+（`path: /channel`，`codec` 取地址上的 `?codec=`、缺省 `cbor`），宿主什么都不用配。
 
 `index.html` 是**默认值**，不是唯一入口。boot 属于宿主（ADR 0045）：要自己配置的宿主用自己那页替换它
 （reflux 那页是 `#main` 加一句 `mount(el, {codec, path})`）。保留这份自带的页面时有两件事要知道：它的
