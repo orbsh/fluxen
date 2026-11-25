@@ -66,14 +66,20 @@ jobs:
           body: |
             The renderer bundle, built from `${{ github.sha }}` with `trunk build --release`.
 
-            Copy the four files `manifest.json` names into your static root, or take the tarball.
+            Copy the five files `manifest.json` names into your static root, or take the tarball; `/`
+            is then a working page (`<div id="fluxen">`, path `/channel`, codec json). That page is a
+            DEFAULT — a host that configures its own boot replaces `index.html`.
             `assets/3dbrowser`、`assets/splatviewer`、`assets/monaco`、`assets/mermaid.min.js`、
             `assets/g2chart` are NOT here: those are module media loaded by frames that name them,
             assembled per deployment.
+          # Every file the manifest names, and the manifest itself: `index.html` included, because a
+          # release that publishes the two hashed artifacts and leaves the page behind is exactly the
+          # gap this list used to have (measured on v0.3.2: the tarball carried it, the assets did not).
           files: |
             dist-release/fluxen-ui-*.tar.gz
             dist-release/manifest.json
             dist-release/SHA256SUMS
+            dist-release/index.html
             dist-release/*.js
             dist-release/*.wasm
             dist-release/assets/*.css
