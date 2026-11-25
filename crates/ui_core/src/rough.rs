@@ -394,8 +394,12 @@ thread_local! {
 /// One call per border-capable widget: the layer only exists for a node that asked
 /// for a border (`is-border` in its own class list) and only while the skin is
 /// `sketch`. Every other case is an empty view — no element, no observer.
+///
+/// `is-card` counts as asking, although it paints no rule of its own: the card's separation is a shade in
+/// normal mode, and that shade is the page's under the skin, so the only thing left to separate it with is the
+/// pen (ADR 0038 §3).
 pub fn border_layer(ctx: &Ctx, class: Option<&Vec<String>>, id: Option<&str>) -> AnyView {
-    let sketchy = class.is_some_and(|c| c.iter().any(|x| x == "is-border"));
+    let sketchy = class.is_some_and(|c| c.iter().any(|x| x == "is-border" || x == "is-card"));
     if !sketchy {
         return ().into_any();
     }

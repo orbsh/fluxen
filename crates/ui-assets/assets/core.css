@@ -968,6 +968,20 @@
         }
     }
 
+    /* A card: the layer above the page. The whole of it is the fill — no rule, because a rule would say the same
+       thing twice (the shade already separates it) and, under the skin, would be the only straight line among
+       drawings. This is also the one effect that carries inner space: a sticky note is a shape *with* room
+       inside, and leaving the padding to the host would mean the host re-inventing the card anyway. `--card-pad`
+       is the handle for a host that wants a different one.
+       The skin answers with the other tool, not a copy of this one: its own shade is the page's, so it separates
+       the card with a drawn edge instead (ADR 0038 §4) — which is why a card, unlike a plain box, is drawn even
+       without `is-border`. */
+    .is-card {
+        background-color: var(--surface);
+        border-radius: var(--round);
+        padding: var(--card-pad, 0.6em);
+    }
+
     .is-highlight {
         &:hover {
             background-color: var(--bg);
@@ -1529,7 +1543,12 @@
        allowed to spill out of the box: a hand-drawn line should not be cropped by its own
        box, and `overflow: visible` also undoes `.round`'s clipping (the radius is 0 here,
        so there is nothing to clip). */
+    /* A card is in this list although it paints no edge: the layer is `position: absolute` and anchors to the
+       nearest positioned ancestor, so without it the drawing lands wherever the page's flow put it — three cards
+       came out as one long rule across the width of the page (measured). `is-card` also needs `overflow: visible`
+       for the same reason as a border: a pen may spill. */
     html[data-sketch="true"] .is-border,
+    html[data-sketch="true"] .is-card,
     html[data-sketch="true"] .select,
     html[data-sketch="true"] .button {
         position: relative;
