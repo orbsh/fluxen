@@ -70,6 +70,15 @@ fn collect(node: &Accrete, out: &mut Vec<Field>) {
                 out.push(Field::new(tag.clone(), RwSignal::new(initial.clone()), initial));
             }
         }
+        Accrete::disc(d) => {
+            if let Some(tag) = d.tag.as_ref().filter(|t| !t.is_empty())
+                && !out.iter().any(|f| &f.name == tag)
+            {
+                // A disc packs a triple (text), never a pair of numbers: its value is the colour.
+                let initial = field_default(node);
+                out.push(Field::new(tag.clone(), RwSignal::new(initial.clone()), initial));
+            }
+        }
         _ => {
             if let Some(subs) = node.borrow_children() {
                 for c in subs {
