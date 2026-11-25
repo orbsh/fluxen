@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cut a renderer release out of a trunk build: four files, a manifest, and a tarball.
+"""Cut a renderer release out of a trunk build: five files, a manifest, and a tarball.
 
     python3 scripts/ui_dist.py                  # build, then assemble into dist-release/
     python3 scripts/ui_dist.py --no-build       # assemble whatever crates/ui_leptos/dist holds
@@ -7,9 +7,20 @@
 
 What ships, and what deliberately does not:
 
-- **the four core files** — the JS glue, its wasm, `assets/core.css`, `assets/custom.css`. That is
-  everything a host page needs; the hashed names are trunk's and stay the only names (a `fluxen.js`
-  alias would be a second name for the same bytes, and another 2.4 MB in every release).
+- **the five files** — the JS glue, its wasm, `assets/core.css`, `assets/custom.css`, and the
+  ENTRY DOCUMENT trunk emits beside them (`index.html`). The hashed names are trunk's and stay the
+  only names (a `fluxen.js` alias would be a second name for the same bytes, and another 2.4 MB in
+  every release).
+
+  The document is here because without it the artifact is not a page: a host still had to write one,
+  which means knowing the hashed wasm name and the shape of `init({module_or_path})` — the two things
+  only the build knows (trunk renames the default `ui_leptos_bg.wasm`). Shipping it makes the release
+  self-sufficient: copy the five files into a static root and `/` is a working page — the
+  `<div id="fluxen">` default, which boots on `path: /channel`, `codec: json`.
+  What it is NOT: a contract. The boot belongs to the host (ADR 0045), so a host that configures its
+  own mount replaces `index.html` with its own page and ignores this one. Two facts a host that keeps
+  it must know — its references are ABSOLUTE (`/ui_leptos-…`), so it is correct where the bundle IS the
+  origin and wrong under a path prefix; and its `<title>` is fluxen's own.
 - **not** `assets/3dbrowser` (28 MB), `assets/splatviewer` (48 MB), `assets/monaco` (6.6 MB),
   `assets/mermaid.min.js` (2.6 MB), `assets/g2chart` (1.1 MB). Those are module/demo media, fetched
   only when a frame names them, and they are built per deployment (see the Dockerfile). Attaching
@@ -41,6 +52,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = ROOT / "crates" / "ui_leptos" / "dist"
 OUT = ROOT / "dist-release"
 CSS = ("assets/core.css", "assets/custom.css")
+# The name the entry document ships under: trunk's own, and a host's `/` is it.
+PAGE = "index.html"
 
 
 def sh(*args: str, cwd: pathlib.Path = ROOT) -> str:
@@ -90,6 +103,10 @@ def sources(dist: pathlib.Path) -> list[tuple[str, pathlib.Path]]:
     js, wasm = entry_names(dist)
     needed = [(js, dist / js), (wasm, dist / wasm)]
     needed += [(name, dist / name) for name in CSS]
+    # The entry document: the page `trunk build` wrote beside the artifacts. `PAGE` is the name it
+    # ships under, and it is `index.html` on purpose — that is what makes the release a page a host
+    # can serve from its root, rather than four files it still has to wrap.
+    needed += [(PAGE, dist / PAGE)]
     missing = [name for name, path in needed if not path.exists()]
     if missing:
         raise SystemExit(f"[dist] the bundle is incomplete, missing: {', '.join(missing)}")
@@ -116,6 +133,10 @@ def write(out: pathlib.Path, files: list[tuple[str, pathlib.Path]], tag: str, re
         "rev": rev,
         "built": "trunk build --release (crates/ui_leptos)",
         "entry": {"js": js, "wasm": wasm},
+        # The document that turns those two into a page. Named apart from `entry` because the entry
+        # pair is addressed by HASH and this one is addressed by PATH — a host that writes its own
+        # page ignores this field, and one that keeps it copies the file to its root.
+        "page": PAGE,
         "files": {},
     }
     for name, path in files:
@@ -168,7 +189,10 @@ def main(argv: list[str] | None = None) -> int:
     for name, meta in manifest["files"].items():
         print(f"  {name:<{width}}  {meta['size']:>9,} B  {meta['sha256']}")
     archive = out / f"fluxen-ui-{tag}.tar.gz"
-    print(f"  {'fluxen-ui-' + tag + '.tar.gz':<{width}}  {archive.stat().st_size:>9,} B  (4 files + manifest)")
+    print(
+        f"  {'fluxen-ui-' + tag + '.tar.gz':<{width}}  {archive.stat().st_size:>9,} B"
+        f"  ({len(files)} files + manifest)"
+    )
     return 0
 
 
