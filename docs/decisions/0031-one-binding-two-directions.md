@@ -12,7 +12,7 @@ frame author has to know more than the model contains.
 
 ### The problem
 
-Today one `bind` field carries both the address and the mode: a `kind` says whether the value comes
+Before this decision one `bind` field carried both the address and the mode: a `kind` said whether the value came
 from a server slot, from a page-local value, or is just a constant. The difference between the first
 two is not where the value lives — both live in the same reactive store in the page — it is where it
 is *authoritative*:
@@ -56,7 +56,7 @@ is shipped to users yet.
 
 ### The problem
 
-The same `bind` means different things depending on the node: on `text` a read, on `input` a read
+The same `bind` meant different things depending on the node: on `text` a read, on `input` a read
 plus a write-back, on `select` a read plus a report. A frame that writes upstream cannot be
 identified by reading the frame; you must know every component's default semantics. And a read-only
 target looks exactly like a writable one until something silently does nothing.

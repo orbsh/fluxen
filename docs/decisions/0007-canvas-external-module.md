@@ -40,15 +40,16 @@ Canvas {
     id: Option<String>,
     url: String,                          // CDN 上的 ES module 地址
     attrs: Option<ClassAttr>,             // 尺寸/样式走现有 attrs
-    bind: Option<HashMap<String, Bind>>,   // "value" = 载荷槽（Chart 既有惯例）
+    source: Option<Source>,              // 载荷槽（Chart 既有惯例）
+    sink: Option<Sink>,                  // 模块上行的落点（本 ADR 只留路，不设语义）
 }
 ```
 
 wire tag `canvas`。不引入 `Custom { capability }` 抽象（用户否决：为想象中的
 插件市场预付成本；数据可视化仍走 chart 类组件，与此无关）。
 
-**data 区不新增寻址机制**：模块载荷 = `bind["value"]` 槽的内容（create 时的
-default + 后续写入）。流式喂数据完全走 ADR 0005 现成协议：
+**data 区不新增寻址机制**：模块载荷 = `source` 那个槽的内容（create 时的
+`default` + 后续 `set`/`patch`）。流式喂数据完全走 ADR 0005 现成协议：
 
 ```
 set/patch { "event": "model-data", "path": "/assets/apple",
@@ -65,7 +66,7 @@ URL 指向的 ES module 必须导出四个函数：
 
 ```js
 mount(el: HTMLElement, data: Uint8Array, host, options) → ctx
-   // el 是组件自己的 canvas 容器；data 是 bind["value"] 的 CBOR；
+   // el 是组件自己的 canvas 容器；data 是 `source` 槽里的 CBOR；
    // host = { send(event, bytes) } ——模块上行走现有动作帧协议（本期只留通道）；
    // options = 模块私有配置的 JS 对象（ADR 0017：Canvas.options 动态袋，缺省 `{}`）
 update(ctx, data: Uint8Array)   // 槽内容变化 → 宿主重序列化推入
@@ -91,9 +92,9 @@ unmount(ctx)                    // leptos 视图销毁时必调；模块释放 G
 
 ### 4. 本 ADR 明确不做
 
-- **事件绑定**：`host.send` 通道留好，但 Canvas 暂不加 `bind` 事件映射字段
+- **事件绑定**：`host.send` 通道留好，也留了 `sink` 字段，但 Canvas 暂不往里写
   ——还没想清楚 3D 场景会发什么事件（pick/hover/drop），只开门不设语义。
-  后续打通 = 复用 bind slot 既有机制，一次小 ADR。
+  后续打通 = 复用 `Sink` 既有机制，一次小 ADR。
 - **schema 导出**：`data` 归模块自定义，`stage schema` 不为 Canvas 导出
   payload schema（capability schema 汇总随 registry 方案一并否决）。
 - **数据可视化按需 wasm**：图表差异是不同 spec（纯数据、本来就在帧里），
@@ -105,7 +106,7 @@ unmount(ctx)                    // leptos 视图销毁时必调；模块释放 G
   + 模块自身（three-d 全渲染面 +341KB raw / +94KB gz）。胶水按模块重复付费，
   所以模块按能力粒度切，宁少勿多。
 - 渲染核心新增一个 `ui_leptos` 挂载实现：NodeRef on_load → import(url) →
-  约定导出检查 → mount；bind["value"] 信号订阅 → update；ResizeObserver →
+  约定导出检查 → mount；`source` 槽的订阅 → update；ResizeObserver →
   resize；Owner drop → unmount。核心不含任何 three-d/glTF/ApexCharts 知识。
 - KDL/stage 侧新变体经 serde 推导自动可用（`canvas { url "…" … }`）。
 - 与 Chart 的关系：并存，各管各的载荷。Chart 的渲染器演进（ApexCharts eval →

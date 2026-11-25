@@ -46,7 +46,7 @@ interval + stackY + color encode + tooltip/elementHighlight interaction
 
 ### 1. chart 的载荷 = G2 spec（纯数据）
 
-`bind["value"]` 槽的 default/set/patch 内容直接就是 G2 spec 对象
+`source` 槽的 default/set/patch 内容直接就是 G2 spec 对象
 （`{type, data, encode, transform, scale, coordinate, interaction, ...}`）。
 核心不解析、不校验内部（同 Canvas：spec 是模块私有词汇）；流式更新
 走 ADR 0005 指针（`patch path:/data/... op:append` 追数据行，

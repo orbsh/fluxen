@@ -31,7 +31,7 @@ pub struct InjectOp {
 ```
 
 - 载荷就是 ADR 0010 的 `Outflow {event, id?, data}`（content/src/lib.rs:52），逐字段落在 op 上，不套 `value` 外壳：`slot` 选键，其余三字段就是包装对象的字段。订阅方（`kind: local, slot, path`）看到的形状与浏览器自己 emit 写入的完全一致——"这次切换是谁写的"在订阅方不可分辨，这正是要的性质。
-- `event` 缺省 = slot 名，与 `BindVariant::Local` 的缺省一致（槽即频道）。
+- `event` 缺省 = slot 名，与本地落点一致（今天写作 `sink` 的 `scope: local`，`dest` 就是槽名；槽即频道）。
 - 该变体不泛型：`Content<T>` 的其它变体携带 T，而 vals 平面的货币是裸 `serde_json::Value`（ADR 0008：事件数据不是展示形态），所以 `InjectOp.data` 是 `Value` 而非 T。两个平面的差异第一次落在类型上。
 - 不新增平面、不新增寻址语法、不新增开关：一个操作、dispatch 一个分支，写 `slot_for_value(slot)`（ctx.rs:196）。
 

@@ -1,4 +1,4 @@
-# G2 pie chart (ADR 0009): the spec = pure JSON in the GoG vocabulary, installed straight into bind.value.default;
+# G2 pie chart (ADR 0009): the spec = pure JSON in the GoG vocabulary, installed straight into `source.default`;
 # the url points at the wrapper module (ADR 0007 contract; the framework no longer has a chart kind).
 action: append
 slot: chat

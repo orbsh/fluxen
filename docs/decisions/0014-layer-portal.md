@@ -1,6 +1,6 @@
 # ADR 0014: 模态层的渲染位置——layer 容器 + portal 传送
 
-状态：已接受（2026-10-10 用户确认后实施）
+状态：已接受（2026-10-10 用户确认后实施）。**`layer`/`portal` 两个节点类型已并入 `panel`**（ADR 0030：四格的两轴）；下文按终态的 `source`/`sink` 写。
 日期：2026-10-10
 仓库：fluxen
 
@@ -19,8 +19,7 @@ transform / filter / contain 就会被困住；而"打开模态的是某条消�
 渲染到它里面；显隐由 layer 的载荷槽决定（空 = 不显示）。**
 
 1. **wire**：两个新变体，省略即旧行为（不新增时零影响），schema 自动跟随。
-   - `layer`：`{ id, attrs: { class?, selector?, dismiss? }, bind: { value: <Local /
-     Source 槽> }, children }`。attrs 只留 `dismiss`；遮罩（铺满视口、模糊背景、
+   - `layer`：`{ id, attrs: { class?, selector?, dismiss? }, source: { slot, scope?: local }, children }`。attrs 只留 `dismiss`；遮罩（铺满视口、模糊背景、
      挡住背后）是 layer 的默认形态，不做开关。
    - `portal`：`{ attrs: { to: <selector> }, children }`。只负责渲染位置，别的语义
      一概没有——不碰显隐、不碰遮罩。

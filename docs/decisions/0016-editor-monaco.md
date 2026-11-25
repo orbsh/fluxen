@@ -27,11 +27,11 @@
 
 ## 决策
 
-1. **组件形态**：新增 `Editor { id, url, attrs: SizeAttr, bind }`（wire tag `editor`，
+1. **组件形态**：新增 `Editor { id, url, attrs: SizeAttr, source, sink }`（wire tag `editor`，
    `has_id = "true"`）。attrs 走尺寸族（与 canvas/diagram 同——编辑器必须有确定高度）、
    `url` 带 serde default 指向自家封装模块（与 chart → g2chart 同例，换渲染实现/CDN 时显式覆盖）。
-2. **数据区（"代码作为参数"）**：`bind["value"]`，载荷 = `{"code": <源码>, "lang": <Monaco 语言 id>}`
-   （inline default 或 `kind: source` 槽，流式/改稿走既有 set/patch 指针）。
+2. **数据区（"代码作为参数"）**：`source`，载荷 = `{"code": <源码>, "lang": <Monaco 语言 id>}`
+   （inline `default` 或一个槽，流式/改稿走既有 `set`/`patch` 指针）；保存走 `sink`。
    **不新增节点级字段**：模块只拿得到数据区，`lang` 若放节点字段就传不进去——这是
    ADR 0007 契约的形状约束，不是取舍。判据沿用 `payload_is_empty`：`{}`/`Null` = 尚无数据
    → 不占位（ADR 0012），`{"code": ""}` 是"有空编辑器"（map 有条目即非空）。
@@ -39,7 +39,7 @@
    预加载），且库下载在 `mount()` 里（ADR 0015：模块求值不拉库）——`ensureMonaco()` 门控。
 4. **保存上行**：封装模块在编辑器上绑 Ctrl/Cmd+S，回调里 `host.send("submit", CBOR({code, lang}))`
    → 走既有上行（`ctx.send(ev, Some(node_id), value)`），与表单 `kind: submit` 同一条腿、
-   零新机制。事件名固定 `submit`（与 button/form 同词），不引入 bind 事件字段。
+   零新机制。目标名固定 `submit`（与 button/`loom` 同词），不引入第二个出口字段。
 5. **交付形态：vendored AMD 子集**（推荐）。理由：本机 jsdelivr/unpkg 直连不通（用户真机
    也许走代理，但 fluxen 的 e2e 与容器镜像都不该依赖一条不通的路）；AMD 构建 + 同源 worker
    零配置（`editor.worker` 与 tokenizer 同源取，无 CDN worker 的 blob/CSP 折腾）；
@@ -79,10 +79,10 @@
   编辑器更重，没有回头的理由；而且模块通道天然满足 ADR 0015 的加载判据。
 - **`code`/`lang` 做成节点级字段，由宿主合成载荷**：等于在 `mount_module` 的载荷闭包里
   加一层变换机制（槽值也要包），为新组件破一次"载荷 = 数据区原样"的不变式。
-- **保存走新的 bind 事件字段**（`bind.submit.event`）：button/form 的 `submit` 已经证明
+- **保存走新的出口字段**（`sink.submit.event` 那种写法）：button 与 `loom` 的 `submit` 已经证明
   固定词够用；加字段就是同一语义表达两遍。
 - **diff 视图（side-by-side）**：本次不做（用户只点编辑器 + 保存）；渲染器是 Monaco，
-  将来加 `bind.diff` 之类是新决定，不预留字段。
+  将来加 `sink.diff` 之类是新决定，不预留字段。
 
 ## 后果
 

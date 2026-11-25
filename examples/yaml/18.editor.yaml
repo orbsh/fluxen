@@ -37,7 +37,7 @@
       width: 100%
       height: 240px
     source: {slot: staged_code}
-# The payload shape in the slot is exactly the same as inline (the host takes the slot node's bind.value.default and pushes it to the module as is).
+# The payload shape in the slot is exactly the same as inline (the host takes the slot node's `source.default` and pushes it to the module as is).
 - action: set
   slot: staged_code
   data:

@@ -1,7 +1,7 @@
 # 外部集成
 
 写给任何把本渲染器送到浏览器的一方：Rust 网关、Python 宿主、一个内嵌页面。它说明复用哪些、
-必须自备哪些、线上说什么、一帧怎么变成画面，以及两个实例——prism 会场（Rust，重新包装核心）与
+必须自备哪些、线上说什么、一帧怎么变成画面，以及两个实例——prism 会场（Rust，把已构建的产物挂成静态根）与
 reflux（Python，钉住发布产物）。
 
 全文只讲一条规则：**渲染器不为任何宿主适配。** 适配的是宿主——它提供 transport 与 boot，
@@ -96,7 +96,7 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
    这个 Effect 订阅自己马上要写的槽。
 5. **渲染。** 树是数据。`render::dispatch` 把节点映射到组件（`gen_dispatch!` 由 `accrete` 的枚举
    生成匹配），每个组件把自己的主体放进一个读取它所需槽的闭包里——`text_` 经 `use_source_value`，
-   `rack` 读它的列表槽。于是 `set` 或 `append` 只重画绑在该槽上的节点：没有 diff，没有虚拟 DOM
+   `tiles` 读它的列表槽。于是 `set` 或 `append` 只重画绑在该槽上的节点：没有 diff，没有虚拟 DOM
    ——信号图**就是**更新范围。空的 data 槽不渲染、不占空间（ADR 0012），所以流式段落可以先出现，
    它的框后长出来。
 
@@ -105,21 +105,21 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
 ```yaml
 # 布局里（create）
 - type: text
-  bind: { value: { kind: source, source: intro, default: "" } }
+  source: {slot: intro}
 ```
 ```yaml
 # 之后某一帧
 action: set
 slot: intro
-data: { type: text, bind: { value: { kind: default, default: "hello" } } }
+data: { type: text, source: {default: "hello"} }
 ```
 `set` 写这个槽，读 `intro` 的节点重新渲染。要让同一段继续长，用 `patch` 带 `slot: intro` 和指向
 槽节点字段的指针——`patch` 是流式动词，`set` 是整值动词。列表则由布局给壳和行模板：
 
 ```yaml
-- type: rack
-  bind: { value: { kind: source, source: chat } }
-  item:
+- type: tiles
+  source: {slot: chat}
+  children:
   - type: frame
     attrs: { class: [as-stretch, box, is-border, round] }
 ```
@@ -128,15 +128,17 @@ data: { type: text, bind: { value: { kind: default, default: "hello" } } }
 
 ### 3.2 上行：页面 → 宿主
 
-1. **组件发射。** `bind["value"]` 是 `Dest { dest }` 或 `Local { slot }` 的节点，经 `use_target`
-   调 `ctx.emit(variant, id, payload)`。`id` 是发射节点自己的 id（`node_id`，空串即无）；
-   `payload` 是该组件产出的东西——表单值、拖拽货物、页码。
+1. **组件发射。** 节点的写口是 `sink`：`Sink { dest, scope, path }`（ADR 0031 §2）。有写口的节点经
+   `use_target` 拿到一个闭包，它调 `ctx.emit(&sink, id, payload)`；没有 `sink` 的节点拿不到闭包，
+   它只读。`id` 是发射节点自己的 id（没有则 `None`）；`payload` 是该组件产出的东西——表单值、
+   拖拽货物、页码。`dest` 缺席的 sink 无处可去：`emit` 返回 false，什么也不发。
 2. **`Event` 上线。** `ctx.send` → `Transport::emit(transport::Event)` → `WsTransport::emit`：组装
    `content::Outflow { dest, id?, data }`，用页面构建时钉住的编码（JSON → text 帧，CBOR → 二进制
    帧）编码后发出。`send` 是 future：socket 尚在连接时 gloo 的 sink 挂起、open 时唤醒，所以抢在
    `open` 之前的发射不会丢。
-3. **`Local` 不出页面。** 同一个 `Outflow` 形状的对象被写进那个 `vals` 槽，本地 emit 与上行帧因此
-   共一种形状（ADR 0010）——整条链可以在没有 socket 的情况下演练。
+3. **`scope: local` 不出页面。** 带 `path` 的本地写只改那个槽里值的一个成员（合并写，ADR 0031 §2）；
+   不带 `path` 的把整个 `Outflow` 存进以 `dest` 命名的槽——本地 emit 与上行帧因此共一种形状
+   （ADR 0010），整条链可以在没有 socket 的情况下演练。
 4. **页面自己的把手。** boot 发布 `window.fluxen.send(name, data)`，它汇入同一个 `Ctx::send`。
    页面脚本与组件共用一条上行、一种帧形状。
 5. **宿主收到的只有** `Outflow`：`id` 是发射者，`data` 自由，完全属于产出它的那个组件。渲染器
@@ -167,12 +169,16 @@ data: { type: text, bind: { value: { kind: default, default: "hello" } } }
 
 | 方式 | 谁 | 复用 | 自备 |
 |:--|:--|:--|:--|
-| 核心 + 自己的 boot | prism（Rust，进程内） | `ui-core`、`accrete`、`content`、`forcegraph`、`ui-assets` | 自己的 transport、自己的页面入口 |
-| boot + 自己的帧 | reflux（Python，钉住产物） | 由示例里的 boot 构建出的 loom | 帧本身，走自己的 socket |
+| 核心 + 自己的 boot | 今天没有消费者（这条路留给要进程内包装核心的宿主） | `ui-core`、`accrete`、`content`、`forcegraph`、`ui-assets` | 自己的 transport、自己的页面入口 |
+| boot + 自己的帧 | prism（Rust，挂产物）、reflux（Python，钉住产物） | 由示例里的 boot 构建出的 loom（`#main` 解析、WS、`window.fluxen.send`） | 帧本身，走自己的 socket；prism 另备静态根与 `/app.css` |
+
+两条路的判据是「谁建 socket」，不是「谁写 Rust」：prism 用 Rust 写的是**生产端**（网关、身份、turn），
+渲染器那一侧它和 reflux 一样只挂产物——`crates/prism` 唯一的 fluxen 依赖是 `content`（线上词汇），
+没有 `ui-core`，也没有自己的 boot。
 
 ## 5. 实例一：prism，会场
 
-prism 是 WS 连接面（网关、身份、turn）。它的渲染器腿是 `/ui`，这条腿说**本文件这套**线上格式，
+prism 是 WS 连接面（网关、身份、turn）。它的渲染器腿是 `/channel`，这条腿说**本文件这套**线上格式，
 不是 prism 自己的 `{ev, args}` 动词帧（那些留在 `/ws`——CLI 与对端的程序腿；先例是 stage：
 页面走 `/channel`，对端走 `/cli`）：
 
@@ -199,13 +205,13 @@ reflux 是"钉住产物"这条路的参考宿主：Python 生产端用 SDK 节�
 ——`mount()` 发布的那个把手。它的线上格式就是动作列表本身（裸数组），与本文件的契约逐字段一致。
 
 在拆分后它消费 **`boot`**（它的 loom 就是一次 boot 构建），不直接碰核心。若将来需要进程内渲染，
-它再迁到"核心 + 自己的 boot"，与 prism 同一条路。
+它再迁到"核心 + 自己的 boot"——那条路今天没有消费者，prism 也不在它上面。
 
 按现在的标准，它欠两处调整：
 
-- **public URL。** 发布产物在构建时声明挂载点。reflux 把 loom 服在页面根，所以它钉住的那次
-  构建保持根相对 public URL；prism 服在 `/assets/`，就按 `/assets/` 构建。同一个核心的两份构建
-  ——宿主从不改写产物的链接。
+- **public URL。** 发布产物在构建时声明挂载点。两个宿主都把它挂在页面根（bundle 就是 origin：
+  `/` 出它的 `index.html`，产物里的 `/ui_leptos-…js`、`/assets/core.css` 按原样解析），所以一份
+  根相对的构建两边通用——宿主从不改写产物的链接，也不为挂载点另建一份构建。
 - **上行把手属于 `boot`。** `reflux.js` 依赖 `window.fluxen.send`；这个名字或契约若要改，改在
   `boot`，reflux 跟着 crate 走，不是反过来。
 

@@ -2,7 +2,8 @@
 
 For anyone who serves this renderer to a browser: a Rust gateway, a Python host, an embedded
 page. It states what you reuse, what you must supply, the wire, how a frame becomes a screen, and
-two worked examples — the prism venue (Rust, re-wrapped core) and reflux (Python, pinned loom).
+two worked examples — the prism venue (Rust, serving the built artifact) and reflux (Python, pinned
+loom).
 
 The rule the whole document is about: **the renderer never adapts to a host.** A host adapts to
 the renderer: it supplies a transport and a boot, and speaks the renderer's wire.
@@ -111,7 +112,7 @@ directions pass through one seam: everything below is `ui-core` plus the transpo
    (ADR 0022 for the slot, ADR 0023 for the dest).
 5. **Render.** The tree is data. `render::dispatch` maps a node to its component (`gen_dispatch!`
    generates the match from `accrete`'s enum), and each component puts its body inside a closure over
-   the slots it reads — `text_` through `use_source_value`, `rack` over its list slot. A `set` or
+   the slots it reads — `text_` through `use_source_value`, `tiles` over its list slot. A `set` or
    `append` therefore re-renders the nodes bound to that slot and nothing else: no diff, no virtual
    DOM — the signal graph *is* the update scope. An empty data slot renders nothing and occupies no
    space (ADR 0012), which is why a streamed paragraph can appear before the rest of its box exists.
@@ -121,22 +122,22 @@ A hole, and what fills it. The layout declares a slot by name; the producer writ
 ```yaml
 # in the layout (create)
 - type: text
-  bind: { value: { kind: source, source: intro, default: "" } }
+  source: {slot: intro}
 ```
 ```yaml
 # a later frame
 action: set
 slot: intro
-data: { type: text, bind: { value: { kind: default, default: "hello" } } }
+data: { type: text, source: {default: "hello"} }
 ```
 `set` writes the slot; every node reading `intro` re-renders. To continue the same paragraph, send
 `patch` with `slot: intro` and a pointer at the slot node's field — `patch` is the streaming verb;
 `set` is the whole-value one. For a list, the layout supplies the shell and the row template:
 
 ```yaml
-- type: rack
-  bind: { value: { kind: source, source: chat } }
-  item:
+- type: tiles
+  source: {slot: chat}
+  children:
   - type: frame
     attrs: { class: [as-stretch, box, is-border, round] }
 ```
@@ -145,18 +146,21 @@ appending does not remount the rows above it.
 
 ### 3.2 Upstream: page → host
 
-1. **A component emits.** A node whose `bind["value"]` is `Dest { dest }` or `Local { slot }` calls
-   `ctx.emit(variant, id, payload)` through `use_target`. `id` is the emitting node's own id
-   (`node_id`, empty string = none); `payload` is whatever that component produced — a form value, a
-   drag cargo, a page number.
+1. **A component emits.** The node's exit is its `sink`: `Sink { dest, scope, path }` (ADR 0031 §2).
+   A node that has one gets a closure from `use_target`, and that closure calls
+   `ctx.emit(&sink, id, payload)`; a node without a `sink` gets none, because it only reads. `id` is
+   the emitting node's own id (`None` = none); `payload` is whatever that component produced — a form
+   value, a drag cargo, a page number. A sink with no `dest` has nowhere to go: `emit` returns false
+   and sends nothing.
 2. **`Event` goes on the wire.** `ctx.send` → `Transport::emit(transport::Event)` →
    `WsTransport::emit`, which builds `content::Outflow { dest, id?, data }`, encodes it with the
    codec the page was built with (JSON → text frame, CBOR → binary frame) and sends. `send` is a
    future: gloo's sink suspends while the socket is still connecting and wakes when it opens, so an
    emit fired before `open` is not lost.
-3. **`Local` never leaves the page.** The same `Outflow`-shaped object is written into that `vals`
-   slot, so a local emit and an uplink frame carry one shape (ADR 0010) — which is how the whole
-   chain can be exercised with no socket at all.
+3. **`scope: local` never leaves the page.** A local write with a `path` changes one member of the
+   value in that slot and leaves the rest alone (ADR 0031 §2); without a `path` the whole `Outflow` is
+   stored in the slot named by `dest`. A local emit and an uplink frame therefore carry one shape
+   (ADR 0010), which is how the whole chain can be exercised with no socket at all.
 4. **The page's own handle.** The boot publishes `window.fluxen.send(name, data)`; it funnels into
    the same `Ctx::send`. A page script and a component share one uplink and one frame shape.
 5. **What the host receives** is `Outflow` and nothing else: `id` is the emitter, `data` is
@@ -192,12 +196,17 @@ a feature. The two consumption styles get names instead of folklore:
 
 | style | who | reuses | supplies |
 |:--|:--|:--|:--|
-| core + own boot | prism (Rust, in-process) | `ui-core`, `accrete`, `content`, `forcegraph`, `ui-assets` | its own transport, its own page entry |
-| boot + own frames | reflux (Python, pinned loom) | the loom built from the example boot | the frames, over its own socket |
+| core + own boot | nobody today (the road is there for a host that wraps the core in-process) | `ui-core`, `accrete`, `content`, `forcegraph`, `ui-assets` | its own transport, its own page entry |
+| boot + own frames | prism (Rust, serves the artifact), reflux (Python, pinned loom) | the loom built from the example boot (`#main`, WS, `window.fluxen.send`) | the frames, over its own socket; prism also the static root and `/app.css` |
+
+The test for the two rows is who builds the socket, not who writes Rust: what prism writes in Rust is
+the **producer** (gateway, identity, turns). On the renderer's side it serves the artifact, exactly as
+reflux does — `crates/prism`'s only fluxen dependency is `content` (the wire vocabulary), with no
+`ui-core` and no boot of its own.
 
 ## 5. Worked example — prism, the venue
 
-Prism is a WS connection plane (gateway, identity, turns). Its renderer leg is `/ui`, and that leg
+Prism is a WS connection plane (gateway, identity, turns). Its renderer leg is `/channel`, and that leg
 speaks **this** wire — not prism's own `{ev, args}` verb frames (those stay on `/ws`, the programmatic
 leg for the CLI and peers — the stage precedent: `/channel` for the page, `/cli` for peers):
 
@@ -229,13 +238,15 @@ page uplinks through `window.fluxen.send` — the handle `mount()` publishes. It
 itself — a bare array, field for field this document's contract.
 
 Under the split it consumes **`boot`** (its loom is a boot build) and never the core directly. If
-it ever needs in-process rendering it moves to core + own boot, the same way prism does.
+it ever needs in-process rendering it moves to core + own boot — a road with no consumer today, and
+prism is not on it.
 
 Two adjustments it owes to the current standard:
 
-- **Public URL.** A release loom declares its mount point at build time. Reflux serves the loom
-  at the page root, so its pinned build keeps a root-relative public URL; prism serves at `/assets/`
-  and builds accordingly. Two builds of one core — a host never rewrites the artifact's links.
+- **Public URL.** A release loom declares its mount point at build time. Both hosts serve the
+  loom at the page root (the bundle IS the origin: `/` answers its `index.html`, and the artifact's
+  own `/ui_leptos-….js` and `/assets/core.css` resolve as built), so one root-relative build serves
+  both — a host never rewrites the artifact's links and never builds twice for the mount point.
 - **The uplink handle belongs to `boot`.** `reflux.js` requires `window.fluxen.send`; if that
   handle's name or contract changes, it changes in `boot`, and reflux follows the crate, not the
   other way round.

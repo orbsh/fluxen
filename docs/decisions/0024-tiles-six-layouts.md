@@ -1,6 +1,6 @@
-# ADR 0024: rack 的 `view`——同一批行，六种摆法
+# ADR 0024: tiles 的六种摆法——同一批行，不同的走法
 
-状态：已定（代码同时落地）
+状态：已定（代码同时落地）。**节点名已是 `tiles`，六轴已落成它的 `window`／`step`／`dir`／`wrap` 等字段**（ADR 0031 §4）——`attrs.view` 这个名字不再存在，下文按终态描述。
 日期：2026-10-31
 仓库：fluxen
 
@@ -11,18 +11,19 @@
 是**行的摆法**，不是"通知"这个用途：首页横幅要的也是同一批东西（一次一条、淡入、换下一条、
 能按住），聊天流要的是另一头（全挂着、可滚、跟尾巴）。
 
-所以问题不是"要不要一个通知组件"，而是 rack 现在只会一种摆法：`attrs.scroll: bool`。
+所以问题不是"要不要一个通知组件"，而是 `tiles` 只会一种摆法：`attrs.scroll: bool`。
 
 同时有一条上位裁定（2026-10-31）：**服务端只送消息，显示多久、什么效果归 UI**。所以帧里不出现
 任何时长、任何效果的描述——那些是渲染器的词汇，不是线上协议的一部分。
 
 ## 决策
 
-1. **不新增容器类型。** rack 里带不变量的是"槽 → 键控行 → item 模板"这套（行身份、merge、
+1. **不新增容器类型。** `tiles` 里带不变量的是"槽 → 键控行 → 行模板"这套（行身份、merge、
    位置索引），而下面六条轴全是同一批行的搬法。另起一个走马灯类型等于把行机制抄第二份，两份
-   迟早分叉。rack 长出 `attrs.view: RackView`。
+   迟早分叉。这些轴长在 `tiles` 自己身上：`window`（同时几行）、`step`（谁在推进）、
+   `dir`、`wrap`（ADR 0031 §4）。
 
-2. **六个轴，默认值等于老 rack。** `layout`（adaptive 流／fixed N／exclusive 一行）、
+2. **六个轴，默认值等于原来的行为。** `layout`（adaptive 流／fixed N／exclusive 一行）、
    `direction`（vertical／horizontal）、`enter`（none／fade／translate）、`scroll`
    （none／bar／indicator／arrow）、`play`（newest／rotate，`every` 毫秒）、`pause`
    （off／click／hover）。六个默认值合起来正好是既有行为，所以老帧不写 `view` 时行为一字不变：
@@ -49,7 +50,7 @@
    和类名是什么就各说一套。
 
 7. **"跟尾巴"只活在三种条件的交点上**：`scroll: bar` + vertical + adaptive。聊天流的老行为不该
-   泄漏到独占轮换的 rack 上。
+   泄漏到独占轮换的 `tiles` 上。
 
 8. **通知不是类型，是一组值。** 浮动区（`.toast`）+ `layout: exclusive`、`enter: fade`、
    `scroll: none`、`play: rotate`、`pause: click` 就是通知区；横幅同理，只是 `enter: translate`、
@@ -59,7 +60,7 @@
 
 `scroll` 这个轴此前只影响"跟不跟尾巴"，没影响容器本身——帧还得自己写 `scrolly` 这个类才真能滚。
 现在它决定容器提供的**滚动手艺**：`bar` 就是那个老类（现有帧本来都手写了它，所以行为不变），
-`none` / `indicator` / `arrow` 一律裁剪（`noscroll`），因为分页的 rack 不能在自己的控件底下滚动。
+`none` / `indicator` / `arrow` 一律裁剪（`noscroll`），因为分页的 `tiles` 不能在自己的控件底下滚动。
 
 `indicator` / `arrow` 落地为翻页控件：点数 = 页数（exclusive 每页一行，fixed 每页 `count` 行），
 当前页高亮；箭头在同两端置灰。点击只改本地窗口，不上行——和轮换同一条规矩；点击一律

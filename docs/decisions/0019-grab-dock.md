@@ -1,6 +1,6 @@
 # ADR 0019: 拖拽的两个角色——grab（源）与 dock（落点）
 
-状态：已接受（2026-10-28；accrete 与 ui_leptos 已落地，浏览器门待下一轮）
+状态：已接受（2026-10-28；accrete 与 ui_leptos 已落地，浏览器门待下一轮）。**`grab`／`dock` 两个节点类型今天不存在**：拖源与落点都在 `frame` 上（`attrs.draggable`、`attrs.accept` + `sink`，ADR 0034）；下文按终态的名词写。
 日期：2026-10-28
 仓库：fluxen
 
@@ -10,8 +10,8 @@
 （`~/.hermes/wiki/liquefaction.md` §界面）。渲染器今天表达不出来。
 
 上行面只有五处：`input`／`textarea` 回车、`select` 点选项、`form` 的 submit 按钮、
-`canvas`／`chart`／`editor` 模块的 `host.send`、`forcegraph` 的 `node-click`。`rack`
-的行、`text`、`fold` 的头都上不了行；`forcegraph` 里的拖是相机与节点物理，松手没超过
+`canvas`／`chart`／`editor` 模块的 `host.send`、`forcegraph` 的 `node-click`。`tiles`
+的行、`text`、`panel` 的头都上不了行；`forcegraph` 里的拖是相机与节点物理，松手没超过
 阈值才算点击，拖本身不上报。
 
 所以「拖一下」在词表里无处表达。它不是某个组件的本地态——源和落点中间隔着别的节点；
@@ -28,12 +28,12 @@ ADR 0008 §5 立过一条：「组件内瞬态交互（hover/focus/drag）：无
 新增两个根变体（都是包装型），外加渲染器内部一个页面级拖拽会话。
 
 1. **`grab`（源）**：四个字段——`id`、`kind`、`payload`、`children`。没有 `attrs`、
-   没有 `bind`：它是一层**不加样式、不占位**的包装（不设 padding／边框／背景，也不
+   没有 `source`/`sink`：它是一层**不加样式、不占位**的包装（不设 padding／边框／背景，也不
    消费额外尺寸，尺寸全由 `children` 给），只说两件事——这件东西可以被拖走，它的货物
    是什么。
 
    - `payload` 是货物本身，任意 JSON，原样进上行帧；`kind` 是货物标签，供落点配对。
-   - `id` 是**行身份**：`rack` 的 keyed diff 用行节点自己的 id，没有就退 `#{idx}` 位置键，
+   - `id` 是**行身份**：`tiles` 的 keyed diff 用行节点自己的 id，没有就退 `#{idx}` 位置键，
      中间删一行会让后面所有行重建、本地态丢。grab 是无样式包装，可以当行的根节点，所以
      id 落在这里。渲染器**不替它从子节点借 id**：那会造出两个同 id 的节点，按 id 定位的
      行操作（`append`／`remove`／`patch`）从此指向不明——身份只能生产者给。
@@ -49,7 +49,7 @@ ADR 0008 §5 立过一条：「组件内瞬态交互（hover/focus/drag）：无
      比对，没有 `kind` 的货配不上任何写了 `accept` 的落点，落上去等于没落（不发射、
      不高亮）。
 
-   `bind["value"]` 为 `Event { event }` 或 `Local { slot }`——**事件名与落点身份在这一侧
+   出口写作 `sink: { dest, scope? }`——**目标名与落点身份在这一侧
    定义**，于是多个 dock 天然可分：事件名不同就是不同的落点，帧的 `id` 是哪个 dock 收的。
    名字说的是位置。
 
@@ -86,7 +86,7 @@ ADR 0008 §5 立过一条：「组件内瞬态交互（hover/focus/drag）：无
    是生产者的编排责任（同 `input` 的 default 与 value）。所以流式行优先带小键，值大的留在
    生产者侧自己取。
 
-7. **列表里不共享 grab**：`rack` 的 `item` 只是壳——模板自己的 `children` 会被整段换成
+7. **列表里不共享 grab**：`tiles` 的行模板只是壳——模板自己的 `children` 会被整段换成
    那一个行节点，所以模板能留的只有类型与 attrs 这类壳信息。要在一行里放 grab 和文字两
    件事，它们在行节点内部，或者 grab 自己就是行的根节点。机制与那个「叶子类型当模板会
    静默吞掉行」的坑见 ADR 0020。
@@ -116,14 +116,14 @@ ADR 0008 §5 立过一条：「组件内瞬态交互（hover/focus/drag）：无
 
 ## 明确不做的替代方案
 
-- **容器属性法**（给 `case`／`rack`／`group` 加 `drop` 属性）：要加到每个容器才可组合，
+- **容器属性法**（给 `frame`／`tiles`／`group` 加 `drop` 属性）：要加到每个容器才可组合，
   而每个不需要拖拽的容器都背上一条语义；属性同样是闭白名单，省下一个变体换来 n 处
   语义与「这个容器到底能不能落」的判断。角色分型是 accrete 既有的形状
-  （case／rack／fold／float／layer／portal／pages 各是一个角色）。
-- **复用 `bind` 加一个 `drag` 键**（不动词表）：`bind` 的键是组件自己的语义
-  （value／select／field／theme），drag 不是哪一类组件的语义；而且每个渲染函数都要
+  （今天那条路走到了 `frame` 的 `attrs.draggable`／`attrs.accept`，ADR 0034）。
+- **复用出口加一个 `drag` 键**（不动词表）：`source`/`sink` 的键是组件自己的语义
+  （slot／dest／scope／path），drag 不是哪一类组件的语义；而且每个渲染函数都要
   各读一遍，比一个变体贵。
-- **生产者自绘 canvas 模块**：等于自己重画整个信息流——`rack` 的追尾滚动、文本选择、
+- **生产者自绘 canvas 模块**：等于自己重画整个信息流——`tiles` 的追尾滚动、文本选择、
   无障碍全丢，而且模块看不见自己之外的落点。
 - **每行打 DOM 标记、由页面脚本代劳**（框架 runtime 那套）：把渲染器自身的能力外推给
   每个使用方各写一遍，且身份要从 DOM 里读回来（读回来的是猜，不是树）。组件实例的

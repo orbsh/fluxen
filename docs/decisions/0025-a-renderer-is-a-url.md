@@ -37,7 +37,7 @@ struct 与 enum 变体）、改 `ui_core`（加组件函数）、重新编译 wa
 
 ## 决定
 
-1. 可视化只有 `canvas` 一个节点：`url` + `bind["value"]`（载荷，CBOR）+ `options`
+1. 可视化只有 `canvas` 一个节点：`url` + `source`（载荷，CBOR）+ `options`
    + `attrs`。`url` 必填——没有 url 的 canvas 是坏帧，解码失败，不是"合法的默认"。
 2. 模块契约不变（ADR 0007）：ES module 导出 `mount/update/resize/unmount`。
 3. 种类全部落到 assets：`g2chart`、`editor`、`diagram`、`forcegraph`（JS 版）

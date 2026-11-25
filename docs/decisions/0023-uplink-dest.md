@@ -25,12 +25,12 @@
 **上行落点叫 `dest`（destination）。**
 
 1. `content::Outflow { dest, id?, data }`——一帧上行 = 送到宿主上的某个目标。
-2. `accrete::BindVariant::Dest { dest }`（`kind: dest`）——控件的上行目标。
-3. 与既有 `bind` 词法同一个模子：`kind` 说的是"这个字符串是什么名字"，`{kind: field, field: …}`、
+2. `accrete::Sink { dest }`——控件的上行目标（ADR 0039 之后，读与写各是一个类型，`dest` 坐在 `Sink` 上）。
+3. 与当时 `bind` 的词法同一个模子：`kind` 说的是"这个字符串是什么名字"，`{kind: field, field: …}`、
    `{kind: source, source: …}`，所以 `{kind: dest, dest: …}` 不是新句式。
 4. `inject` / `local` 里"另起的名字"叫 `name?`（缺省 = 槽名）：那里 `slot` 已经是通道，
    同一个对象里不能有两个 `slot`。
-5. `event` 在 UI 侧彻底退场：bind 里没有、帧里没有、`ctx.emit` 的分支名也没有。
+5. `event` 在 UI 侧彻底退场：帧里没有、`ctx.emit` 的分支名也没有。
 
 ## 为什么是 `dest` 而不是别的
 
@@ -38,7 +38,7 @@
 - 4 个字母，和 `slot`、`kind` 一样长，帧的字段列对齐。
 - 被否掉的：`intent`（不像计算机领域的词，且一次未确认的自造改名）、`request`/`req`（暗示回执，
   我们的上行不保证有回应）、`command`（`name.change` 这类通知不是命令）、`topic`（订阅语义，
-  bind 里没有订阅）、`func`/`call`（描述"调什么"，不如"送到哪"贴合）、`addr`（更像内存/套接字
+  当时 `bind` 里也没有订阅）、`func`/`call`（描述"调什么"，不如"送到哪"贴合）、`addr`（更像内存/套接字
   地址）、`sink`（和 `kind: source` 凑对漂亮，但 `local` 夹在中间破坏对称）、`path`（撞
   `Local.path`）、`hook`（reflux 的 `app.hooks` 已被页面钩子占）、`name`（`name?` 骑手已用）。
 

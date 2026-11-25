@@ -38,7 +38,7 @@ accrete 管物质的生长（吸积，结果）——两词各占一根轴，互
 - 全仓机械改名：crate 目录（brick→accrete、brick_macro→accrete_macro）、
   类型（Brick/Accrete、BrickOps→AccreteOps、ClassifyBrick→ClassifyAccrete）、
   属性宏（#[ui_brick]→#[ui_acrete]）、函数（render_brick→render_accrete 等）。
-- wire 格式零变化：砖类型值（text/case/rack…）不含 crate 名，serde 标签不动，
+- wire 格式零变化：节点类型值（`text`/`frame`/`tiles`…）不含 crate 名，serde 标签不动，
   非破坏性改名。
 - CSS 颜色名 firebrick 保留（词内包含，改名时显式保护）。
 - 历史 ADR（0001/0002/0003）与 README 中的 crate 名引用同步为 accrete
