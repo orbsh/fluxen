@@ -150,8 +150,10 @@ appending does not remount the rows above it.
    A node that has one gets a closure from `use_target`, and that closure calls
    `ctx.emit(&sink, id, payload)`; a node without a `sink` gets none, because it only reads. `id` is
    the emitting node's own id (`None` = none); `payload` is whatever that component produced — a form
-   value, a drag cargo, a page number. A sink with no `dest` has nowhere to go: `emit` returns false
-   and sends nothing.
+   value, a   drag cargo, a page number. A sink with no `dest` has nowhere to go: `emit` returns false
+   and sends nothing. An `input`'s change reaches the loom on its own clock (`emit`: a 250 ms
+   debounce by default, `{throttle: ms}` or `{debounce: 0}` otherwise — ADR 0032 §8), so a
+   `submit: [change]` frame count is a rate the producer chose, not a keystroke count.
 2. **`Event` goes on the wire.** `ctx.send` → `Transport::emit(transport::Event)` →
    `WsTransport::emit`, which builds `content::Outflow { dest, id?, data }`, encodes it with the
    codec the page was built with (JSON → text frame, CBOR → binary frame) and sends. `send` is a

@@ -19,11 +19,10 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
-    let field = accrete
-        .tag
+    let tag = accrete.tag.clone().filter(|t| !t.is_empty());
+    let field = tag
         .as_ref()
-        .filter(|t| !t.is_empty())
-        .and_then(|tag| ctx.loom.as_ref().and_then(|b| b.field(tag)));
+        .and_then(|t| ctx.loom.as_ref().and_then(|b| b.field(t)));
 
     // Initial value read untracked (same reason as `input_`: a component that
     // emits must not subscribe to the slot its own send writes).
@@ -52,8 +51,13 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     let rows_ctx = ctx.clone();
     let rows = move || {
         let ctx = rows_ctx.clone();
+        // The row builder runs more than once, so the field's name is cloned per run and given to the
+        // click closure — borrowing the outer `tag` inside a `move` closure would move it out.
+        let tag_of_row = tag.clone();
         let option = use_source_list(&ctx, &accrete).unwrap_or_default();
         let children = option.iter().enumerate().map(|(idx, child)| {
+            // One name per row: the row closure is `FnMut`, so the outer copy is only borrowed here.
+            let tag_of_child = tag_of_row.clone();
             let key = child.get_id().clone().unwrap_or(idx.to_string());
             let selected = current.get() == key;
             // Rows are shared, and `add_class` mutates: copy this row, not the
@@ -73,7 +77,13 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
                         // (ADR 0032 §2), so a loom is what sends a choice anywhere.
                         if let Some(sig) = field {
                             sig.set(v.clone());
-                            field_changed(&click_ctx, click_ctx.loom.as_ref());
+                            // A click is already discreet: no window to wait for, whatever a neighbouring field asks for.
+                            field_changed(
+                                &click_ctx,
+                                click_ctx.loom.as_ref(),
+                                tag_of_child.as_deref().unwrap_or_default(),
+                                Some(accrete::Emit::IMMEDIATE),
+                            );
                         }
                         if let Some(s) = v.as_str() {
                             c.set(s.to_string());

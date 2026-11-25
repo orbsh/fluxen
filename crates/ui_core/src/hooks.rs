@@ -173,6 +173,31 @@ pub struct Field {
     pub name: String,
     pub sig: RwSignal<Value>,
     pub initial: Value,
+    /// Bumped whenever a scheduled notification must be forgotten: a newer keystroke, a send, a reset.
+    /// The timer that fires with an old generation does nothing — that is the whole cancellation story,
+    /// and it costs no `clearTimeout` handles to keep alive.
+    pub pending: RwSignal<u64>,
+    /// When this field's change last reached the loom, in `Date.now()` milliseconds — the throttle's
+    /// clock.
+    pub last_fire: RwSignal<f64>,
+}
+
+impl Field {
+    pub fn new(name: String, sig: RwSignal<Value>, initial: Value) -> Self {
+        Self {
+            name,
+            sig,
+            initial,
+            pending: RwSignal::new(0),
+            last_fire: RwSignal::new(0.0),
+        }
+    }
+
+    /// Forget whatever was scheduled for this field (a send or a reset happened; the value it would
+    /// have carried is no longer the one on screen).
+    fn cancel(&self) {
+        self.pending.set(self.pending.get_untracked() + 1);
+    }
 }
 
 /// What a loom hands down to its fields (ADR 0032): the keys it packs, when
@@ -223,6 +248,19 @@ impl LoomState {
     }
 
     /// One send happened: take one off, if there is anything to take.
+    /// Drop every scheduled notification in this loom and everything nested under it. Called by a send:
+    /// a frame that has just packed the fields must not be followed by a stale keystroke arriving late.
+    fn cancel_pending(&self) {
+        for f in &self.fields {
+            f.cancel();
+        }
+        self.children.with_value(|kids| {
+            for k in kids {
+                k.cancel_pending();
+            }
+        });
+    }
+
     fn count_send(&self) {
         if self.unlimited() {
             return;
@@ -237,6 +275,9 @@ impl LoomState {
     /// submission is one object, so the aftermath is one decision. A nested loom that sends on its own
     /// applies its own mode, over its own subtree only (it never reaches up).
     fn reset_fields(&self) {
+        // A reset changes what the next keystroke will carry, so anything the last one scheduled is
+        // about to be wrong: drop it rather than let it resurrect the cleared value.
+        self.cancel_pending();
         if !matches!(self.reset, accrete::ResetMode::Keep) {
             self.reset_subtree(self.reset);
             refresh_inner(self);
@@ -326,6 +367,9 @@ pub fn submit(ctx: &Ctx, b: &std::sync::Arc<LoomState>) {
     if locked(Some(b)) {
         return;
     }
+    // This send *is* the flush: the fields already hold what is on screen (a keystroke writes them
+    // synchronously), so all a pending window can do now is send the same value again later.
+    b.cancel_pending();
     refresh(b);
     if let Some(sink) = &b.sink {
         ctx.emit(sink, b.id.clone(), b.pack());
@@ -352,14 +396,82 @@ pub fn nearest(
     None
 }
 
-/// A field's value changed: keep enclosing objects current, then send from the
-/// loom that owns `change` timing (if any declares it).
-pub fn field_changed(ctx: &Ctx, b: Option<&std::sync::Arc<LoomState>>) {
+/// A field's value changed. The value itself is already written (a keystroke writes the field's signal
+/// synchronously, so the display never waits); what the field's `emit` decides is when the *loom* hears
+/// about it, which is all `submit: [change]` turns into frames (ADR 0032 §8).
+///
+/// `None` for `emit` is the wire's absence, and absence means a 250 ms debounce — the same default the
+/// schema shows. `{debounce: 0}` is the way back to a frame per keystroke.
+pub fn field_changed(
+    ctx: &Ctx,
+    b: Option<&std::sync::Arc<LoomState>>,
+    name: &str,
+    emit: Option<accrete::Emit>,
+) {
     let Some(b) = b else { return };
+    // Enclosing objects see the new value at once either way: the timing is about frames, not about
+    // whether a nested loom's mirror is current.
     refresh(b);
+    let window = emit.unwrap_or_default();
+    if window.is_throttle() {
+        throttled(ctx, b, name, window.millis());
+    } else if window.millis() == 0 {
+        settle_change(ctx, b);
+    } else {
+        after_quiet(ctx, b, name, window.millis(), false);
+    }
+}
+
+/// The change reaches the loom: send from whichever loom declares `change` (nearest wins, so a nested
+/// loom cannot make its parent send again).
+fn settle_change(ctx: &Ctx, b: &std::sync::Arc<LoomState>) {
     if let Some(owner) = nearest(Some(b), accrete::SubmitMode::Change) {
         submit(ctx, &owner);
     }
+}
+
+/// `{throttle: ms}`: the first change goes at once, later ones coalesce into at most one per window,
+/// and the window's last value lands when the window closes.
+fn throttled(ctx: &Ctx, b: &std::sync::Arc<LoomState>, name: &str, ms: u32) {
+    let Some(f) = b.fields.iter().find(|f| f.name == name) else {
+        return;
+    };
+    let now = js_sys::Date::now();
+    let window = f64::from(ms);
+    if window <= 0.0 || now - f.last_fire.get_untracked() >= window {
+        f.last_fire.set(now);
+        settle_change(ctx, b);
+    } else {
+        let wait = (window - (now - f.last_fire.get_untracked())).ceil().max(1.0) as u32;
+        after_quiet(ctx, b, name, wait, true);
+    }
+}
+
+/// Schedule the change for `ms` from now, replacing whatever this field had pending. `fire` on the way
+/// out is what turns a throttle's trailing edge into the next window's opening time.
+fn after_quiet(ctx: &Ctx, b: &std::sync::Arc<LoomState>, name: &str, ms: u32, fire: bool) {
+    let Some(f) = b.fields.iter().find(|f| f.name == name) else {
+        return;
+    };
+    let generation = f.pending.get_untracked() + 1;
+    f.pending.set(generation);
+    let (b2, name2, ctx2) = (std::sync::Arc::clone(b), name.to_string(), ctx.clone());
+    let _ = leptos::leptos_dom::helpers::set_timeout_with_handle(
+        move || {
+            let Some(f) = b2.fields.iter().find(|f| f.name == name2) else {
+                return;
+            };
+            // A newer keystroke, a send or a reset has spoken since: this timer is history.
+            if f.pending.get_untracked() != generation {
+                return;
+            }
+            if fire {
+                f.last_fire.set(js_sys::Date::now());
+            }
+            settle_change(&ctx2, &b2);
+        },
+        std::time::Duration::from_millis(u64::from(ms)),
+    );
 }
 
 /// Enter was pressed in a field: the nearest loom declaring `enter` sends.

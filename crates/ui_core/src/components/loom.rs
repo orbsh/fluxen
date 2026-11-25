@@ -47,11 +47,11 @@ fn collect(node: &Accrete, out: &mut Vec<Field>) {
             {
                 // The value arrives from the child's own pack, through the
                 // shared `mirror` signal — not from a field here.
-                out.push(Field {
+                out.push(Field::new(
                     name,
-                    sig: RwSignal::new(Value::Object(serde_json::Map::new())),
-                    initial: Value::Object(serde_json::Map::new()),
-                });
+                    RwSignal::new(Value::Object(serde_json::Map::new())),
+                    Value::Object(serde_json::Map::new()),
+                ));
             }
         }
         Accrete::input(i) => {
@@ -59,11 +59,7 @@ fn collect(node: &Accrete, out: &mut Vec<Field>) {
                 && !out.iter().any(|f| &f.name == tag)
             {
                 let initial = field_default(node);
-                out.push(Field {
-                    name: tag.clone(),
-                    sig: RwSignal::new(initial.clone()),
-                    initial,
-                });
+                out.push(Field::new(tag.clone(), RwSignal::new(initial.clone()), initial));
             }
         }
         Accrete::select(s) => {
@@ -71,11 +67,7 @@ fn collect(node: &Accrete, out: &mut Vec<Field>) {
                 && !out.iter().any(|f| &f.name == tag)
             {
                 let initial = field_default(node);
-                out.push(Field {
-                    name: tag.clone(),
-                    sig: RwSignal::new(initial.clone()),
-                    initial,
-                });
+                out.push(Field::new(tag.clone(), RwSignal::new(initial.clone()), initial));
             }
         }
         _ => {

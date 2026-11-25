@@ -1,0 +1,39 @@
+# A field's clock (ADR 0032 §8). The value is written on every keystroke either way; what `emit` decides
+# is how often the loom HEARS it — and therefore how often `submit: [change]` can fire.
+#
+#   absent          250 ms after the typing stops, carrying the whole text (a search box, a draft)
+#   {throttle: ms}  at once, then at most once per window, the window's last value landing at its end
+#                   (a live preview that must keep moving)
+#   {debounce: 0}   every keystroke, at once — the pre-timer behaviour, for frames that want it
+#
+# Enter and buttons do not wait for a window: a send packs what is on screen and drops whatever was
+# pending, so `submit: [enter, change]` never carries a value older than the keypress before it.
+- action: append
+  slot: chat
+  data:
+    type: frame
+    attrs: {class: [box, pad-sm, gap, gap-md]}
+    children:
+    - type: loom
+      sink: {dest: search}
+      attrs: {submit: [change]}
+      children:
+      - type: input
+        tag: q
+        placeholder: {default: "quiet for 250 ms"}
+    - type: loom
+      sink: {dest: preview}
+      attrs: {submit: [change]}
+      children:
+      - type: input
+        tag: q
+        emit: {throttle: 50}
+        placeholder: {default: "at most one frame per 50 ms"}
+    - type: loom
+      sink: {dest: every-key}
+      attrs: {submit: [enter, change]}
+      children:
+      - type: input
+        tag: q
+        emit: {debounce: 0}
+        placeholder: {default: "every keystroke; Enter flushes anyway"}

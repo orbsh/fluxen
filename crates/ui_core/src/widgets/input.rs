@@ -90,16 +90,20 @@ fn on_input(
     kind: Option<JsType>,
     slot: RwSignal<Value>,
     field: Option<RwSignal<Value>>,
+    tag: Option<String>,
+    emit: accrete::Emit,
     ctx: Ctx,
 ) -> impl Fn(web_sys::Event) + 'static {
     move |event: web_sys::Event| {
         let parsed = parse(&kind, &target_value(&kind, event.target()));
+        // The display is written on the keystroke, always. Only what the loom hears is timed (ADR 0032
+        // §6), which is why typing never lags behind a `debounce`.
         slot.set(parsed.clone());
         // The value goes where the loom keeps it, and nowhere else: a field has no exit of its own
         // (ADR 0032 §2), so an untagged field is a display and nothing more.
-        if let Some(sig) = field {
+        if let (Some(sig), Some(name)) = (field, tag.clone()) {
             sig.set(parsed);
-            field_changed(&ctx, ctx.loom.as_ref());
+            field_changed(&ctx, ctx.loom.as_ref(), &name, Some(emit));
         }
     }
 }
@@ -140,11 +144,14 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     // A tagged field belongs to its loom: its value lives in the loom's
     // signal and the loom's sink is the only exit. No tag = no member, and the
     // field keeps its own exit.
-    let field = accrete
-        .tag
+    let tag = accrete.tag.clone().filter(|t| !t.is_empty());
+    let field = tag
         .as_ref()
-        .filter(|t| !t.is_empty())
-        .and_then(|tag| ctx.loom.as_ref().and_then(|b| b.field(tag)));
+        .and_then(|t| ctx.loom.as_ref().and_then(|b| b.field(t)));
+    // When this field's typing reaches the loom: `emit` on the wire, a 250 ms debounce when it says
+    // nothing (ADR 0032 §8). Enter and buttons bypass it — they go through `submit`, which packs the
+    // field's current value.
+    let emit = accrete.emission();
 
     // Initial value: the loom's copy, else the source literal. A field does
     // not subscribe to the slot it writes (a self read/write loop restores what
@@ -243,7 +250,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
             .attr("disabled", is_locked)
             .node_ref(node_area)
             .child(text)
-            .on(ev::input, on_input(kind.clone(), slot, field, ctx.clone()))
+            .on(ev::input, on_input(kind.clone(), slot, field, tag.clone(), emit, ctx.clone()))
             .on(ev::keydown, on_key(true, field, ctx.clone()));
         let el = match placeholder {
             Some(ph) => base.placeholder(ph).into_any(),
@@ -271,7 +278,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
         .r#type(ty)
         .attr("disabled", is_locked)
         .node_ref(node_el)
-        .on(ev::input, on_input(kind.clone(), slot, field, ctx.clone()))
+        .on(ev::input, on_input(kind.clone(), slot, field, tag.clone(), emit, ctx.clone()))
         .on(ev::keydown, on_key(false, field, ctx.clone()));
     let el = match (&kind, placeholder) {
         (Some(JsType::bool), Some(ph)) => base.checked(checked).placeholder(ph).into_any(),
