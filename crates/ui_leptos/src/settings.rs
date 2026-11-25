@@ -19,7 +19,6 @@ pub struct Opts {
     pub host: Option<String>,
     pub path: Option<String>,
     pub codec: Option<String>,
-    pub token: Option<String>,
     /// Extra parameters for the socket's address. The host decides what they mean; the boot only
     /// joins and escapes them, because the address is the host's fact and not ours (ADR-0046).
     pub query: Option<std::collections::BTreeMap<String, String>>,
@@ -36,7 +35,6 @@ pub struct Boot {
     pub host: Option<String>,
     pub path: String,
     pub codec: CodecType,
-    pub token: Option<String>,
     /// The host's extra address parameters, already de-duplicated, in their given order.
     pub query: Vec<(String, String)>,
     /// `None` means "no option slot on this page".
@@ -84,7 +82,6 @@ impl Boot {
             host: o.host.clone(),
             path,
             codec,
-            token: o.token.clone(),
             query: o.query.clone().unwrap_or_default().into_iter().collect(),
             config,
             policy,

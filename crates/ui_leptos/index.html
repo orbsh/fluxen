@@ -13,6 +13,16 @@
   <link data-trunk rel="rust" />
   <!-- Our own id: `#fluxen` means "mount me with the defaults". Any page that configures the boot calls
        mount(element, options) from its own script instead. -->
-  <div id="fluxen"></div>
+  <div id="fluxen" data-codec=""></div>
+  <!-- The codec is the PAGE's opinion, not the boot's (ADR-0046): this snippet reads the address and hands
+       the answer to the element the boot mounts. A token would be the host's business, and rides the
+       socket's query string, not this page. -->
+  <script>
+    (() => {
+      const el = document.getElementById("fluxen");
+      const said = new URLSearchParams(location.search).get("codec");
+      if (said) el.dataset.codec = said;
+    })();
+  </script>
 </body>
 </html>

@@ -65,18 +65,27 @@ pub fn start() {
         report("fluxen: #fluxen is not an HTML element");
         return;
     };
-    if let Err(e) = boot(el, None, None) {
+    // The element's `data-codec` is the page's word (ADR-0046): a snippet that read the address can
+    // set it, and a page that wants to say more calls `mount` itself. The boot still reads no URL.
+    let codec = el
+        .dataset()
+        .get("codec")
+        .filter(|said| !said.trim().is_empty());
+    let opts = codec.map(|codec| Opts {
+        codec: Some(codec),
+        ..Opts::default()
+    });
+    if let Err(e) = boot(el, opts, None) {
         report(&e);
     }
 }
 
-/// Mount explicitly: `await mount(document.querySelector('#app'), { host, path, codec, token, config,
+/// Mount explicitly: `await mount(document.querySelector('#app'), { host, path, codec, query, config,
 /// policy, transport })`.
 ///
-/// The URL's `?token=` and `?codec=` are the producer's word and apply where `options` is silent; every field
-/// the call names wins, quietly, because an override is not a disagreement (ADR 0045 §2). `transport` is a live
-/// hook object — the same shape as `window.fluxenTransport` — and passing it is how a page that boots itself
-/// keeps its own socket.
+/// Nothing is read from `document.location` (ADR-0046): the host knows its own address, its own session
+/// and its own storage, so it passes `codec` and puts anything else the socket needs — a token included,
+/// because a token is just one more query parameter — into `query`. The boot joins and escapes them.
 #[wasm_bindgen]
 pub fn mount(element: web_sys::Element, options: JsValue) -> Result<(), JsValue> {
     let el = element
@@ -133,10 +142,9 @@ fn boot(
     // THE ADDRESS IS THE HOST'S (ADR-0046). We do not look at `document.location`: the host read
     // whatever it had to read (a token in storage, a query parameter, nothing) and handed us the
     // parts. All we do here is join them, escaped, in a fixed order.
+    // A token is nothing special here: it is one more query parameter, put there by whoever knows the
+    // session (ADR-0046). The boot has no field for it, and no branch for it.
     let mut url = format!("ws://{}{}?codec={}", host, boot.path, codec_str);
-    if let Some(token) = &boot.token {
-        url.push_str(&format!("&token={}", encode(token)));
-    }
     for (key, value) in &boot.query {
         url.push_str(&format!("&{}={}", encode(key), encode(value)));
     }
