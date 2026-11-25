@@ -164,17 +164,32 @@ data: { type: text, source: {default: "hello"} }
 - **`ui-core`**——`ctx` / `render` / `components` / `widgets`。没有 `#main`，没有 `transport-ws`。
 - **`boot`**——`#main` 解析、WS 接线、`mount()`、`window.fluxen.send`。
 
-这样 `fluxen` 门面才有内容：它总是重导出 `ui-core`，`boot` 走一个 feature。两种消费方式从此有名字，
+这样 `fluxen` 门面才有内容：它总是重导出 `ui-core`，`boot` 走一个 feature。三种消费方式从此有名字，
 不靠口口相传：
 
 | 方式 | 谁 | 复用 | 自备 |
 |:--|:--|:--|:--|
 | 核心 + 自己的 boot | 今天没有消费者（这条路留给要进程内包装核心的宿主） | `ui-core`、`accrete`、`content`、`forcegraph`、`ui-assets` | 自己的 transport、自己的页面入口 |
 | boot + 自己的帧 | prism（Rust，挂产物）、reflux（Python，钉住产物） | 由示例里的 boot 构建出的 loom（`#main` 解析、WS、`window.fluxen.send`） | 帧本身，走自己的 socket；prism 另备静态根与 `/app.css` |
+| 我们的 boot + 你的 transport | 需要 JS 传输的宿主（ADR 0040） | 示例里的 boot 构建出的 loom（`#main` 解析、`Ctx`、`mount_to`、`window.fluxen.send`） | 只有 transport：`window.fluxenTransport` 的 `emit`/`subscribe`/`close?`，字节进出；codec 仍归 Rust |
 
 两条路的判据是「谁建 socket」，不是「谁写 Rust」：prism 用 Rust 写的是**生产端**（网关、身份、turn），
 渲染器那一侧它和 reflux 一样只挂产物——`crates/prism` 唯一的 fluxen 依赖是 `content`（线上词汇），
 没有 `ui-core`，也没有自己的 boot。
+
+### 第三种走法：留着我们的 boot，只换 transport
+
+需要 POST+SSE、与页面其它 JS 共用一条 socket、带鉴权头、或自己那套重连退避的宿主，不必写一个 Rust boot，也不必另编一个 `ui-core` 的 wasm（那条路的代价见 ADR 0040 §2：它并没有把 boot 移出 Rust，只多出一份 ABI、一份 codec 与第二个产物）。做法是一个全局钩子：
+
+```
+window.fluxenTransport = {
+  emit(bytes)      { /* 一帧上行，已编码 */ },
+  subscribe(push)  { /* 收下 sink；每条下行帧交给 push(bytes) */ },
+  close?()         { /* 可选 */ },
+}
+```
+
+五条规矩：**在 mount 之前读一次**（`Ctx::new` 构造时就吃掉 transport，之后不能换）；**只搬字节**——codec 仍归 Rust，仍来自 `#main[data-codec]` / `?codec=`；**挂了但形状不对 = mount 报错**，绝不静默回退到我们的 WS（那会让页面以为 JS 掌控传输、而 wasm 自己开了一条）；**重连归钩子**，框架从不重试；两种模式下 `window.fluxen.send` 都在，页面代码不知道用的是哪条传输。代价只有一条：钩子模式下每帧多一次 JS↔wasm 跨界，而默认路径一分钱不付。
 
 ## 5. 实例一：prism，会场
 
@@ -182,9 +197,7 @@ prism 是 WS 连接面（网关、身份、turn）。它的渲染器腿是 `/cha
 不是 prism 自己的 `{ev, args}` 动词帧（那些留在 `/ws`——CLI 与对端的程序腿；先例是 stage：
 页面走 `/channel`，对端走 `/cli`）：
 
-- **布局。** 客户端第一个上行是 `Outflow { dest: "init" }`。prism 用普通的 `create` 帧答布局：
-  `file:` 来源把 YAML 帧列表原样送出，`dest:` 来源提交给一个全局摊位并把返回值转发。没有布局
-  信封，也没有第二种形状——布局就是第一个视图操作。
+- **布局。** 连接一建立 prism 就往下推，不等任何上行：先是凭证那一帧，然后是外壳（`shell.yaml` 的 `create`：导航 + 每个 island 一个空区域），再是这一位看客的数据帧，最后在平面上通告 `ui:connect`——声明它的摊位用普通帧作答。没有「请求布局」这个动词，也没有布局信封：布局就是连接的回答。
 - **prism 自己的动词**走**它自己的**信封，不是渲染器的。今天那个信封恰好长得像
   `{ev, args}`，渲染腿只运动作列表、别的什么都不解（决策 6 已落地）——prism 的动词因此整条留在它自己
   那一侧，关心它们的客户端（比如登录表单）在那边读
