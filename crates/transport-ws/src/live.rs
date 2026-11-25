@@ -73,6 +73,9 @@ struct Shared {
     frames_in: Cell<u64>,
     frames_out: Cell<u64>,
     dropped: Cell<u64>,
+    /// Told `true` when a socket opens and `false` when it ends (ADR 0047 §1/§2). The host's `open`
+    /// seam speaks its first word from here, which is the only moment the queue is known to be drained.
+    lifecycle: RefCell<Option<Rc<dyn Fn(bool)>>>,
 }
 
 fn now_ms() -> f64 {
@@ -115,6 +118,11 @@ pub struct LiveWs {
 impl LiveWs {
     /// Open the first connection and start both supervisors. The transport is usable immediately: an
     /// `emit` before the socket opens is queued, not lost.
+    /// Tell a listener when the socket comes up and goes down. One listener: the boot has one host.
+    pub fn on_lifecycle(&self, told: Rc<dyn Fn(bool)>) {
+        *self.shared.lifecycle.borrow_mut() = Some(told);
+    }
+
     pub fn new(url: &str, codec: ActiveCodec, cfg: LiveConfig) -> Result<Self, String> {
         if let Some(hb) = cfg.heartbeat {
             hb.checked()?;
@@ -133,6 +141,7 @@ impl LiveWs {
             frames_in: Cell::new(0),
             frames_out: Cell::new(0),
             dropped: Cell::new(0),
+            lifecycle: RefCell::new(None),
         });
         publish(&shared);
 
@@ -298,6 +307,12 @@ fn connect(
                 }
                 shared.frames_out.set(shared.frames_out.get() + 1);
             }
+            // The host's `open` seam runs HERE, after the flush: it is the first word of this
+            // connection, and it cannot land in a queue that is about to disappear (ADR 0047 §1).
+            let told = shared.lifecycle.borrow().clone();
+            if let Some(told) = told {
+                told(true);
+            }
         });
         ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
         onopen.forget();
@@ -352,6 +367,10 @@ fn connect(
                         web_sys::console::warn_1(
                             &format!("fluxen: {dropped} unsent frame(s) dropped with the connection").into(),
                         );
+                    }
+                    let told = shared.lifecycle.borrow().clone();
+                    if let Some(told) = told {
+                        told(false);
                     }
                     publish(&shared);
                     if let Some(tx) = done.borrow_mut().take() {
