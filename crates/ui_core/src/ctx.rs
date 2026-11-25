@@ -172,10 +172,23 @@ impl Ctx {
     }
 
     pub async fn send(&self, event: impl AsRef<str>, id: Option<String>, content: Value) {
+        let name = event.as_ref();
+        // The host's rewriters run before the frame is built (ADR 0047 §5): registered order, `"*"`
+        // after any name that matches. `None` means "leave it alone", which is why a rewriter that only
+        // wants to look costs nothing. Synchronous by necessity — the frame cannot leave without an
+        // answer — but it blocks this frame only, never a render.
+        let mut content = content;
+        for (watched, rewrite) in &self.hooks.dests {
+            if watched == "*" || watched == name {
+                if let Some(replaced) = rewrite(name, content.clone()) {
+                    content = replaced;
+                }
+            }
+        }
         self.transport
             .inner
             .emit(transport::Event {
-                name: event.as_ref().to_string(),
+                name: name.to_string(),
                 id,
                 data: content,
             })
