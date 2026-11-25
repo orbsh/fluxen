@@ -65,8 +65,7 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Cmd::Schema => {
-            let schema = schemars::schema_for!(accrete::Accrete);
-            println!("{}", serde_json::to_string_pretty(&schema)?);
+            println!("{}", serde_json::to_string_pretty(&stage::schema::exported())?);
             Ok(())
         }
     }
