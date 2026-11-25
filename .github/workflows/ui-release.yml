@@ -3,7 +3,9 @@ name: ui-release
 # A release is a deliberate act: tag `v*` (annotated or lightweight, either is fine) and CI publishes
 # the renderer bundle. Not on branch pushes — the docker image already tracks main.
 #
-# What lands on the release: the four core files, `manifest.json`, `SHA256SUMS`, and one tarball.
+# What lands on the release: the five files (the JS glue, its wasm, the two sheets, and the entry
+# document `index.html`), `manifest.json`, `SHA256SUMS`, and one tarball. The document is what makes
+# the artifact a page a host can serve from its root; a host that configures its own boot replaces it.
 # What does not: the demo's module media (3dbrowser 28 MB, splatviewer 48 MB, monaco 6.6 MB,
 # mermaid 2.6 MB, g2chart 1.1 MB). Those are fetched by frames that name them and are assembled per
 # deployment — see `scripts/ui_dist.py`'s header for the reasoning.

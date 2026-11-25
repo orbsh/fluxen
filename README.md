@@ -198,13 +198,23 @@ python3 scripts/ui_dist.py --no-build # assemble an existing crates/ui_leptos/di
 
 A `v*` tag runs the same script in CI (`.github/workflows/ui-release.yml`) and publishes:
 
-- `manifest.json` — `entry.js` / `entry.wasm`, plus sha256 and size for every file
-- the four files it names (`ui_leptos-<hash>.js`, `…_bg.wasm`, `assets/core.css`, `assets/custom.css`)
-- `SHA256SUMS`, and `fluxen-ui-<tag>.tar.gz` (the same four plus the manifest)
+- `manifest.json` — `entry.js` / `entry.wasm`, `page` (the entry document), plus sha256 and size for
+  every file
+- the five files it names (`ui_leptos-<hash>.js`, `…_bg.wasm`, `assets/core.css`,
+  `assets/custom.css`, `index.html`)
+- `SHA256SUMS`, and `fluxen-ui-<tag>.tar.gz` (the same five plus the manifest)
 
-Fetch by tag — e.g. `https://github.com/orbsh/fluxen/releases/download/v0.1.0/manifest.json` — copy
-the four files into your static root, and pass the **hashed** wasm path to `init({ module_or_path })`:
-the glue's default `ui_leptos_bg.wasm` does not exist under trunk's hashed names (PLAN §24).
+Fetch by tag — e.g. `https://github.com/orbsh/fluxen/releases/download/v0.3.2/manifest.json` — copy
+the five files into your static root and `/` is a working page: the entry document mounts fluxen into
+`<div id="fluxen">` on its defaults (`path: /channel`, `codec: json`), so the host configures nothing.
+
+`index.html` is a DEFAULT, not the way in. The boot belongs to the host (ADR 0045): a host that
+configures its own mount replaces that file with its own page — reflux's is `#main` plus a
+`mount(el, {codec, path})` call. Two facts matter if you keep the shipped one: its references are
+**absolute** (`/ui_leptos-…`), so it is right where the bundle IS the origin (prism, reflux) and
+wrong under a path prefix; and its `<title>` is fluxen's. And whatever the page, the **hashed** wasm
+path goes to `init({ module_or_path })` — the glue's default `ui_leptos_bg.wasm` does not exist under
+trunk's hashed names (PLAN §24).
 
 Not included: `assets/3dbrowser`, `assets/splatviewer`, `assets/monaco`, `assets/mermaid.min.js`,
 `assets/g2chart`. Those are module media, fetched only when a frame names them and assembled per

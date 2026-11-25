@@ -162,13 +162,20 @@ python3 scripts/ui_dist.py --no-build # 装配已有的 crates/ui_leptos/dist
 
 打 `v*` tag 时 CI 跑同一个脚本（`.github/workflows/ui-release.yml`），发布：
 
-- `manifest.json` —— `entry.js`／`entry.wasm`，以及每个文件的 sha256 与大小
-- 它点名的四件（`ui_leptos-<hash>.js`、`…_bg.wasm`、`assets/core.css`、`assets/custom.css`）
-- `SHA256SUMS`，以及 `fluxen-ui-<tag>.tar.gz`（同样四件 + manifest）
+- `manifest.json` —— `entry.js`／`entry.wasm`、`page`（入口文档），以及每个文件的 sha256 与大小
+- 它点名的五件（`ui_leptos-<hash>.js`、`…_bg.wasm`、`assets/core.css`、`assets/custom.css`、
+  `index.html`）
+- `SHA256SUMS`，以及 `fluxen-ui-<tag>.tar.gz`（同样五件 + manifest）
 
-按 tag 取用（例如 `https://github.com/orbsh/fluxen/releases/download/v0.1.0/manifest.json`），把四件
-拷进你的静态根，并把**带哈希的** wasm 路径传给 `init({ module_or_path })` —— glue 的默认
-`ui_leptos_bg.wasm` 在 trunk 的哈希名下并不存在（PLAN §24）。
+按 tag 取用（例如 `https://github.com/orbsh/fluxen/releases/download/v0.3.2/manifest.json`），把五件
+拷进你的静态根，`/` 就是一个能用的页面：入口文档把 fluxen 挂到 `<div id="fluxen">`，用它的默认值
+（`path: /channel`、`codec: json`），宿主什么都不用配。
+
+`index.html` 是**默认值**，不是唯一入口。boot 属于宿主（ADR 0045）：要自己配置的宿主用自己那页替换它
+（reflux 那页是 `#main` 加一句 `mount(el, {codec, path})`）。保留这份自带的页面时有两件事要知道：它的
+引用是**绝对路径**（`/ui_leptos-…`），所以只在「bundle 就是 origin」时成立（prism、reflux 都是），挂在
+子路径下就不对了；它的 `<title>` 是 fluxen 自己的。无论用哪页，传给 `init({ module_or_path })` 的必须是
+**带哈希的** wasm 路径 —— glue 的默认 `ui_leptos_bg.wasm` 在 trunk 的哈希名下并不存在（PLAN §24）。
 
 不含：`assets/3dbrowser`、`assets/splatviewer`、`assets/monaco`、`assets/mermaid.min.js`、
 `assets/g2chart`。这些是模块媒体，只有帧点名时才加载，由部署侧自行组装（见 Dockerfile）。
