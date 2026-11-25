@@ -76,6 +76,11 @@
     :root {
         --fg: light-dark(oklch(0.18 0 0), oklch(0.98 0 0));
         --bg: light-dark(oklch(1 0 0), oklch(0.15 0 0));
+        /* The layer above the page: the same paper, a shade off it. A card that is exactly the page colour
+           has to lean on its edge to be seen at all; a shade is the difference between "flat" and "above",
+           and it is a token so a host can tune the step without forking the sheet. Light mode steps DOWN
+           from white, dark mode steps UP from the page — away from the page colour is up in both. */
+        --surface: light-dark(oklch(0.965 0 0), oklch(0.205 0 0));
 
         --accent: oklch(0.7 0.12 182.49);
         --primary: oklch(0.98 0.06 107.14);
@@ -1358,6 +1363,9 @@
     html[data-sketch="true"] {
         --round: 0;
         --input-round: 0;
+        /* The skin draws edges; it does not paint panels. A hand-drawn box on tinted paper would be a filled
+           sketch, and the paper is the page's, so every box sits on the page colour again. */
+        --surface: var(--bg);
     }
 
     /* Whatever drew a border and has its drawing in place drops the painted edge: the space stays (the
