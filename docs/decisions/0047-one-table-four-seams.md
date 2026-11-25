@@ -1,6 +1,6 @@
 # 0047 — 一张 hooks 表，四个口子
 
-状态：Accepted（实现中）
+状态：Accepted（实现完成，单测待补）
 
 ## 问题
 
@@ -24,6 +24,20 @@ await mount(el, {
 ### 判据：按 action，不按"有没有 slot 字段"
 
 `create` 带的是 `slot: ""`——那是**根**，不是缺失。用"有没有 slot"当判据会让根槽成为灰区，也会漏掉将来打到根的 `set`。所以：`create` 一个口子，其余 action 按它们**写到的那个槽**进 `slots` 表（`remove` 也算，值为空）。
+
+### 实现形状（写代码时定下来的，不是最初的设想）
+
+- **`Ctx` 里不放 JS 函数**。`Ctx` 被 view 闭包捕获，所以必须是 `Send + Sync`，而 `js_sys::Function`
+  两者都不是；`SendWrapper` 只给 `Send`，进 `Arc` 仍不过。解法不是通道——wasm 单线程，调函数就是
+  在 JS 侧执行——而是：**函数住 `thread_local!` 表里，`Ctx` 只拿 id**。适配器闭包捕获一个 `u32`，
+  天然 `Send + Sync`。
+- **`open` 的实参是页面的上行句柄**（`window.fluxen.send`，boot 挂载时发布、socket 打开时必定已在）。
+  `open(send)` 的 `send` 就是它，没有第二个来源。
+- **`slots` 的合并是一条地图，不是队列**：`set` 只覆盖 `pending[名称]`，`drain` 在消费帧的那个
+  Effect 每个 batch 的末尾跑一次。这样不需要调度器（`spawn_local` 在此 crate 不可用：它同时为服务
+  端编译），也不会让宿主回调待在触发它的那次写里面。
+- **`create` 在 layout 被替换处通报**，`open`/`close` 由 `LiveWs::on_lifecycle` 通报：`open` 排在
+  outbox flush **之后**（保证宿主的第一句话是这条连接的第一帧），`close` 排在未发帧丢弃**之后**。
 
 ### 五条语义
 
