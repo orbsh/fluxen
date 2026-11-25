@@ -41,7 +41,7 @@
 - [x] 34 — 嵌套 bundle 的打包键只认 `tag`：`id` 是身份（按它匹配答复）、`dest` 是它自己发送的去向，两者都不是名字，`bundle_key` 不再从 `id` 后备；无 `tag` 的内层 bundle 不进外层的包（它的字段留在自己包里，自己有 `dest` 就自己发）；顶层 `tag` 不读 — ADR 0032 §4 — 2026-11-24
 - [x] 33 — 读和写分成两个类型：`Source {slot, scope, path, default}` / `Sink {dest, scope, path}`（`dest` 与上行帧同名，`emit` 不再翻译；sink 没有 `default`，两个类型各自 deny unknown keys，`sink: {slot: …}` 解码即错）；例子/文档 29 处 `sink: {slot: …}` 改 `dest`，两条死 `default` 一并删掉 — ADR 0039（0031 §2 加 amend）— 2026-11-24
 - [ ] 32 — 皮肤的边角：`select` 的稳定子树、`button` 的类名、input 保持 CSS 边（void 元素装不下子节点）— ADR 0038 §4 — 待做
-- [ ] 35 — `move` 动作：把一个**已经在**列表里的行挪到另一个位置，行本身不重建 — ADR 0005 加一节 — 待做
+- [x] 35 — `move` 动作：把一个**已经在**列表里的行挪到另一个位置，行本身不重建 — ADR 0005 加一节 — 2026-11-24
   - 帧形状 `{"action": "move", "slot": <列表槽>, "id": <行的 id>, "position": ±n}`；`position` 与 `append` 同向（`0` 尾、`+n` 从尾往里数、`-n` 从头往里数），但**按"把这一行先拎出来"的列表计数**（`len - 1`）——否则"删之前数还是删之后数"两条都自洽，实现和人读的会是两条。
   - 域：行必须在列表里（不在就拒收，与 `append` 拒重复 id 是同一条边界）；`position` 越界由渲染器拒（`move_index`，与 `append_index` 并列，域比 `append` 少一格）。
   - 渲染器：改的是信号里的行序，diff 交给 keyed 列表（`components/tiles.rs` 的 `tachys::view::keyed`）——id 没变的行复用节点，所以焦点、动画、滚动位置都不丢；非 keyed 的容器按"重建子树"兜底，语义仍正确。今天要重排只有"删光再插回"，中间态一旦渲染，节点就真的没了。

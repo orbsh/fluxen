@@ -39,8 +39,8 @@ Above it nothing knows where bytes come from; below it nothing knows Accrete.
 
 ## 2. The wire
 
-Downstream, a frame **is** the action list — the seven actions (`create` / `set` / `append` /
-`remove` / `patch` / `tmpl` / `empty`) as an ordered array. There is no envelope on this
+Downstream, a frame **is** the action list — the eight actions (`create` / `set` / `append` /
+`move` / `remove` / `patch` / `tmpl` / `empty`) as an ordered array. There is no envelope on this
 side (ADR 0021 decision 6). `content` keeps only the actions and `Outflow`, and a host keeps an
 envelope only when it has more than one kind of frame to categorise — prism does (`connected`,
 `init.error`, `echo.result`); `stage` and reflux have a single verb each, so neither has one.
@@ -96,6 +96,7 @@ directions pass through one seam: everything below is `ui-core` plus the transpo
    | `create` | `ctx.layout` | the root document; the page's reactive root re-renders |
    | `set` | data slot `slot` | one named node |
    | `append` | list slot `slot` | row id read from `data.id`; duplicate ids rejected; `position` counts from the tail (0 = end) |
+   | `move` | list slot `slot` | the row `id` must already be in the list; `position` counts like `append`'s but on the list with the row lifted out; out of range rejected |
    | `remove` | list slot `slot` | by row id |
    | `patch` | layout root, one list row, or a data slot | JSON Pointer (RFC 6901) into the node's WIRE shape; `slot: ""` = root, `id` set = that row, else the named slot |
 

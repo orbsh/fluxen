@@ -35,8 +35,8 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
 
 ## 2. 线上格式
 
-下行，一帧**就是**动作列表——`create` / `set` / `append` / `remove` / `patch` / `tmpl` / `empty`
-七个动作按序组成的数组。渲染器这一侧没有信封（ADR 0021 决策 6）：`content` 只剩动作与
+下行，一帧**就是**动作列表——`create` / `set` / `append` / `move` / `remove` / `patch` / `tmpl` / `empty`
+八个动作按序组成的数组。渲染器这一侧没有信封（ADR 0021 决策 6）：`content` 只剩动作与
 `Outflow`；宿主只有在「帧不止一类」时才需要信封——prism 有（`connected`、`init.error`、
 `echo.result`），`stage` 与 reflux 各只有一个动词，所以都没有。
 
@@ -83,6 +83,7 @@ crate 里，因为它是调试**工具**而不是示例。核心不依赖这两�
    | `create` | `ctx.layout` | 根文档；页面的响应式根重画 |
    | `set` | 数据槽 `slot` | 一个具名节点 |
    | `append` | 列表槽 `slot` | 行身份取自 `data.id`；重复 id 拒收；`position` 从尾往内数（0 = 末尾） |
+   | `move` | 列表槽 `slot` | 行 `id` 必须已在列表里；`position` 记法与 `append` 同向，但按"该行先拎出来"之后的列表数；域外拒收 |
    | `remove` | 列表槽 `slot` | 按行 id |
    | `patch` | 布局根、某一行、或数据槽 | 对节点的**线上形状**打 JSON Pointer（RFC 6901）；`slot: ""` 是根，带 `id` 是那一行，其余是具名槽 |
 

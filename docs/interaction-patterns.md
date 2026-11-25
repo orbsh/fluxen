@@ -6,7 +6,7 @@ The premise behind every section: **the renderer holds no business logic.** It e
 
 ## 1. A base view, and a series of operations on it
 
-What this library gives an application is **an operable base view**: one view first — a surface to act on — and everything afterwards is a series of operations against it (`create`, `set`, `append`, `remove`, `patch`). That is what the name Accretes: the view accumulates, it is not rebuilt per change.
+What this library gives an application is **an operable base view**: one view first — a surface to act on — and everything afterwards is a series of operations against it (`create`, `set`, `append`, `move`, `remove`, `patch`). That is what the name Accretes: the view accumulates, it is not rebuilt per change.
 
 How the base view reaches the client has nothing to do with accrete:
 

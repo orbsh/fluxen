@@ -2,14 +2,14 @@
 
 > 本文是 [README.md](README.md) 的中文镜像；表述冲突时以英文版为准。
 
-AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set/append/patch/remove）+ CBOR 编码。自 Fluxora 拆出（事件总线/Gateway 半区成为 [Prism](../prism/)；Fluxora 本体迁向 Leptos 并保留原名）。
+AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set/append/move/remove/patch）+ CBOR 编码。自 Fluxora 拆出（事件总线/Gateway 半区成为 [Prism](../prism/)；Fluxora 本体迁向 Leptos 并保留原名）。
 
 设计文档：[Fluxora 架构](https://github.com/orbsh/wiki/blob/main/projects/fluxora-architecture.md)（wiki —— Accrete DSL、操作协议、codec 决策均在彼处）。
 
 ## 迁入内容
 
 - **Accrete DSL**（`accrete` / `accrete_macro`）：闭合类型 enum，`#[serde(tag = "type")]`，Bind 系统，面向 AI 生成的 JsonSchema 校验
-- **操作协议**（ADR 0005，取代原流式合并）：create/set/append/patch/remove 动作；`patch` 以 JSON Pointer 寻址任意节点的线上形状；`tmpl` 注册 stamp 定义——一棵节点树，`"$name"` 整值在实例化时填进去（ADR 0037）
+- **操作协议**（ADR 0005，取代原流式合并）：create/set/append/move/remove/patch 动作；`move` 把已在列表里的行挪位、行本身不重建；`patch` 以 JSON Pointer 寻址任意节点的线上形状；`tmpl` 注册 stamp 定义——一棵节点树，`"$name"` 整值在实例化时填进去（ADR 0037）
 - **编码**（`codec`）：`ActiveCodec` 枚举分发（Json/CBOR），URL 参数握手定版，`encode_ws()` 辅助函数
 
 ## 定位
@@ -79,7 +79,7 @@ UI 的 WS 地址默认取页面 origin，无需配置。接收侧逐帧自适应
 
 console REPL 把每一帧回显成 YAML——单独一行 `<-`，其后是缩进正文，JSON 与 CBOR 上行皆然——包括 UI 上报的事件：既是发送端也是事件监视器。命令：`/send <file.yaml>`、`/raw <json>`（发送裸 `Message<Accrete>`）、`/quit`。
 
-推送任意帧批次（YAML 文件 = 一个 Content 项或其数组；action 头被保留：create/set/append/patch/remove/tmpl，见 docs/decisions/0005-operation-layer-value-patch.md。KDL 载体已于 2026-10-02 退役，只维护 YAML/JSON）：
+推送任意帧批次（YAML 文件 = 一个 Content 项或其数组；action 头被保留：create/set/append/move/remove/patch/tmpl，见 docs/decisions/0005-operation-layer-value-patch.md。KDL 载体已于 2026-10-02 退役，只维护 YAML/JSON）：
 
 ```
 curl -X POST --data-binary @examples/yaml/00.main.yaml http://localhost:3002/send

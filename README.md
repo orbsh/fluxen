@@ -2,14 +2,14 @@
 
 [中文版](README.zh.md)
 
-AI-native UI rendering library: Accrete DSL + Leptos rendering + operation protocol (create/set/append/patch/remove) + CBOR codec. Carved out of Fluxora (the event-bus/Gateway half became [Prism](../prism/); Fluxora itself is migrating to Leptos and keeps its name).
+AI-native UI rendering library: Accrete DSL + Leptos rendering + operation protocol (create/set/append/move/remove/patch) + CBOR codec. Carved out of Fluxora (the event-bus/Gateway half became [Prism](../prism/); Fluxora itself is migrating to Leptos and keeps its name).
 
 Design: [Fluxora 架构](https://github.com/orbsh/wiki/blob/main/projects/fluxora-architecture.md) (wiki — Accrete DSL, operation protocol, codec decisions all documented there).
 
 ## What moved in
 
 - **Accrete DSL** (`accrete` / `accrete_macro`): closed typed enum, `#[serde(tag = "type")]`, Bind system, JsonSchema validation for AI generation
-- **Operation protocol** (ADR 0005, replaced the original streaming merge): create/set/append/patch/remove actions; `patch` addresses any node by JSON Pointer into its wire shape; `tmpl` registers a stamp definition — a node tree whose `"$name"` values are filled in whole (ADR 0037)
+- **Operation protocol** (ADR 0005, replaced the original streaming merge): create/set/append/move/remove/patch actions; `move` reorders a row already in a list, without rebuilding it; `patch` addresses any node by JSON Pointer into its wire shape; `tmpl` registers a stamp definition — a node tree whose `"$name"` values are filled in whole (ADR 0037)
 - **Codec** (`codec`): `ActiveCodec` enum dispatch (Json/CBOR), URL-param handshake pinning, `encode_ws()` helper
 
 ## Position
@@ -80,7 +80,7 @@ Endpoints once running (default port 3002):
 - `GET /cli` — programmatic peers (the console, curl-ws, your own tools)
 - `POST /send` — body is YAML (or JSON — YAML is a superset); parsed into a
   frame and broadcast to all peers. The action head is honored:
-  create/set/append/patch/remove/tmpl files are all first-class
+  create/set/append/move/remove/patch/tmpl files are all first-class
 - everything else — the UI itself: reverse-proxyed to `trunk serve` when its
   port (default 8281) is up at startup, otherwise served statically from the
   trunk dist dir (default `examples/renderer/dist`). Probe is TCP-only and
@@ -105,7 +105,7 @@ both sender and event monitor. Commands: `/send <file.yaml>`,
 `/raw <json>` (send a bare `Message<Accrete>`), `/quit`.
 
 Push any frame batch from a YAML file — the file is one Content item or an
-array of them; the action head is preserved (create/set/append/patch/remove/
+array of them; the action head is preserved (create/set/append/move/remove/patch/
 tmpl; see docs/decisions/0005-operation-layer-value-patch.md). The KDL
 carrier was retired 2026-10-02 (maintained as YAML/JSON only):
 
