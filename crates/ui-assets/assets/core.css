@@ -1411,12 +1411,12 @@
        box is simply drawn a second time, two pixels down and right, in a lighter ink — the way wired.js draws
        it, and the reason nothing in the skin is blurred. The lift on hover is the same move, one step further,
        which in normal mode is the offset growing. */
-    html[data-sketch="true"] svg.rough > g.shadow {
+    html[data-sketch="true"] svg.rough g.shadow {
         transform: translate(2px, 2px);
         opacity: 0.35;
     }
 
-    html[data-sketch="true"] .button:hover > svg.rough > g.shadow {
+    html[data-sketch="true"] .button:hover > svg.rough g.shadow {
         transform: translate(4px, 4px);
     }
 
