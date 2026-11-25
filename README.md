@@ -220,3 +220,25 @@ trunk's hashed names (PLAN §24).
 Not included: `assets/3dbrowser`, `assets/splatviewer`, `assets/monaco`, `assets/mermaid.min.js`,
 `assets/g2chart`. Those are module media, fetched only when a frame names them and assembled per
 deployment (see the Dockerfile).
+
+### Taking over the five seams
+
+```js
+await mount(document.querySelector('#app'), {
+  codec: 'json',
+  query: { token },                       // a session is a query parameter, not a special option (ADR 0046)
+  hooks: {
+    // Every socket open, reconnects included. The argument is window.fluxen.send — the host's first word.
+    open: (send) => send('identify', { token }),
+    close: () => {},
+    // The root was replaced (create): any DOM reference the host holds is stale.
+    create: (root) => {},
+    // Slot values: one report per name per render pass, newest wins; the current value is replayed on subscribe.
+    slots: { 'ui:token': (token) => localStorage.setItem('token', token) },
+    // Uplinks: rewrites run synchronously before encoding; return null to leave the payload alone.
+    dests: { '*': (dest, data) => ({ ...data, trace: myTrace() }) },
+  },
+});
+```
+
+The semantics are [ADR 0047](docs/decisions/0047-one-table-four-seams.md).
