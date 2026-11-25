@@ -75,7 +75,7 @@ pub fn start() {
         codec: Some(codec),
         ..Opts::default()
     });
-    if let Err(e) = boot(el, opts, None) {
+    if let Err(e) = boot(el, opts, None, Vec::new(), Vec::new()) {
         report(&e);
     }
 }
@@ -86,6 +86,74 @@ pub fn start() {
 /// Nothing is read from `document.location` (ADR-0046): the host knows its own address, its own session
 /// and its own storage, so it passes `codec` and puts anything else the socket needs — a token included,
 /// because a token is just one more query parameter — into `query`. The boot joins and escapes them.
+// --- the host's hooks: JS functions live here, the context holds only ids ------------------------
+//
+// `Ctx` is captured by view closures, so it must be `Send + Sync`, and a `js_sys::Function` is
+// neither. The way out is not a channel: wasm is single-threaded, so calling the function from here
+// IS running it on the JS side (ADR 0047). The table lives on this side; the adapter a `Ctx` holds
+// captures one `u32` and nothing else.
+
+thread_local! {
+    static SLOT_HOOKS: std::cell::RefCell<std::collections::HashMap<u32, js_sys::Function>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static DEST_HOOKS: std::cell::RefCell<std::collections::HashMap<u32, js_sys::Function>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static NEXT_HOOK: std::cell::Cell<u32> = const { std::cell::Cell::new(1) };
+}
+
+fn next_hook_id() -> u32 {
+    NEXT_HOOK.with(|n| {
+        let id = n.get();
+        n.set(id + 1);
+        id
+    })
+}
+
+/// One slot observer as `Ctx` sees it: an id, and a call into the table.
+fn slot_observer(id: u32) -> ui_core::ctx::SlotObserver {
+    std::sync::Arc::new(move |name: &str, value: Option<&accrete::Accrete>| {
+        let Ok(js) = serde_wasm_bindgen::to_value(&value) else {
+            return;
+        };
+        SLOT_HOOKS.with(|table| {
+            if let Some(callback) = table.borrow().get(&id) {
+                // A host callback that throws is the host's bug, not a reason to lose the render: the
+                // answer is dropped and said once in the console (ADR 0047 §4).
+                if let Err(e) = callback.call2(&JsValue::NULL, &JsValue::from_str(name), &js) {
+                    web_sys::console::warn_1(
+                        &JsValue::from_str(&format!("fluxen: hooks.slots[{name}] threw: {e:?}")),
+                    );
+                }
+            }
+        });
+    })
+}
+
+/// One uplink rewriter: `None` leaves the payload, a value replaces it (ADR 0047 §5).
+fn dest_rewriter(id: u32) -> ui_core::ctx::DestRewriter {
+    std::sync::Arc::new(move |dest: &str, data: serde_json::Value| {
+        let ok = serde_wasm_bindgen::to_value(&data).ok()?;
+        let answered = DEST_HOOKS.with(|table| {
+            table
+                .borrow()
+                .get(&id)
+                .map(|callback| callback.call2(&JsValue::NULL, &JsValue::from_str(dest), &ok))
+        })?;
+        match answered {
+            Ok(value) if !value.is_undefined() && !value.is_null() => {
+                serde_wasm_bindgen::from_value(value).ok()
+            }
+            Err(e) => {
+                web_sys::console::warn_1(&JsValue::from_str(&format!(
+                    "fluxen: hooks.dests[{dest}] threw, the frame keeps its payload: {e:?}"
+                )));
+                None
+            }
+            _ => None,
+        }
+    })
+}
+
 #[wasm_bindgen]
 pub fn mount(element: web_sys::Element, options: JsValue) -> Result<(), JsValue> {
     let el = element
@@ -94,6 +162,8 @@ pub fn mount(element: web_sys::Element, options: JsValue) -> Result<(), JsValue>
 
     let mut opts = None;
     let mut hook = None;
+    let mut slots: Vec<(String, u32)> = Vec::new();
+    let mut dests: Vec<(String, u32)> = Vec::new();
     if !options.is_undefined() && !options.is_null() {
         // A hook is a live object, not data: take it off first, then deserialize the rest, so an unknown key
         // or a mis-shaped value is still a loud refusal.
@@ -103,18 +173,71 @@ pub fn mount(element: web_sys::Element, options: JsValue) -> Result<(), JsValue>
         {
             hook = Some(found);
         }
+        // `hooks` is live functions, taken off the same object for the same reason `transport` is: a
+        // function is not data, so `Opts` never learns about it and `deny_unknown_fields` stays true.
+        if let Ok(found) = js_sys::Reflect::get(&options, &JsValue::from_str("hooks"))
+            && !found.is_undefined()
+            && !found.is_null()
+        {
+            (slots, dests) = collect_hooks(&found)?;
+        }
         // Deserialize a copy without that key: `deny_unknown_fields` is the rule, and a key set to
         // `undefined` is still a key — the caller's object is not ours to rewrite either.
         let source = js_sys::Object::from(options.clone());
         let rest = js_sys::Object::assign(&js_sys::Object::new(), &source);
         let _ = js_sys::Reflect::delete_property(&rest, &JsValue::from_str("transport"));
+        let _ = js_sys::Reflect::delete_property(&rest, &JsValue::from_str("hooks"));
         opts =
             Some(serde_wasm_bindgen::from_value(rest.into()).map_err(|e| {
                 JsValue::from_str(&format!("fluxen: mount(element, options): {e}"))
             })?);
     }
 
-    boot(el, opts, hook).map_err(|e| JsValue::from_str(&e))
+    boot(el, opts, hook, slots, dests).map_err(|e| JsValue::from_str(&e))
+}
+
+/// Read `hooks.slots` / `hooks.dests` off the mount options: keep the functions here, hand the context
+/// their ids. A key that is present but not a function is a refusal, not a silent skip — the same rule
+/// every other option follows.
+fn collect_hooks(hooks: &JsValue) -> Result<(Vec<(String, u32)>, Vec<(String, u32)>), JsValue> {
+    let mut slots: Vec<(String, u32)> = Vec::new();
+    let mut dests: Vec<(String, u32)> = Vec::new();
+    for (key, into) in [("slots", &mut slots), ("dests", &mut dests)] {
+        let Ok(found) = js_sys::Reflect::get(hooks, &JsValue::from_str(key)) else {
+            continue;
+        };
+        if found.is_undefined() || found.is_null() {
+            continue;
+        }
+        let map = found
+            .dyn_into::<js_sys::Object>()
+            .map_err(|_| JsValue::from_str(&format!("fluxen: hooks.{key} must be an object")))?;
+        for entry in js_sys::Object::entries(&map).iter() {
+            let pair: js_sys::Array = entry.into();
+            let name = pair
+                .get(0)
+                .as_string()
+                .ok_or_else(|| JsValue::from_str(&format!("fluxen: hooks.{key} needs string keys")))?;
+            let callback = pair
+                .get(1)
+                .dyn_into::<js_sys::Function>()
+                .map_err(|_| {
+                    JsValue::from_str(&format!("fluxen: hooks.{key}[{name}] is not a function"))
+                })?;
+            let id = next_hook_id();
+            if key == "slots" {
+                SLOT_HOOKS.with(|table| {
+                    table.borrow_mut().insert(id, callback);
+                });
+            } else {
+                DEST_HOOKS.with(|table| {
+                    table.borrow_mut().insert(id, callback);
+                });
+            }
+            into.push((name, id));
+        }
+    }
+    Ok((slots, dests))
 }
 
 /// One boot for both entrances: resolve, open the socket, mount the root, publish the uplink handle.
@@ -122,6 +245,8 @@ fn boot(
     el: web_sys::HtmlElement,
     opts: Option<Opts>,
     hook_value: Option<JsValue>,
+    slots: Vec<(String, u32)>,
+    dests: Vec<(String, u32)>,
 ) -> Result<(), String> {
     // Mounting is a page-level operation; every step can fail (not in a browser, WS won't connect); these are
     // states the caller must surface, so they go through Result, no panic.
@@ -178,7 +303,15 @@ fn boot(
     leptos::mount::mount_to(el, move || {
         // Must be assembled inside the Leptos runtime: `Ctx::new` uses Executor::spawn_local, and calling
         // it before mount_to panics ("before a global executor was initialized").
-        let ctx = Ctx::new(transport, codec);
+        let mut ctx = Ctx::new(transport, codec);
+        // The host's seams, registered before the first frame can be consumed (ADR 0047). The names
+        // are the page's; the closures hold only ids, so nothing here is a JS type in `Ctx`.
+        for (name, id) in slots {
+            ctx.hooks.slots.push((name, slot_observer(id)));
+        }
+        for (name, id) in dests {
+            ctx.hooks.dests.push((name, dest_rewriter(id)));
+        }
         ctx.set_config_slot(boot.config.clone());
         // Mirror page options onto the document root (ADR 0038 §3): things like `skin` are sent down when the producer builds the page,
         // and CSS only looks at `html[data-<name>]`. One line of assembly; a host swapping the boot does the same one line.

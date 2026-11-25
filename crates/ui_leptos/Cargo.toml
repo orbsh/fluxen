@@ -17,6 +17,7 @@ crate-type = ["cdylib", "rlib"]
 # docs/decisions/0021-external-integration.md, the section on ownership (`## 归属`)).
 [dependencies]
 ui-core = { workspace = true }
+accrete.workspace = true
 content.workspace = true
 futures.workspace = true
 transport.workspace = true
