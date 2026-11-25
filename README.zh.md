@@ -34,6 +34,7 @@ AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set
 - `host` —— socket 去哪；不写即文档自身的 host。
 - `path` —— socket 路径（缺省 `/channel`），必须以 `/` 开头。
 - `codec` —— 这个页面**发出去**的编码：`cbor`（缺省）或 `json`。收到的帧按首字节逐帧识别，所以网关可以自由混用。
+- `hooks` —— 四个口子：连接开/关（`open`/`close`）、整页重铺（`create`）、槽观察（`slots`）、上行改写（`dests`）。全部语义（何时触发、补发、合并、异常隔离）见 ADR 0047。
 - `query` —— 额外拼进 socket 地址的参数（`Record<string, string>`），保序、逐项转义；键名的含义是宿主的，不是渲染器的。**token 就在这里**：它是一个普通查询参数，不再是一个特殊设置。
 - `config` —— 本页选项所在的槽（缺省 `__CONFIG__`）；空串表示本页没有选项槽（ADR 0038）。
 - `policy` —— socket 自己的那几个数：`{heartbeat, dead, retry: {base, max, jitter}}`（ADR 0044 §2）。`heartbeat: 0` 同时关掉探针和"静默即自断"；`retry: false` 表示只连一次，之后是终态 `closed`，不假装在重连。
