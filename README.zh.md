@@ -16,6 +16,35 @@ AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set
 
 只做渲染层——没有事件总线，没有 gateway，没有传输。上游（Prism / Aura realm / 任何生产者）发送 Accrete 操作，Fluxen 负责渲染与操作应用。厚壳原则不变：AI 生成经 schema 校验的结构化 JSON（内容 + 结构），框架掌握样式与渲染确定性。
 
+## 在页面里挂载
+
+渲染器是库，不是应用：页面点名一个元素，把设置当数据传进来（ADR 0045）。没有属性，所以"我这两份配置谁赢"这个问题不存在——调用压过地址（`?codec=`、`?token=`，生产者可以把它写在递出去的链接上），而且是安静的：覆盖不是分歧。
+
+```html
+<div id="app"></div>
+<script type="module">
+  import init, { mount } from '/vendor/fluxen/ui_leptos-<hash>.js';
+  await init({ module_or_path: '/vendor/fluxen/ui_leptos-<hash>_bg.wasm' });
+  await mount(document.querySelector('#app'), { codec: 'json', path: '/ws' });
+</script>
+```
+
+每个字段都可省：
+
+- `host` —— socket 去哪；不写即文档自身的 host。
+- `path` —— socket 路径（缺省 `/channel`），必须以 `/` 开头。
+- `codec` —— 这个页面**发出去**的编码：`cbor`（缺省）或 `json`。收到的帧按首字节逐帧识别，所以网关可以自由混用。
+- `token` —— 拼进 socket URL；这是链接唯一能携带的设置。
+- `config` —— 本页选项所在的槽（缺省 `__CONFIG__`）；空串表示本页没有选项槽（ADR 0038）。
+- `policy` —— socket 自己的那几个数：`{heartbeat, dead, retry: {base, max, jitter}}`（ADR 0044 §2）。`heartbeat: 0` 同时关掉探针和"静默即自断"；`retry: false` 表示只连一次，之后是终态 `closed`，不假装在重连。
+- `transport` —— 页面自带 socket 时传入的活钩子 `{emit(bytes), subscribe(push)}`（ADR 0040）。与 `window.fluxenTransport` 同形，但按值传：活对象不是数据。
+
+`<div id="fluxen">` 的意思是"用缺省挂我"，有它在时，加载模块就是全部集成——`init` 会走这条路。它是我们的 id，不是页面的地标：宿主的 `#main` 什么都不挂，所以"这页有渲染器"和"这页配置了渲染器"不会重叠，也就不需要撤销开关来仲裁。
+
+值给了但不可用是拒绝，不是降级：未知键、既不是 `json` 也不是 `cbor` 的 codec、不以 `/` 开头的 `path`、死窗落在探针窗里的 policy。`mount` 抛出原因；在 `#fluxen` 那条路上，同一句话还会写进元素——空白页面加一行 devtools 日志，正是把配置错误读成渲染 bug 的方式。
+
+上行走 `window.fluxen.send(event, data)`，或者由宿主自己的 runtime 驱动：reflux 用它的客户端 runtime 驱动渲染器，从不碰这个句柄。
+
 ## 数据绑定
 
 两个方向各一种类型：读是 `Source` —— `{slot?, scope?, path?, default?}`，写是 `Sink` —— `{dest?, scope?, path?}`
