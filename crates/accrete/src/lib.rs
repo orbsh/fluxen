@@ -1053,6 +1053,31 @@ impl Input {
     }
 }
 
+/// The three shapes a `select` can take, all optional and all defaulting to the plain inline list (ADR 0049).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
+pub struct SelectAttr {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    /// Whether the options fold away behind the current choice (`true`) or stand in the page as they are
+    /// (the default). Open and closed is the renderer's own state — it never travels.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expand: Option<bool>,
+    /// Which way the options run: `row` is a row of buttons, `col` (the default) a list. It lays out both
+    /// the standing form and what a fold opens.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dir: Option<Dir>,
+    /// Whether more than one option may be chosen. A single choice is one key; several are a list of them,
+    /// which is what the field then packs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub multiple: Option<bool>,
+}
+
+/// An option field (ADR 0031 §2): a list plane of nodes, one of which is the current choice. ADR 0049 adds the
+/// three shapes in `SelectAttr` — folded, a direction, several choices — without a second node.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
@@ -1065,7 +1090,7 @@ pub struct Select {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<ClassAttr>,
+    pub attrs: Option<SelectAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
 
