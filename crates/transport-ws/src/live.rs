@@ -12,7 +12,7 @@
 //! * **A dead window.** Silence past `dead_ms` means the link is gone, and the socket is closed on
 //!   purpose so the supervisor starts over. Waiting for the browser to notice a half-open TCP is not a
 //!   plan: a slept laptop's socket stays "open" for minutes and nothing is reported.
-//! * **Backoff with a cap.** 500 ms doubling to 30 s, jittered downward so a fleet recovering from one
+//! * **Backoff with a cap.** 500 ms doubling to 10 s, jittered downward so a fleet recovering from one
 //!   restart does not knock in lockstep. The policy lives in `transport::reconnect`, where it is testable
 //!   without a browser.
 //!
@@ -392,18 +392,49 @@ fn roll_percent() -> u32 {
     (js_sys::Math::random() * 100.0) as u32
 }
 
+/// A pending timeout, released with the future that awaited it.
+///
+/// `Closure::once_into_js` cannot be used for this timer: it hands JS a function that releases itself
+/// on the first call, so a second call traps in wasm-bindgen's trampoline (`_wbg_cb_unref` on freed
+/// state → `unreachable`) and the trap carries no panic message — the failure looks like a silent wasm
+/// abort with only function numbers in the stack. Holding the closure here and clearing the timeout on
+/// drop means a stray second fire cannot happen: the callback is gone when the wait is abandoned.
+struct Timer {
+    window: web_sys::Window,
+    id: i32,
+    _cb: Closure<dyn FnMut()>,
+}
+
+impl Drop for Timer {
+    fn drop(&mut self) {
+        self.window.clear_timeout_with_handle(self.id);
+    }
+}
+
 fn sleep_ms(ms: u64) -> impl std::future::Future<Output = ()> {
     let (tx, rx) = futures::channel::oneshot::channel::<()>();
-    let cb = Closure::once_into_js(move || {
-        let _ = tx.send(());
+    // One send, whichever way it arrives: a callback that fires after the waiter gave up finds the
+    // sender taken and does nothing.
+    let tx = Rc::new(RefCell::new(Some(tx)));
+    let cb = {
+        let tx = Rc::clone(&tx);
+        Closure::<dyn FnMut()>::new(move || {
+            if let Some(tx) = tx.borrow_mut().take() {
+                let _ = tx.send(());
+            }
+        })
+    };
+    let timer = web_sys::window().map(|window| {
+        let id = window
+            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                cb.as_ref().unchecked_ref(),
+                ms.min(i32::MAX as u64) as i32,
+            )
+            .unwrap_or(0);
+        Timer { window, id, _cb: cb }
     });
-    if let Some(win) = web_sys::window() {
-        let _ = win.set_timeout_with_callback_and_timeout_and_arguments_0(
-            cb.unchecked_ref(),
-            ms.min(i32::MAX as u64) as i32,
-        );
-    }
     async move {
         let _ = rx.await;
+        drop(timer);
     }
 }
