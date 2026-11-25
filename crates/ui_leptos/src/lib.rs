@@ -99,7 +99,6 @@ pub fn mount(element: web_sys::Element, options: JsValue) -> Result<(), JsValue>
         let source = js_sys::Object::from(options.clone());
         let rest = js_sys::Object::assign(&js_sys::Object::new(), &source);
         let _ = js_sys::Reflect::delete_property(&rest, &JsValue::from_str("transport"));
-        let _ = js_sys::Reflect::delete_property(&rest, &JsValue::from_str("transport"));
         opts =
             Some(serde_wasm_bindgen::from_value(rest.into()).map_err(|e| {
                 JsValue::from_str(&format!("fluxen: mount(element, options): {e}"))
