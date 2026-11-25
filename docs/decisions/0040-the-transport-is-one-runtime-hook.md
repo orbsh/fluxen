@@ -1,6 +1,8 @@
 # 0040 — The transport is one runtime hook, not a second artifact
 
-Status: **Accepted** (2026-11-25). Not implemented yet.
+Status: **Accepted** (2026-11-25). Implemented: `examples/renderer/src/hook.rs` (the read-and-wrap, with the
+malformed case as a mount error) and `examples/transport-ws/src/live.rs` (the default socket, with the retry
+that §3 hands to whoever owns it — see ADR 0044).
 
 ---
 
@@ -59,11 +61,20 @@ Five rules, all of them deliberate:
   chose the codec would make "wrong bytes, blank page" the default failure.
 - **Present but malformed is a mount error**, named in the console. Never a silent fallback to our WebSocket: a page
   whose JS believes it owns the socket while wasm opens its own is the worst of both worlds, and it fails invisibly.
-- **No reconnect inside the framework.** The hook owns the socket, so it owns retry, backoff and resumption — the
-  framework never retries either (the WS transport has no retry today). What the framework does on a closed
-  transport is what it does on a closed socket: the page stays, the connection does not.
+- **No reconnect inside the framework.** The framework retries nothing: `Transport` has no retry and `Ctx` has
+  none. Retry belongs to whoever owns the socket — the hook in hook mode, and `LiveWs` in the default mode
+  (ADR 0044), one layer below the framework. What the framework does on a closed transport is what it does on a
+  closed socket: the page stays, the connection does not.
 - **`window.fluxen.send` is published in both modes.** Page code does not know which transport is running; the
   handle is the same leg into `Ctx::send`.
+
+## 3.1 The default path is not the same socket it was
+
+Taking a hook out of the boot left the default path doing all of the work with none of the supervision: one
+`open`, no heartbeat, no retry. A page that lost its socket stayed on screen looking alive (ADR 0044 §1), which
+is the same failure the hook exists to let hosts solve — our own host should not ship it either. So the default
+is `LiveWs`: heartbeat, dead-link detection, reconnection with backoff, all in the transport. The hook is not
+wrapped in it, for the reason §3 gives.
 
 ## 4. What it costs
 

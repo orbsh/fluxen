@@ -8,9 +8,16 @@ fn main() {
             .set_max_level(tracing::Level::INFO)
             .build(),
     );
-    // A mount failure (no window / no #main / WS won't open) is a state the page must surface,
-    // not a process-level panic: the cause goes to the devtools log, the page stays blank, but it isn't swallowed.
+    // A mount failure (no window / no #main / a socket that will not open / a `data-transport` that does not
+    // parse) is a state the page must surface, not a process-level panic. It goes to the devtools log *and*
+    // into `#main`: a blank page plus a console line is how a configuration mistake gets mistaken for a
+    // renderer bug.
     if let Err(e) = ui_leptos::mount() {
         tracing::error!("fluxen: mount failed: {e}");
+        if let Some(doc) = web_sys::window().and_then(|w| w.document())
+            && let Ok(Some(el)) = doc.query_selector("#main")
+        {
+            el.set_text_content(Some(&format!("fluxen: {e}")));
+        }
     }
 }

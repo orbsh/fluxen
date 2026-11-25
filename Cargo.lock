@@ -3455,6 +3455,7 @@ name = "transport"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "serde",
  "serde_json",
 ]
 
@@ -3465,9 +3466,12 @@ dependencies = [
  "content",
  "futures",
  "gloo-net 0.7.0",
+ "js-sys",
  "serde_json",
  "transport",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -3575,6 +3579,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "content",
+ "futures",
  "js-sys",
  "leptos",
  "serde_json",

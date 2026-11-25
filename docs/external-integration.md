@@ -181,6 +181,19 @@ appending does not remount the rows above it.
 - **Nothing is stateful in the transport.** Reconnect and re-send the layout; the page is a
   projection of the frames it has received since it mounted.
 
+### The page's own transport
+
+`window.fluxenTransport = { emit(bytes), subscribe(push), close? }` — install it before mount and it owns the
+whole link: the boot reads it once, moves only bytes (the codec stays in Rust and still comes from
+`data-codec` / `?codec=`), and both directions go through it. Retry, backoff and resumption are then the
+host's business (ADR 0040 §3). Without it the default `LiveWs` runs: a `__ping__` after 5 s of inbound
+silence (the host answers `__pong__`), a dead link declared after 10 s of silence and closed by the page
+itself, and reconnection from 500 ms doubling to a 10 s cap with jitter (ADR 0044). The policy is one
+attribute on `#main` — `data-transport='{"heartbeat": 0}'` turns the probes off, `{"retry": false}` turns
+reconnection off, and both numbers plus the schedule can be written out; an unknown key is a mount error
+rather than a knob that does nothing. A hook that is present but missing `emit` or `subscribe` is a mount error — never a silent fallback to our own socket, which would
+leave the page's JS and its wasm each holding a socket that the other cannot see.
+
 ## 4. The boot, and why it becomes its own crate
 
 Today `ui_leptos::mount()` is the only boot: it reads `#main`'s `data-host` / `data-path` /
