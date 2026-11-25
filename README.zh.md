@@ -18,7 +18,7 @@ AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set
 
 ## 在页面里挂载
 
-渲染器是库，不是应用：页面点名一个元素，把设置当数据传进来（ADR 0045）。没有属性，所以"我这两份配置谁赢"这个问题不存在——调用压过地址（`?codec=`、`?token=`，生产者可以把它写在递出去的链接上），而且是安静的：覆盖不是分歧。
+渲染器是库，不是应用：页面点名一个元素，把设置当数据传进来（ADR 0045）。没有属性，所以"我这两份配置谁赢"这个问题不存在；**地址也不是它的输入**（ADR 0046）：`?codec=` 由页面自己的四行脚本读出来交给它，token 是宿主塞进 `query` 的一个普通参数。渲染器只负责拼接与转义。
 
 ```html
 <div id="app"></div>
@@ -34,7 +34,7 @@ AI 原生 UI 渲染库：Accrete DSL + Leptos 渲染 + 操作协议（create/set
 - `host` —— socket 去哪；不写即文档自身的 host。
 - `path` —— socket 路径（缺省 `/channel`），必须以 `/` 开头。
 - `codec` —— 这个页面**发出去**的编码：`cbor`（缺省）或 `json`。收到的帧按首字节逐帧识别，所以网关可以自由混用。
-- `token` —— 拼进 socket URL；这是链接唯一能携带的设置。
+- `query` —— 额外拼进 socket 地址的参数（`Record<string, string>`），保序、逐项转义；键名的含义是宿主的，不是渲染器的。**token 就在这里**：它是一个普通查询参数，不再是一个特殊设置。
 - `config` —— 本页选项所在的槽（缺省 `__CONFIG__`）；空串表示本页没有选项槽（ADR 0038）。
 - `policy` —— socket 自己的那几个数：`{heartbeat, dead, retry: {base, max, jitter}}`（ADR 0044 §2）。`heartbeat: 0` 同时关掉探针和"静默即自断"；`retry: false` 表示只连一次，之后是终态 `closed`，不假装在重连。
 - `transport` —— 页面自带 socket 时传入的活钩子 `{emit(bytes), subscribe(push)}`（ADR 0040）。与 `window.fluxenTransport` 同形，但按值传：活对象不是数据。

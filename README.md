@@ -23,7 +23,7 @@ to a host — the host supplies a transport and a boot and speaks the renderer's
 
 ## Mounting it in a page
 
-The renderer is a library, not an application: a page names an element and passes its settings as data (ADR 0045). There are no attributes, so the question "which of my two configurations wins" does not exist — the call outranks the address (`?codec=`, `?token=`, which a producer can put on a URL it hands out), quietly, because an override is not a disagreement.
+The renderer is a library, not an application: a page names an element and passes its settings as data (ADR 0045). There are no attributes, so the question "which of my two configurations wins" does not exist — and the address is not an input at all (ADR 0046): a page's own four-line snippet reads `?codec=` and hands it in, and a token is just another entry in `query`. The boot joins and escapes; it decides nothing.
 
 ```html
 <div id="app"></div>
@@ -39,7 +39,7 @@ Every field is optional:
 - `host` — where the socket goes; absent means the document's own host.
 - `path` — the socket's path (default `/channel`), which must start with `/`.
 - `codec` — what this page *sends*: `cbor` (default) or `json`. What arrives is detected per frame, so a gateway may mix encodings freely.
-- `token` — appended to the socket URL; the one setting a link can carry.
+- `query` — extra parameters for the socket's address (`Record<string, string>`), order kept, each escaped; what the keys mean is the host's business. A **token** rides here: one more query parameter, not a special setting.
 - `config` — the slot this page's options live in (`__CONFIG__` by default); an empty string says this page has no option slot at all (ADR 0038).
 - `policy` — the socket's own numbers: `{heartbeat, dead, retry: {base, max, jitter}}` (ADR 0044 §2). `heartbeat: 0` stops probing *and* stops the page closing itself on silence; `retry: false` means one connection, then a terminal `closed` rather than pretending to reconnect.
 - `transport` — a live hook object, `{emit(bytes), subscribe(push)}`, when the page brings its own socket (ADR 0040). Same shape as `window.fluxenTransport`, but by value: a live object is not data.
