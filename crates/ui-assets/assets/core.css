@@ -1373,9 +1373,22 @@
         display: contents;
     }
 
+    /* In the skin the host IS the field's box, so it takes the field's place in the layout: a block-level
+       flex box, not an inline one. An inline host shrink-wraps its child, and since the drawing follows the
+       host, every field drew itself at the width of its intrinsic content and called that its size. */
     html[data-sketch="true"] .rough-host {
         position: relative;
+        display: flex;
+    }
+
+    /* A switch is the one field that does NOT take the width it is offered: it is a box of its own size,
+       centred in whatever it sits in. `flex: 0 0 auto` stops a row from growing it, `align-self` stops a
+       column from stretching it, and the child keeps the square its component rule asks for. */
+    html[data-sketch="true"] .rough-host.is-checkbox {
         display: inline-flex;
+        width: fit-content;
+        flex: 0 0 auto;
+        align-self: center;
     }
 
     html[data-sketch="true"] .rough-host > input,
@@ -1386,6 +1399,12 @@
         width: 100%;
         box-sizing: border-box;
         font-size: inherit;
+    }
+
+    html[data-sketch="true"] .rough-host.is-checkbox > input {
+        flex: 0 0 auto;
+        width: 1.15em;
+        height: 1.15em;
     }
 
     html[data-sketch="true"] .rough-host[data-rough="ready"] > input,
@@ -1438,5 +1457,23 @@
 
     html[data-sketch="true"] .is-border.selected > svg.rough path.mark {
         opacity: 1;
+    }
+
+    /* The tick: a stroke of the same pen. A switch's content is a line, and the CSS version is a filled
+       `clip-path` glyph — a second hand in the middle of a hand-drawn box. It rides in the layer like
+       everything else and the stylesheet decides when it shows, because `:checked` is state CSS can see
+       for itself; nothing watches the box from script. */
+    html[data-sketch="true"] svg.rough path.check {
+        stroke-width: 1.1px;
+        opacity: 0;
+    }
+
+    html[data-sketch="true"] .rough-host > input[type="checkbox"]:checked ~ svg.rough path.check {
+        opacity: 1;
+    }
+
+    /* …and the painted glyph goes, so the box holds one tick and not two. */
+    html[data-sketch="true"] .rough-host > input[type="checkbox"]::before {
+        content: none;
     }
 }

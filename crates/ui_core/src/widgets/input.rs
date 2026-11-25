@@ -134,7 +134,14 @@ fn on_key(
 /// declaration), `tag` is what a loom calls it (ADR 0032). `multiline` is the layout — same node.
 pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
-    let mut css = vec!["input", "flex", "is-shadow"];
+    // A switch is a box, not a column of text: `flex` makes it a flex item that grows with the row, which
+    // turned every checkbox into a full-width bar with the tick in the middle. Every other kind of field
+    // does want that growth, so the class is added per kind rather than for all of them.
+    let is_bool = matches!(accrete.kind, Some(JsType::bool));
+    let mut css = vec!["input", "is-shadow"];
+    if !is_bool {
+        css.push("flex");
+    }
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
@@ -156,7 +163,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     // Initial value: the loom's copy, else the source literal. A field does
     // not subscribe to the slot it writes (a self read/write loop restores what
     // was just sent).
-    let is_switch = matches!(kind, Some(JsType::bool));
+    let is_switch = is_bool;
     let initial = match field {
         Some(sig) => sig.get_untracked(),
         // A switch shows the state it is SET to, including the one the far side set: its value is its display,
@@ -256,7 +263,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
             Some(ph) => base.placeholder(ph).into_any(),
             None => base.into_any(),
         };
-        return rough::field_host(&ctx, seed_of(&accrete), el);
+        return rough::field_host(&ctx, seed_of(&accrete), false, el);
     }
 
     // Reactivity sinks into the attribute closure: `value` is a DynProperty, so a
@@ -286,5 +293,5 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
         (_, Some(ph)) => base.value(value).placeholder(ph).into_any(),
         (_, None) => base.value(value).into_any(),
     };
-    rough::field_host(&ctx, seed_of(&accrete), el)
+    rough::field_host(&ctx, seed_of(&accrete), is_switch, el)
 }
