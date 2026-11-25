@@ -43,11 +43,11 @@ time. Every box that matters is already a frame — a bubble, a card, a row of a
 general case buys nothing the frame does not cover, and costs a rule ("some nodes can carry a
 payload") with no other reason to exist.
 
-## Why not a `dock` inside `bundle`
+## Why not a `dock` inside `loom`
 
-A `bundle` also collects values and also emits, so "a drop is a bundle with one field" is tempting.
+A `loom` also collects values and also emits, so "a drop is a loom with one field" is tempting.
 The timings conflict: a drop is a finished gesture — it happens once, at release, and carries
-whatever was in the air — while a `bundle` sends on `submit`, which is the user saying "this form is
+whatever was in the air — while a `loom` sends on `submit`, which is the user saying "this form is
 done" and may fire many times over the life of the page. Folding one into the other would make the
 landing's event name a function of a submit policy, and a frame that lands nothing would still be a
 form.

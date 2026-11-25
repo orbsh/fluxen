@@ -20,7 +20,7 @@
       dismiss: true
     source: {slot: login_modal, scope: local}
     children:
-    - type: bundle
+    - type: loom
       sink: {dest: login}
       attrs:
         submit: [enter, button]
@@ -47,7 +47,6 @@
         - type: button
           attrs:
             oneshot: false
-          sink: {}
           source: {default: 登录}
 - action: append
   slot: chat
@@ -57,7 +56,7 @@
     attrs:
       class: [flex, col, gap]
     children:
-    - type: bundle
+    - type: loom
       attrs: {submit: [enter]}
       sink: {dest: login_modal, scope: local}
       children:

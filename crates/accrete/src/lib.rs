@@ -453,7 +453,7 @@ pub struct PanelAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub direction: Option<Direction>,
     /// Closes on a click outside the body — the mask for `viewport`, "anywhere else" for the rest.
-    /// A panel without it can only be closed by its trigger (a bundle that must not lose its work).
+    /// A panel without it can only be closed by its trigger (a loom that must not lose its work).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dismiss: Option<bool>,
     /// `inline` only: the first child is the header and toggles the body (the old `fold` shape).
@@ -497,7 +497,7 @@ pub struct Panel {
     pub children: Option<Vec<Accrete>>,
 }
 
-/// When a bundle sends (ADR 0032). The modes combine, so the attribute is a
+/// When a loom sends (ADR 0032). The modes combine, so the attribute is a
 /// set: `[enter, button]` is a chat box, `[change]` packs as the user types.
 /// This is timing — a different axis from `scope`, which says where a value
 /// lands.
@@ -523,7 +523,7 @@ pub enum SubmitSet {
 }
 
 impl Default for SubmitSet {
-    /// `[enter]` — the shape a bundle has when it says nothing.
+    /// `[enter]` — the shape a loom has when it says nothing.
     fn default() -> Self {
         Self::Many(vec![SubmitMode::Enter])
     }
@@ -546,7 +546,7 @@ fn submit_is_default(s: &SubmitSet) -> bool {
     s.modes() == [SubmitMode::Enter]
 }
 
-/// What a bundle's fields become after it sends (ADR 0032 §4). One word, three exclusive values:
+/// What a loom's fields become after it sends (ADR 0032 §4). One word, three exclusive values:
 /// `keep` (absent — what a field always did), `clear` (the empty value of its own shape) and
 /// `default` (the value `source.default` gave it at build time).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -570,7 +570,7 @@ fn is_false(b: &bool) -> bool {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct BundleAttr {
+pub struct LoomAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -581,13 +581,13 @@ pub struct BundleAttr {
     /// What the fields become after a send. Absent = `keep`.
     #[serde(default, skip_serializing_if = "reset_is_default")]
     pub reset: ResetMode,
-    /// How many sends this bundle has: absent or `-1` = unlimited, `0` = locked from the start. Each send
-    /// takes one; at zero the bundle's fields are disabled and it refuses to send (ADR 0032 §5).
+    /// How many sends this loom has: absent or `-1` = unlimited, `0` = locked from the start. Each send
+    /// takes one; at zero the loom's fields are disabled and it refuses to send (ADR 0032 §5).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sends: Option<i64>,
 }
 
-/// A bundle packs a group of fields into one object and sends it (ADR 0032).
+/// A loom packs a group of fields into one object and sends it (ADR 0032).
 /// It owns the exit for its fields (`sink`), when they leave (`attrs.submit`), what they become
 /// afterwards (`attrs.reset`) and how many times they may (`attrs.sends`) — the field itself owns
 /// nothing but its value. `id` marks this submission (the instance), not the fields: fields are
@@ -596,17 +596,17 @@ pub struct BundleAttr {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
-pub struct Bundle {
+pub struct Loom {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    /// The key this bundle contributes to its parent's packed object — the same `tag` rule a field follows,
-    /// because a nested bundle is an input of the enclosing one. Only read when the bundle sits inside another
-    /// bundle; with no `tag` it packs nothing into its parent (`id` is identity, `dest` is where it sends, and
+    /// The key this loom contributes to its parent's packed object — the same `tag` rule a field follows,
+    /// because a nested loom is an input of the enclosing one. Only read when the loom sits inside another
+    /// loom; with no `tag` it packs nothing into its parent (`id` is identity, `dest` is where it sends, and
     /// neither is a name — ADR 0032 §4).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<BundleAttr>,
+    pub attrs: Option<LoomAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sink: Option<Sink>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -919,7 +919,7 @@ pub struct Image {
 #[serde(deny_unknown_fields)]
 pub struct Input {
     pub id: Option<String>,
-    /// The field's name inside an enclosing bundle: the bundle packs this tag
+    /// The field's name inside an enclosing loom: the loom packs this tag
     /// as the key, so the sink's address no longer names the field.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
@@ -950,7 +950,7 @@ pub struct Input {
 pub struct Select {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    /// The field's name inside an enclosing bundle (same rule as `input`).
+    /// The field's name inside an enclosing loom (same rule as `input`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1120,7 +1120,7 @@ pub enum Accrete {
     /// and this arm is the single name they share.
     #[ui_acrete(has_id = "true")]
     panel(Panel),
-    bundle(Bundle),
+    loom(Loom),
     svg(Svg),
     path(Path),
     /// One container for a slot's items (ADR 0031 §4): `window` says how many are on it, `step`

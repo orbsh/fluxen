@@ -8,10 +8,10 @@ use leptos::prelude::*;
 use serde_json::Value;
 
 /// A button: the label comes from `source`, and a press submits the nearest
-/// enclosing bundle whose `attrs.submit` names `button`. Submitting is not a
-/// third channel (ADR 0031 §2) and the button is not a party to it: the bundle
+/// enclosing loom whose `attrs.submit` names `button`. Submitting is not a
+/// third channel (ADR 0031 §2) and the button is not a party to it: the loom
 /// holds the exit, the payload, the id — and the timing, which is why a button
-/// carries no `sink` of its own (ADR 0039 §2, amended). Outside such a bundle it
+/// carries no `sink` of its own (ADR 0039 §2, amended). Outside such a loom it
 /// draws nothing, because a press there would send nothing.
 ///
 /// A press is one submit (ADR 0032). `attrs.oneshot` therefore no longer changes
@@ -23,9 +23,9 @@ pub fn button_(accrete: Button, ctx: &Ctx) -> AnyView {
         .unwrap_or("Ok")
         .to_owned();
 
-    // The nearest enclosing bundle that takes a button press owns the send; it also owns the payload
+    // The nearest enclosing loom that takes a button press owns the send; it also owns the payload
     // and the id, so the button adds nothing — not even the decision to send.
-    let Some(bundle) = nearest(ctx.bundle.as_ref(), SubmitMode::Button) else {
+    let Some(loom) = nearest(ctx.loom.as_ref(), SubmitMode::Button) else {
         return div().into_any();
     };
 
@@ -39,12 +39,12 @@ pub fn button_(accrete: Button, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     move || -> AnyView {
         let ctx = ctx.clone();
-        let bundle = bundle.clone();
+        let loom = loom.clone();
         button()
             .class(css.clone())
             .child(t.clone())
             .child(rough::drawn_border(&ctx, id.as_deref()))
-            .on(click, move |_| submit(&ctx, &bundle))
+            .on(click, move |_| submit(&ctx, &loom))
             .into_any()
     }
     .into_any()

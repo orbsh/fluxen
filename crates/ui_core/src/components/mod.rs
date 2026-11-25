@@ -6,8 +6,8 @@ pub mod canvas;
 pub use canvas::canvas_;
 pub mod forcegraph;
 pub use forcegraph::forcegraph_;
-pub mod bundle;
-pub use bundle::bundle_;
+pub mod loom;
+pub use loom::loom_;
 
 pub mod panel;
 pub use panel::panel_;

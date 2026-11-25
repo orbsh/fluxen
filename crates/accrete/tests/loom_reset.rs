@@ -1,5 +1,5 @@
-//! ADR 0032 §6-7: after a send a bundle's fields either stay, clear or go back to their starting value,
-//! and a bundle may be granted a number of sends. These are wire-contract checks — what a frame may say
+//! ADR 0032 §6-7: after a send a loom's fields either stay, clear or go back to their starting value,
+//! and a loom may be granted a number of sends. These are wire-contract checks — what a frame may say
 //! is the thing being pinned, decoded through the codec like every other node.
 #![allow(
     clippy::unwrap_used,
@@ -9,25 +9,25 @@
     clippy::panic_in_result_fn
 )]
 
-use accrete::{Accrete, BundleAttr, ResetMode};
+use accrete::{Accrete, LoomAttr, ResetMode};
 use serde_json::json;
 
-fn attrs(v: serde_json::Value) -> BundleAttr {
+fn attrs(v: serde_json::Value) -> LoomAttr {
     let a: Accrete = serde_json::from_value(json!({
-        "type": "bundle",
+        "type": "loom",
         "sink": {"dest": "confirm"},
         "attrs": v,
         "children": [{"type": "input", "tag": "q"}]
     }))
     .expect("decode");
-    let Accrete::bundle(b) = a else {
-        panic!("a bundle decoded as something else")
+    let Accrete::loom(b) = a else {
+        panic!("a loom decoded as something else")
     };
     b.attrs.expect("attrs")
 }
 
 #[test]
-fn a_bundle_that_says_nothing_keeps_its_fields_and_counts_nothing() {
+fn a_loom_that_says_nothing_keeps_its_fields_and_counts_nothing() {
     let a = attrs(json!({}));
     assert_eq!(a.reset, ResetMode::Keep);
     assert_eq!(a.sends, None, "absent is unlimited");
@@ -41,7 +41,7 @@ fn reset_is_one_of_three_words() {
     assert_eq!(attrs(json!({"reset": "keep"})).reset, ResetMode::Keep);
     assert!(
         serde_json::from_value::<Accrete>(json!({
-            "type": "bundle",
+            "type": "loom",
             "attrs": {"reset": "empty"},
             "children": [{"type": "input", "tag": "q"}]
         }))

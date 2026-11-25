@@ -22,7 +22,7 @@
         - is-shadow
         horizontal: true
       children:
-      - type: bundle
+      - type: loom
         attrs: {submit: [change]}
         sink: {dest: page, scope: local}
         children:
@@ -91,7 +91,7 @@
         format: md
       source:
         default: "## 文档页（表单）"
-    - type: bundle
+    - type: loom
       attrs:
         submit: [enter, button]
       children:
@@ -101,7 +101,6 @@
       - type: button
         attrs:
           oneshot: false
-        sink: {}
         source: {default: 保存}
 - action: append
   slot: pages

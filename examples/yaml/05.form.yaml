@@ -1,7 +1,7 @@
 action: append
 slot: chat
 data:
-  type: bundle
+  type: loom
   sink: {dest: confirm}
   attrs:
     submit: [enter, button]
@@ -52,6 +52,5 @@ data:
   - type: button
     attrs:
       oneshot: false
-    sink: {}
     source: {default: confirm}
 

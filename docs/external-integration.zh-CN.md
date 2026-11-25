@@ -168,7 +168,7 @@ data: { type: text, bind: { value: { kind: default, default: "hello" } } }
 | 方式 | 谁 | 复用 | 自备 |
 |:--|:--|:--|:--|
 | 核心 + 自己的 boot | prism（Rust，进程内） | `ui-core`、`accrete`、`content`、`forcegraph`、`ui-assets` | 自己的 transport、自己的页面入口 |
-| boot + 自己的帧 | reflux（Python，钉住产物） | 由示例里的 boot 构建出的 bundle | 帧本身，走自己的 socket |
+| boot + 自己的帧 | reflux（Python，钉住产物） | 由示例里的 boot 构建出的 loom | 帧本身，走自己的 socket |
 
 ## 5. 实例一：prism，会场
 
@@ -185,25 +185,25 @@ prism 是 WS 连接面（网关、身份、turn）。它的渲染器腿是 `/ui`
   ——所以动词整个留在 prism 一侧，渲染腿只运动作列表。在意的客户端（比如登录表单）自己读。
 - **流式。** 格式由生产端决定。gravity 的 turn 调用带一个 `protocol` 参数：默认 `data`（裸
   delta，给非 UI 消费者），`fluxen`（视图帧——对布局声明的槽做 `append`/`set`）。应用知识留在
-  摊位，渲染器保持通用，槽名不编进 bundle。
+  摊位，渲染器保持通用，槽名不编进 loom。
 - **认证。** 连接即有 device 身份，`login` 只是普通上行，没有登录墙：认证是逐 event 的业务
   决策，纯阅读的布局一个都不声明。
 - **prism 自备：** transport（它的 `/channel` 腿）、帧（布局 + 应用的 view 事件），以及——只在它想要时
-  才需要——自己的页面。客户端一侧什么都不用索取：**连上就推布局**，所以示例 bundle 不改一行就能配 prism。
+  才需要——自己的页面。客户端一侧什么都不用索取：**连上就推布局**，所以示例 loom 不改一行就能配 prism。
 - **prism 不许做：** 教会 `ui-core` 认 `{ev,args}`，或者自带第二个渲染器。
 
 ## 6. 实例二：reflux，Python 宿主
 
 reflux 是"钉住产物"这条路的参考宿主：Python 生产端用 SDK 节点与八个动作构建帧
-（`reflux/wire.py`），静态壳（`www/`）加载钉住的渲染器 bundle，页面上行走 `window.fluxen.send`
+（`reflux/wire.py`），静态壳（`www/`）加载钉住的渲染器 loom，页面上行走 `window.fluxen.send`
 ——`mount()` 发布的那个把手。它的线上格式就是动作列表本身（裸数组），与本文件的契约逐字段一致。
 
-在拆分后它消费 **`boot`**（它的 bundle 就是一次 boot 构建），不直接碰核心。若将来需要进程内渲染，
+在拆分后它消费 **`boot`**（它的 loom 就是一次 boot 构建），不直接碰核心。若将来需要进程内渲染，
 它再迁到"核心 + 自己的 boot"，与 prism 同一条路。
 
 按现在的标准，它欠两处调整：
 
-- **public URL。** 发布产物在构建时声明挂载点。reflux 把 bundle 服在页面根，所以它钉住的那次
+- **public URL。** 发布产物在构建时声明挂载点。reflux 把 loom 服在页面根，所以它钉住的那次
   构建保持根相对 public URL；prism 服在 `/assets/`，就按 `/assets/` 构建。同一个核心的两份构建
   ——宿主从不改写产物的链接。
 - **上行把手属于 `boot`。** `reflux.js` 依赖 `window.fluxen.send`；这个名字或契约若要改，改在

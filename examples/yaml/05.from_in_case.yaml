@@ -9,7 +9,7 @@
     children:
     - type: frame
     - type: frame
-    - type: bundle
+    - type: loom
       id: QQucja82kxbHPGLozJWdbk
       attrs:
         submit: [enter, button]
@@ -34,7 +34,6 @@
       - type: button
         attrs:
           oneshot: true
-        sink: {}
 # ---- three goods rows: the id is the row's key (the same set of keys is used by stage/step/remove) ----
 - action: append
   slot: goods
@@ -42,7 +41,7 @@
     type: entry
     id: '853736'
     children:
-    - type: bundle
+    - type: loom
       attrs: {selector: qty, submit: [change]}
       sink: {dest: '853736', scope: local}
       children:
@@ -69,7 +68,7 @@
     type: entry
     id: '56459'
     children:
-    - type: bundle
+    - type: loom
       attrs: {selector: qty, submit: [change]}
       sink: {dest: '56459', scope: local}
       children:
@@ -96,7 +95,7 @@
     type: entry
     id: '934900'
     children:
-    - type: bundle
+    - type: loom
       attrs: {selector: qty, submit: [change]}
       sink: {dest: '934900', scope: local}
       children:

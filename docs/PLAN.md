@@ -34,14 +34,15 @@
 - [x] 26 — Canvas 的模块选项与 forcegraph 变体 — ADR 0017 — 2026-10-23
 - [x] 27 — 删 `inject`：op / 消费臂 / 同值守卫 / 测试 / 示例帧 / wire 文档行 — ADR 0031 §2、0038 §1 — 2026-11-24
 - [x] 28 — 页面选项就是槽：`#main[data-config]` 指定槽名（默认 `__CONFIG__`），选项对象是节点的载荷（`source.default`）；`sink` 带 `path` 写进 local 面并按成员合并，读侧按成员回落；`config` op / `Ctx.config` / `set_config` / 每个选项一个 signal 全部退役 — ADR 0038 §2 — 2026-11-24
-- [x] 29 — 皮肤：`config.skin` 镜像到 `<html data-*>` + roughr 实时画边（frame / panel / bundle；帧自己声明 `is-border` 才挂）— ADR 0038 §3-4 — 2026-11-24
+- [x] 29 — 皮肤：`config.skin` 镜像到 `<html data-*>` + roughr 实时画边（frame / panel / loom；帧自己声明 `is-border` 才挂）— ADR 0038 §3-4 — 2026-11-24
 - [x] 30 — 开关落在控件本身：`bool` 字段读自己写的槽、change 即出口（文本字段仍以 Enter 为出口），复选框读 `checked()` 而非 `value()`；示例把它放进图的右下角（`panel place: anchor` 浮层，卡片向上开，占图的空边角），shell 不加任何栏 — ADR 0030、0038 §2、§5 — 2026-11-24
-- [x] 31 — 字段没有自己的上行：无 tag 的 sink 只剩本地落地（remote/both 报警告），清空改由 bundle 的 `reset: keep|clear|default` 决定；`sends: n` 每发一次减一、为 0 锁定（字段 disabled、拒发），缺省/-1 无限 — ADR 0032 §2、§6、§7 — 2026-11-24
-- [x] 32 — 字段的 `sink` 整个删掉（shape 也不再接受，`Input`/`Select` deny unknown keys）：字段只剩 `source` + `kind`（number/bool/text/password，缺省 text，元素类型与解析同一处声明）；本地落地归 bundle（`sink: {scope: local, path: /}` 把打包对象并进槽根，`write_local_at` 的根路径按对象合并）；例子里的 13 处字段 sink 全部改成 bundle — ADR 0032 §2 — 2026-11-24
-- [x] 34 — 嵌套 bundle 的打包键只认 `tag`：`id` 是身份（按它匹配答复）、`dest` 是它自己发送的去向，两者都不是名字，`bundle_key` 不再从 `id` 后备；无 `tag` 的内层 bundle 不进外层的包（它的字段留在自己包里，自己有 `dest` 就自己发）；顶层 `tag` 不读 — ADR 0032 §4 — 2026-11-24
+- [x] 31 — 字段没有自己的上行：无 tag 的 sink 只剩本地落地（remote/both 报警告），清空改由 loom 的 `reset: keep|clear|default` 决定；`sends: n` 每发一次减一、为 0 锁定（字段 disabled、拒发），缺省/-1 无限 — ADR 0032 §2、§6、§7 — 2026-11-24
+- [x] 32 — 字段的 `sink` 整个删掉（shape 也不再接受，`Input`/`Select` deny unknown keys）：字段只剩 `source` + `kind`（number/bool/text/password，缺省 text，元素类型与解析同一处声明）；本地落地归 loom（`sink: {scope: local, path: /}` 把打包对象并进槽根，`write_local_at` 的根路径按对象合并）；例子里的 13 处字段 sink 全部改成 loom — ADR 0032 §2 — 2026-11-24
+- [x] 34 — 嵌套 loom 的打包键只认 `tag`：`id` 是身份（按它匹配答复）、`dest` 是它自己发送的去向，两者都不是名字，`loom_key` 不再从 `id` 后备；无 `tag` 的内层 loom 不进外层的包（它的字段留在自己包里，自己有 `dest` 就自己发）；顶层 `tag` 不读 — ADR 0032 §4 — 2026-11-24
 - [x] 33 — 读和写分成两个类型：`Source {slot, scope, path, default}` / `Sink {dest, scope, path}`（`dest` 与上行帧同名，`emit` 不再翻译；sink 没有 `default`，两个类型各自 deny unknown keys，`sink: {slot: …}` 解码即错）；例子/文档 29 处 `sink: {slot: …}` 改 `dest`，两条死 `default` 一并删掉 — ADR 0039（0031 §2 加 amend）— 2026-11-24
 - [ ] 32 — 皮肤的边角：`select` 的稳定子树、`button` 的类名、input 保持 CSS 边（void 元素装不下子节点）— ADR 0038 §4 — 待做
 - [x] 35 — `move` 动作：把一个**已经在**列表里的行挪到另一个位置，行本身不重建 — ADR 0005 加一节 — 2026-11-24
+- [x] 36 — 节点改名 `bundle` → `loom`：`bundle` 只说"打包"，对"收集输入"与"字段按 `tag` 命名"两层都沉默，读起来又像是 `frame`/`panel`/`tiles` 那一类"装东西的盒子"；`loom` 一次说出三件事——线=字段、织法=`tag`→键、布=送出的对象，且织机天然可嵌套（ADR 0032 §4）。`bus` 否（Prism 自己就是总线、共享通路不属于哪一组、总线不嵌套）、`trunk` 否（本仓构建工具、git 主干、方向朝根而载荷离树） — ADR 0032 §1 — 2026-11-25
   - 帧形状 `{"action": "move", "slot": <列表槽>, "id": <行的 id>, "position": ±n}`；`position` 与 `append` 同向（`0` 尾、`+n` 从尾往里数、`-n` 从头往里数），但**按"把这一行先拎出来"的列表计数**（`len - 1`）——否则"删之前数还是删之后数"两条都自洽，实现和人读的会是两条。
   - 域：行必须在列表里（不在就拒收，与 `append` 拒重复 id 是同一条边界）；`position` 越界由渲染器拒（`move_index`，与 `append_index` 并列，域比 `append` 少一格）。
   - 渲染器：改的是信号里的行序，diff 交给 keyed 列表（`components/tiles.rs` 的 `tachys::view::keyed`）——id 没变的行复用节点，所以焦点、动画、滚动位置都不丢；非 keyed 的容器按"重建子树"兜底，语义仍正确。今天要重排只有"删光再插回"，中间态一旦渲染，节点就真的没了。

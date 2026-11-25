@@ -45,7 +45,7 @@ fn a_grid_round_trips_with_its_header_and_rows() {
                 "type": "entry",
                 "id": "853736",
                 "children": [
-                    {"type": "bundle", "attrs": {"selector": "qty", "submit": ["change"]},
+                    {"type": "loom", "attrs": {"selector": "qty", "submit": ["change"]},
                      "sink": {"dest": "853736", "scope": "local"},
                      "children": [{"type": "input", "tag": "qty", "kind": "number",
                                    "source": {"default": 1}}]},

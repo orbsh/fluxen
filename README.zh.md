@@ -36,12 +36,12 @@ source: {slot: "notice", path: "/title", default: "untitled"}
 
 `source` 和 `sink` 是两条通道，不是同一个类型用两次。哪种节点能有它，是设计的一部分 —— `text`、`tiles`
 是读；**字段不写**：`input` 只有 `source` + `kind`（哪种字段：`number`、`bool`、`text`、`password`，
-元素类型和解析同一处声明），`select` 只有 `source` + `options`，两者都由 `tag` 命名。发出去的是外面那层 **bundle**：它把带 tag 的字段打成一个对象，
+元素类型和解析同一处声明），`select` 只有 `source` + `options`，两者都由 `tag` 命名。发出去的是外面那层 **loom**：它把带 tag 的字段打成一个对象，
 拥有出口、时机（`submit: [enter, button, change]`）、次数（`sends`）、善后（`reset`），以及上行携带的 `id`
 （ADR 0032）。那个 `id` 是请求的身份 —— 下发表单的服务端用它匹配答复 —— 而 `tag` 是对方在 `data` 里读到的名字：
 
 ```yaml
-type: bundle
+type: loom
 id: "login-42"                       # 这次请求：回来的答复按它匹配
 sink: {dest: "session"}              # 打好的对象送到哪
 attrs: {submit: [enter, button]}     # 什么时候送
@@ -50,7 +50,7 @@ children:
 - {type: input, tag: pass, kind: password}
 ```
 
-bundle 可以嵌在 bundle 里：内层按自己的时机打包（比如自动补全用 `change`），外层在自己的时机把全部字段打包 ——
+loom 可以嵌在 loom 里：内层按自己的时机打包（比如自动补全用 `change`），外层在自己的时机把全部字段打包 ——
 一个字段，几种发送方式（docs/interaction-patterns.zh-CN.md §4）。
 
 ## 开发工作流（`stage`）

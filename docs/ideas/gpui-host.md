@@ -21,7 +21,7 @@ The seam allows it — `accrete`, `content` and `transport` know no framework an
 - **The styling channel disappears.** The token lane is `variant` → class → a rule in `reflux.css`'s `@layer reflux`. There is no CSS in a GPUI window, so "styling owned by the shell" becomes a theme map in Rust, and every token in `profile.json` needs a value there.
 - **The reactivity semantics change.** Leptos' fine-grained signals are ADR 0002's own stated reason for choosing it: a streamed `Concat` re-runs only the one text node it touched. GPUI is entity + `notify()` with a `Render` rebuild per frame; per-node granularity means per-node entities, and that cost has to be measured rather than assumed (Zed streams text in it, so it is possible — it is not free).
 - **The browser facts have nowhere to go.** `reflux:path` → `pushState`, `reflux:title` → `document.title`, `location.query` on `hello` / `reflux:nav`, and `window.fluxen.send` are all the *client runtime's*, and that runtime is browser-shaped by definition. A native window has no address bar: routing either grows a self-drawn one or the routing contract is re-decided. A native `Transport` is the easy part (gloo-net → `tokio-tungstenite`).
-- **Distribution changes wholesale.** Today fluxen ships as a trunk-built wasm bundle that reflux pins into a page and a wheel. A GPUI host is a native binary; the `pip install reflux` path does not apply to it at all.
+- **Distribution changes wholesale.** Today fluxen ships as a trunk-built wasm loom that reflux pins into a page and a wheel. A GPUI host is a native binary; the `pip install reflux` path does not apply to it at all.
 
 ## GPUI's own state
 
@@ -31,7 +31,7 @@ The official `gpui` crate on crates.io is 0.2.2, published 2025-10, and nothing 
 
 - **"fluxen gains a native host."** Admissible. The price is a second renderer plus a ruling on the five deployment artifacts and on the token lane. It is ADR-scale work: write the backend review under ADR 0002's judgement first, then build the smallest host that can draw the eight actions and the artifact-free subset of the vocabulary.
 - **"reflux becomes a desktop application."** A different and much larger question: reflux's browser assumptions — the address bar as the routing authority, a refresh being a new device, the token riding `hello`, the wheel distributing a page — would all be re-answered. Under that premise GPUI is the expensive route; a native client that talks the wire and ignores `accrete` is cheaper.
-- **A native shell around the existing bundle** (wry / tauri hosting the current wasm). Not "GPUI as the frontend", but the only option that puts today's renderer in a desktop window with zero renderer work.
+- **A native shell around the existing loom** (wry / tauri hosting the current wasm). Not "GPUI as the frontend", but the only option that puts today's renderer in a desktop window with zero renderer work.
 
 ## What a proposal would have to settle first
 

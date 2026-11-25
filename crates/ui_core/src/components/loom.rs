@@ -1,8 +1,8 @@
 use crate::Ctx;
 use crate::ctx::render_children;
-use crate::hooks::{BundleState, Field, bundle_key, node_id, refresh, use_common_css};
+use crate::hooks::{LoomState, Field, loom_key, node_id, refresh, use_common_css};
 use crate::rough;
-use accrete::{Accrete, AccreteOps, Bundle, JsType};
+use accrete::{Accrete, AccreteOps, Loom, JsType};
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::Value;
@@ -34,15 +34,15 @@ fn field_default(node: &Accrete) -> Value {
     }
 }
 
-/// What this bundle packs: one key per tagged field, and one key per nested
-/// bundle. The walk STOPS at a nested bundle (ADR 0032 §4) — its fields belong
+/// What this loom packs: one key per tagged field, and one key per nested
+/// loom. The walk STOPS at a nested loom (ADR 0032 §4) — its fields belong
 /// to it, and the outer object sees only its packed value. That is what makes
 /// `outer(submit: [enter]) > inner(submit: [change], tag: mention) > input(tag: q)`
 /// a single `mention` key instead of a flattened `q`.
 fn collect(node: &Accrete, out: &mut Vec<Field>) {
     match node {
-        Accrete::bundle(b) => {
-            if let Some(name) = bundle_key(&b.tag)
+        Accrete::loom(b) => {
+            if let Some(name) = loom_key(&b.tag)
                 && !out.iter().any(|f| f.name == name)
             {
                 // The value arrives from the child's own pack, through the
@@ -88,11 +88,11 @@ fn collect(node: &Accrete, out: &mut Vec<Field>) {
     }
 }
 
-/// A bundle packs a group of fields into one object and sends it (ADR 0032).
+/// A loom packs a group of fields into one object and sends it (ADR 0032).
 /// It owns two things: where the packed object goes (`sink`) and when it leaves
-/// (`attrs.submit`). Fields are named by their own `tag`; the bundle's `id` is
+/// (`attrs.submit`). Fields are named by their own `tag`; the loom's `id` is
 /// this submission's instance, not a field name.
-pub fn bundle_(accrete: Bundle, ctx: &Ctx) -> AnyView {
+pub fn loom_(accrete: Loom, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let node_id = node_id(&accrete);
     let mut css = vec!["case", "flex"];
@@ -109,14 +109,14 @@ pub fn bundle_(accrete: Bundle, ctx: &Ctx) -> AnyView {
         }
     }
 
-    // A nested bundle's packed object lands in the parent's slot for its key.
-    let parent = ctx.bundle.clone();
+    // A nested loom's packed object lands in the parent's slot for its key.
+    let parent = ctx.loom.clone();
     let mirror =
-        bundle_key(&accrete.tag).and_then(|key| parent.as_ref().and_then(|p| p.field(&key)));
+        loom_key(&accrete.tag).and_then(|key| parent.as_ref().and_then(|p| p.field(&key)));
 
     let attrs = accrete.attrs.clone().unwrap_or_default();
     let sends = attrs.sends;
-    let state = Arc::new(BundleState {
+    let state = Arc::new(LoomState {
         fields,
         modes: attrs.submit.clone(),
         reset: attrs.reset,
@@ -129,19 +129,19 @@ pub fn bundle_(accrete: Bundle, ctx: &Ctx) -> AnyView {
         parent: parent.clone(),
         mirror,
     });
-    // A nested bundle joins its parent's list, so a reset can travel down the tree a pack travels up.
+    // A nested loom joins its parent's list, so a reset can travel down the tree a pack travels up.
     if let Some(p) = &parent {
         p.children
             .update_value(|kids| kids.push(std::sync::Arc::clone(&state)));
     }
-    // Publish the initial object: an outer bundle must be able to pack this one
+    // Publish the initial object: an outer loom must be able to pack this one
     // before anything was typed in it.
     refresh(&state);
 
-    // Inject and clone down: fields and nested bundles read their bundle from
+    // Inject and clone down: fields and nested looms read their loom from
     // the ctx they were rendered with, so ownership does not depend on timing.
     let ctx = Ctx {
-        bundle: Some(state),
+        loom: Some(state),
         ..ctx
     };
     let children = accrete
@@ -169,11 +169,11 @@ mod tests {
     use accrete::Accrete;
     use serde_json::json;
 
-    /// The names an outer bundle would pack: `collect` walks the outer's children, exactly as `bundle_` does.
+    /// The names an outer loom would pack: `collect` walks the outer's children, exactly as `loom_` does.
     fn names(v: serde_json::Value) -> Vec<String> {
         let a: Accrete = serde_json::from_value(v).expect("valid accrete");
-        let Accrete::bundle(outer) = &a else {
-            panic!("expected bundle")
+        let Accrete::loom(outer) = &a else {
+            panic!("expected loom")
         };
         let mut out = Vec::new();
         for c in outer.children.as_deref().unwrap_or_default() {
@@ -183,13 +183,13 @@ mod tests {
     }
 
     #[test]
-    fn a_tagged_nested_bundle_is_one_key_and_the_walk_stops() {
+    fn a_tagged_nested_loom_is_one_key_and_the_walk_stops() {
         // The outer object keeps the group as one object (ADR 0032 §4), it does not flatten the inner fields.
         assert_eq!(
             names(json!({
-                "type": "bundle",
+                "type": "loom",
                 "children": [{
-                    "type": "bundle",
+                    "type": "loom",
                     "tag": "mention",
                     "children": [{"type": "input", "tag": "q"}]
                 }]
@@ -199,14 +199,14 @@ mod tests {
     }
 
     #[test]
-    fn an_untagged_nested_bundle_packs_nothing_into_its_parent() {
+    fn an_untagged_nested_loom_packs_nothing_into_its_parent() {
         // `id` is identity and `dest` is where the inner sends, so neither names it here: without a `tag` the
         // group is its own, and the parent's object does not move because someone gave it an id.
         assert!(
             names(json!({
-                "type": "bundle",
+                "type": "loom",
                 "children": [{
-                    "type": "bundle",
+                    "type": "loom",
                     "id": "login-42",
                     "sink": {"dest": "notes", "scope": "local"},
                     "children": [{"type": "input", "tag": "q"}]

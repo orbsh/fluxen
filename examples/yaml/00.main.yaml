@@ -72,7 +72,7 @@
               class:
               - nogrow
             source: {default: drawn borders}
-          - type: bundle
+          - type: loom
             attrs:
               class:
               - nogrow
@@ -133,10 +133,10 @@
           attrs:
             horizontal: true
           children:
-          # One field, one bundle (ADR 0032): the bundle owns the exit, the timing and what the field
+          # One field, one loom (ADR 0032): the loom owns the exit, the timing and what the field
           # becomes afterwards — `reset: clear` is why the box is empty again after Enter. A field has no
           # uplink of its own any more, so the box without this wrapper would send nothing.
-          - type: bundle
+          - type: loom
             id: test
             sink: {dest: message}
             attrs:

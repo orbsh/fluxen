@@ -94,9 +94,9 @@ fn has_retired_key(v: &serde_yaml::Value) -> bool {
 ///
 /// `input` and `select` are not in the list: they no longer have the field at all and refuse it in serde (ADR 0032 §2), so this
 /// check would never see them get that far. Neither is `button`: its sink was a confirm-key marker, not a channel, and ADR 0039 §2
-/// dropped it — the enclosing bundle's `submit` set is what names the timing.
+/// dropped it — the enclosing loom's `submit` set is what names the timing.
 fn illegal_channel(v: &serde_yaml::Value) -> Option<String> {
-    const WRITERS: &[&str] = &["bundle", "frame"];
+    const WRITERS: &[&str] = &["loom", "frame"];
     match v {
         serde_yaml::Value::Mapping(m) => {
             let kind = m.get("type").and_then(|t| t.as_str());
@@ -298,8 +298,8 @@ mod tests {
             "input 没有 sink，这个检查也要拒绝"
         );
 
-        let ok = y("type: bundle\nsink: {dest: x}\nchildren: []\n");
-        assert!(illegal_channel(&ok).is_none(), "bundle 可以写");
+        let ok = y("type: loom\nsink: {dest: x}\nchildren: []\n");
+        assert!(illegal_channel(&ok).is_none(), "loom 可以写");
     }
 
     #[test]

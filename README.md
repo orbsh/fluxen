@@ -17,7 +17,7 @@ Design: [Fluxora 架构](https://github.com/orbsh/wiki/blob/main/projects/fluxor
 Rendering layer only — no event bus, no gateway, no transport. Upstream (Prism / Aura realm / any producer) sends Accrete operations; Fluxen renders and applies them. The thick-shell principle stays: AI generates schema-validated structured JSON (content + structure), the framework owns styling and rendering determinism.
 
 Integrating it into a host (a gateway that re-wraps the core, or a server that serves a pinned
-bundle) is a documented contract, not folklore: [docs/external-integration.md](docs/external-integration.md)
+loom) is a documented contract, not folklore: [docs/external-integration.md](docs/external-integration.md)
 (English) · [中文](docs/external-integration.zh-CN.md). The rule it states: the renderer never adapts
 to a host — the host supplies a transport and a boot and speaks the renderer's wire.
 
@@ -49,13 +49,13 @@ source: {slot: "notice", path: "/title", default: "untitled"}
 `text` and `tiles` read; **a field does not write**: an `input` keeps `source` + `kind` (what kind of field:
 `number`, `bool`, `text`, `password` — element type and parse in one place) and a `select` keeps `source` +
 `options`, and both are named by `tag`. What
-sends is the enclosing **bundle**: it packs its tagged fields into one object and owns the exit, the timing
+sends is the enclosing **loom**: it packs its tagged fields into one object and owns the exit, the timing
 (`submit: [enter, button, change]`), the budget (`sends`), the aftermath (`reset`), and the `id` the outflow
 carries (ADR 0032). That `id` is the request identity — a server that published the form matches the answer by
 it — while `tag` is what the far side reads inside `data`:
 
 ```yaml
-type: bundle
+type: loom
 id: "login-42"                       # the request: what comes back is matched by this
 sink: {dest: "session"}              # where the packed object goes
 attrs: {submit: [enter, button]}     # when it goes
@@ -64,7 +64,7 @@ children:
 - {type: input, tag: pass, kind: password}
 ```
 
-A bundle may sit inside another bundle: the inner one packs on its own trigger (say `change`, for a completion
+A loom may sit inside another loom: the inner one packs on its own trigger (say `change`, for a completion
 box), the outer one packs everything when its own trigger fires — one field, several ways to send it
 (docs/interaction-patterns.md §4).
 

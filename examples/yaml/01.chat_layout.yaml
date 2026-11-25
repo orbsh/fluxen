@@ -37,7 +37,7 @@ data:
           - box
         source:
           default: "**channel**"
-      - type: bundle
+      - type: loom
         attrs:
           class:
           - --channel
@@ -119,7 +119,7 @@ data:
           attrs:
             horizontal: true
           children:
-          - type: bundle
+          - type: loom
             sink: {dest: message}
             attrs: {submit: [enter]}
             children:

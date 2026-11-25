@@ -106,7 +106,7 @@ fn a_sink_names_a_dest_and_has_no_default() {
         "a sink addresses a dest, not a slot"
     );
     // A sink without a dest is legal and means "no address"; a button no longer needs one at all
-    // (ADR 0039 §2 amended) — the enclosing bundle's `submit` names the timing.
+    // (ADR 0039 §2 amended) — the enclosing loom's `submit` names the timing.
     let marker = sink(json!({}));
     assert_eq!(marker.dest, None);
 }
@@ -155,7 +155,7 @@ fn a_module_url_is_the_only_way_to_name_a_renderer() {
 #[test]
 fn a_select_says_read_and_options() {
     // Two channels on one node: the value in (`source`) and the option rows (a named second channel).
-    // The choice does not leave through the select: that is the enclosing bundle's business, and the
+    // The choice does not leave through the select: that is the enclosing loom's business, and the
     // schema no longer has a shape to spell it (ADR 0032 §2).
     let a: Accrete = serde_json::from_value(json!({
         "type": "select",
@@ -197,7 +197,7 @@ fn a_value_can_be_local_now_and_mirrored_up() {
     // ADR 0031 §2: `both` is what the retired `report` said — assign in the
     // page and let the far side hear about it, without a third channel.
     let a: Accrete = serde_json::from_value(json!({
-        "type": "bundle",
+        "type": "loom",
         "sink": {"dest": "island", "scope": "both"},
         "children": [{
             "type": "select",
@@ -207,8 +207,8 @@ fn a_value_can_be_local_now_and_mirrored_up() {
         }]
     }))
     .unwrap();
-    let Accrete::bundle(b) = &a else {
-        panic!("expected bundle")
+    let Accrete::loom(b) = &a else {
+        panic!("expected loom")
     };
     let sink = b.sink.as_ref().unwrap();
     assert_eq!(sink.dest.as_deref(), Some("island"));

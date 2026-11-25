@@ -9,7 +9,7 @@
 - action: append
   slot: chat
   data:
-    type: bundle
+    type: loom
     id: table-form
     attrs:
       submit: [enter, button]
@@ -34,7 +34,6 @@
     - type: button
       attrs:
         oneshot: false
-      sink: {}
 # ---- rows: one entry per item; `id` is its key (stage/step reuse the same set of keys) ----
 - action: append
   slot: table-rows
@@ -42,7 +41,7 @@
     type: entry
     id: '853736'
     children:
-    - type: bundle
+    - type: loom
       attrs: {selector: qty, submit: [change]}
       sink: {dest: s, scope: local}
       children:
@@ -68,7 +67,7 @@
     type: entry
     id: b
     children:
-    - type: bundle
+    - type: loom
       attrs: {selector: qty, submit: [change]}
       sink: {dest: b, scope: local}
       children:
@@ -94,7 +93,7 @@
     type: entry
     id: n
     children:
-    - type: bundle
+    - type: loom
       attrs: {selector: qty, submit: [change]}
       sink: {dest: n, scope: local}
       children:

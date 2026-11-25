@@ -11,7 +11,7 @@
 //! It deliberately does NOT know: the page shell (`#main` attributes, `window.fluxen.send`), any
 //! concrete transport implementation, or the application's layout. Those are the boot's job and
 //! live in `examples/renderer` — the reference host — so that a host wrapping this core in its own
-//! binary (prism) sits in exactly the same position as our own bundle. See
+//! binary (prism) sits in exactly the same position as our own loom. See
 //! `docs/decisions/0021-external-integration.md` and `docs/external-integration.md`.
 
 // Unit tests may use the unwrap/panic vocabulary the production targets are

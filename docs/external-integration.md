@@ -2,7 +2,7 @@
 
 For anyone who serves this renderer to a browser: a Rust gateway, a Python host, an embedded
 page. It states what you reuse, what you must supply, the wire, how a frame becomes a screen, and
-two worked examples — the prism venue (Rust, re-wrapped core) and reflux (Python, pinned bundle).
+two worked examples — the prism venue (Rust, re-wrapped core) and reflux (Python, pinned loom).
 
 The rule the whole document is about: **the renderer never adapts to a host.** A host adapts to
 the renderer: it supplies a transport and a boot, and speaks the renderer's wire.
@@ -179,7 +179,7 @@ appending does not remount the rows above it.
 
 Today `ui_leptos::mount()` is the only boot: it reads `#main`'s `data-host` / `data-path` /
 `data-codec` / `data-token`, opens `ws://<host><path>`, mounts the reactive root, and publishes
-`window.fluxen.send` as the page-level uplink. That is a good boot for a **pinned bundle** and a
+`window.fluxen.send` as the page-level uplink. That is a good boot for a **pinned loom** and a
 bad fit for a host that re-wraps the core in its own binary.
 
 Decision (2026-10-29): split `ui_leptos` into
@@ -193,7 +193,7 @@ a feature. The two consumption styles get names instead of folklore:
 | style | who | reuses | supplies |
 |:--|:--|:--|:--|
 | core + own boot | prism (Rust, in-process) | `ui-core`, `accrete`, `content`, `forcegraph`, `ui-assets` | its own transport, its own page entry |
-| boot + own frames | reflux (Python, pinned bundle) | the bundle built from the example boot | the frames, over its own socket |
+| boot + own frames | reflux (Python, pinned loom) | the loom built from the example boot | the frames, over its own socket |
 
 ## 5. Worked example — prism, the venue
 
@@ -212,28 +212,28 @@ leg for the CLI and peers — the stage precedent: `/channel` for the page, `/cl
 - **Streaming.** The producer decides the format. Gravity's turn call takes a `protocol` argument:
   default `data` (raw deltas, for non-UI consumers), `fluxen` (view frames — `append`/`set` against
   the slot the layout declares). Application knowledge stays in the booth; the renderer stays
-  generic; nothing about a slot name is compiled into the bundle.
+  generic; nothing about a slot name is compiled into the loom.
 - **Auth.** Device identity on connect, `login` as an ordinary uplink, no wall: authentication is a
   business decision per event, and a purely reading layout declares none.
 - **What prism supplies:** the transport (its `/channel` leg), the frames (layout + the application's
   view events), and — only if it wants to — its own page. Nothing is asked for on the client side:
-  the layout is pushed the moment the socket opens, so the example bundle works against prism
+  the layout is pushed the moment the socket opens, so the example loom works against prism
   unchanged.
 - **What prism must NOT do:** teach `ui-core` about `{ev,args}`, or ship a second renderer.
 
 ## 6. Worked example — reflux, the Python host
 
-Reflux is the reference host for the pinned-bundle style: a Python producer builds SDK nodes and the
-eight actions (`reflux/wire.py`), a static shell (`www/`) loads the pinned renderer bundle, and the
+Reflux is the reference host for the pinned-loom style: a Python producer builds SDK nodes and the
+eight actions (`reflux/wire.py`), a static shell (`www/`) loads the pinned renderer loom, and the
 page uplinks through `window.fluxen.send` — the handle `mount()` publishes. Its wire is the action list
 itself — a bare array, field for field this document's contract.
 
-Under the split it consumes **`boot`** (its bundle is a boot build) and never the core directly. If
+Under the split it consumes **`boot`** (its loom is a boot build) and never the core directly. If
 it ever needs in-process rendering it moves to core + own boot, the same way prism does.
 
 Two adjustments it owes to the current standard:
 
-- **Public URL.** A release bundle declares its mount point at build time. Reflux serves the bundle
+- **Public URL.** A release loom declares its mount point at build time. Reflux serves the loom
   at the page root, so its pinned build keeps a root-relative public URL; prism serves at `/assets/`
   and builds accordingly. Two builds of one core — a host never rewrites the artifact's links.
 - **The uplink handle belongs to `boot`.** `reflux.js` requires `window.fluxen.send`; if that

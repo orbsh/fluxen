@@ -44,12 +44,12 @@ data:
           children: null
         - type: text
           source: {default: lv 3}
-  - type: bundle
+  - type: loom
     sink: {dest: message}
     attrs: {submit: [enter]}
     children:
     - type: input
       tag: message
   - type: button
-    sink: {dest: ok}
+    source: {default: ok}
 

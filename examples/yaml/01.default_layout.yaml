@@ -19,14 +19,13 @@ data:
         - is-shadow
         - nogrow
         format: md
-    - type: bundle
+    - type: loom
       sink: {dest: login}
       attrs:
         submit: [enter, button]
       children:
       - type: button
         source: {default: LOGIN}
-        sink: {}
   - type: tiles
     attrs:
       class:
@@ -65,13 +64,13 @@ data:
       attrs:
         horizontal: true
       children:
-      - type: bundle
+      - type: loom
         sink: {dest: history}
         attrs: {submit: [enter]}
         children:
         - type: input
           tag: history
-      - type: bundle
+      - type: loom
         sink: {dest: echo}
         attrs: {submit: [enter]}
         children:
