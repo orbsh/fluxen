@@ -45,7 +45,7 @@ struct 与 enum 变体）、改 `ui_core`（加组件函数）、重新编译 wa
 4. 已删除：`Chart`/`Editor`/`Diagram` 三个 struct 与 enum 变体、
    `default_chart_url`/`default_editor_url`、组件 `chart_`/`editor_`/`diagram_`
    与 `components/diagram.rs`（内联 mermaid 加载器）。
-5. 本仓新增 `examples/modules/diagram/index.js`：mermaid 作为模块实现契约
+5. 本仓新增 `assets/modules/diagram/index.js`：mermaid 作为模块实现契约
    （v10 `run()` / v9 `init()` 都支持，因为库版本归部署）。
 
 ## 迁移

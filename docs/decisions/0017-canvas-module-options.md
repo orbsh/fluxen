@@ -63,7 +63,7 @@ options 与 url 一样是**挂载期**配置：改它们不热生效，要重新
 
 ### 4. 示例模块：forcegraph（3d-force-graph v1.80.1）
 
-`examples/modules/forcegraph/index.js`，纯 JS、零构建，考据自 k10r 的实测实现：
+`assets/modules/forcegraph/index.js`，纯 JS、零构建，考据自 k10r 的实测实现：
 
 - 库是 UMD（自带 three.js，暴露全局 `ForceGraph3D`），只能 `<script>` 注入——与
   g2chart 同一条先例。**库在 `mount()` 里才注入**（ADR 0015），模块求值期零下载。
