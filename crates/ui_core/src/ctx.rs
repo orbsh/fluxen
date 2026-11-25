@@ -215,19 +215,20 @@ impl Ctx {
         // delivering, and overwriting a map needs no scheduler — `drain_slots` runs at the end of the
         // pass that consumed the frames, so a host's callback never sits inside the write that caused it.
         if !self.hooks.slots.is_empty() {
-            self.pending
-                .update(|pending| {
-                    pending.insert(name.to_owned(), value);
-                });
+            // A pass can outlive its owner: the root was replaced (`create`) or the mount was torn down
+            // with frames still in flight. A disposed signal is not an error to shout about — there is
+            // nobody left to hear it — so the write is dropped instead of panicking.
+            let _ = self.pending.try_update(|pending| {
+                pending.insert(name.to_owned(), value);
+            });
         }
     }
 
     /// Deliver what accumulated since the last pass: one callback per name, with its newest value.
     pub fn drain_slots(&self) {
-        if self.pending.read().is_empty() {
-            return;
-        }
-        let taken = std::mem::take(&mut *self.pending.write());
+        let Some(taken) = self.pending.try_update(std::mem::take) else {
+            return; // disposed: nothing to deliver to
+        };
         for (name, value) in taken {
             for (watched, notify) in &self.hooks.slots {
                 if watched == "*" || watched == &name {
