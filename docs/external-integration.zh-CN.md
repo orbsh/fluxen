@@ -155,6 +155,17 @@ data: { type: text, source: {default: "hello"} }
   生产端可以连着发 `create` 与 `patch`；但不能指望渲染器替它重放或改写任何东西。
 - **transport 里没有状态。** 重连就重发布局；页面只是它挂载以来收到那些帧的投影。
 
+### 页面自己的传输
+
+`window.fluxenTransport = { emit(bytes), subscribe(push), close? }`——在 mount 之前装好，它就接管整条链路：boot
+读一次、只搬字节（编解码仍在 Rust，仍由 `data-codec`／`?codec=` 决定），上行下行都经它；重连、退避与恢复正常是
+宿主的责任（ADR 0040 §3）。没装则跑默认的 `LiveWs`：入向静默 5 秒发一次 `__ping__`（宿主回 `__pong__`）、
+静默 10 秒判死并由页面自己关掉 socket、重连从 500ms 起翻倍到 10 秒封顶并加抖动（ADR 0044）。整条策略写在
+`#main` 的一个属性上：`data-transport='{"heartbeat": 0}'` 关掉探针、`{"retry": false}` 关掉重连，两个数字与退避
+表都可以写出来；不认识的键是 mount 报错，不是"设了但没用的旋钮"。装了却缺
+`emit` 或 `subscribe` 是 mount 错误——绝不静默回退到自带的 socket，那会让页面的 JS 与 wasm 各持一条彼此看不见的
+连接。
+
 ## 4. boot，以及它为什么该独立成 crate
 
 今天 `ui_leptos::mount()` 是唯一的 boot：读 `#main` 的 `data-host` / `data-path` / `data-codec` /

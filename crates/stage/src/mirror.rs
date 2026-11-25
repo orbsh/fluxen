@@ -110,6 +110,34 @@ async fn http_send(
     }
 }
 
+/// If this is the transport's `__ping__`, the `__pong__` to send back — in the encoding it arrived in, so
+/// a JSON page stays text and a CBOR page stays binary.
+fn answer_probe(msg: &Message) -> Option<Message> {
+    let pong = content::Outflow {
+        dest: content::PONG_DEST.to_owned(),
+        id: None,
+        data: serde_json::Value::Null,
+    };
+    match msg {
+        Message::Text(text) => {
+            let out: content::Outflow = serde_json::from_str(text).ok()?;
+            if out.dest != content::PING_DEST {
+                return None;
+            }
+            serde_json::to_string(&pong).ok().map(Message::text)
+        }
+        Message::Binary(bytes) => {
+            let cbor = content::codec::ActiveCodec::Cbor;
+            let out: content::Outflow = cbor.decode(bytes.as_ref()).ok()?;
+            if out.dest != content::PING_DEST {
+                return None;
+            }
+            cbor.encode(&pong).ok().map(Message::binary)
+        }
+        _ => None,
+    }
+}
+
 async fn run_peer(socket: WebSocket, ctx: Ctx, is_ui: bool) {
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
     let tx_for_cleanup = tx.clone();
@@ -134,6 +162,12 @@ async fn run_peer(socket: WebSocket, ctx: Ctx, is_ui: bool) {
     let inp = async move {
         while let Some(Ok(msg)) = stream.next().await {
             if !matches!(msg, Message::Text(_) | Message::Binary(_)) {
+                continue;
+            }
+            // The transport's own frames (ADR 0044): answer a probe, and never relay it to other peers —
+            // a heartbeat is between this socket and this server, not page traffic.
+            if let Some(pong) = answer_probe(&msg) {
+                let _ = tx_for_broadcast.send(pong);
                 continue;
             }
             let mut ui_list = ui_b.lock().await;

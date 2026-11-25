@@ -3,6 +3,8 @@
 //! Decoding (`content::codec`) and dispatch (the UI store logic) live on the consumer side;
 //! an implementer only has to send out the `Outflow` from before the uplink event is encoded, and yield the raw downlink frames as a stream.
 
+pub mod reconnect;
+
 use futures::stream::LocalBoxStream;
 use serde_json::Value;
 use std::future::Future;

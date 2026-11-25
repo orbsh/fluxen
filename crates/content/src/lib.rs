@@ -7,6 +7,31 @@ use serde_json::Value;
 /// If the host needs its own `ev` / `sender` / `created`, it carries them in the host's own frame — the three hosts
 /// (stage / prism / reflux) each have their own, and they align only at the `Content` layer.
 
+/// The two dest names the transport owns (ADR 0044). They are not app events: an uplink `__ping__` is
+/// answered with a downlink `__pong__` by the host, and neither ever reaches a handler or a slot. The
+/// `__`-wrapped spelling is what keeps a page event from colliding with them by accident.
+pub const PING_DEST: &str = "__ping__";
+pub const PONG_DEST: &str = "__pong__";
+
+/// Whether a `dest` is the transport's own (and therefore never app traffic).
+pub fn is_reserved(dest: &str) -> bool {
+    dest == PING_DEST || dest == PONG_DEST
+}
+
+/// Whether an **encoded** frame is one of those. Both codecs are tried, because the host answers in the
+/// encoding it likes and the page must not care: a JSON pong on a CBOR page is still a pong (ADR 0044).
+/// The byte scan is only a prefilter — a frame without the marker costs no decode at all, and a frame that
+/// merely *contains* the word is decoded and then judged by its `dest`.
+pub fn is_transport_frame(bytes: &[u8]) -> bool {
+    let marked = bytes.windows(4).any(|w| w == b"__pi" || w == b"__po");
+    if !marked {
+        return false;
+    }
+    [codec::ActiveCodec::Json, codec::ActiveCodec::Cbor]
+        .into_iter()
+        .any(|c| c.decode::<Outflow>(bytes).map(|o| is_reserved(&o.dest)).unwrap_or(false))
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Outflow {
     /// Uplink target: which target on the host the page sends this interaction to (ADR 0023). Not the same name as the downlink `slot` —

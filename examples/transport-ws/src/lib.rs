@@ -1,7 +1,16 @@
-//! WebSocket transport implementation (gloo-net, wasm environment, framework agnostic).
+//! WebSocket transport implementations (wasm, framework agnostic).
 //!
-//! The framework-bound parts (connection-state signals, bridging the byte stream into a framework signal) stay in each UI crate;
-//! this crate only provides the pure `Transport` implementation: connect, emit encodes upstream, on yields downstream frames.
+//! Two of them, deliberately: `WsTransport` is one `open` and no retry (the honest minimum, and what a
+//! host that manages its own socket wants), and `LiveWs` is the one the reference boot uses — heartbeat,
+//! dead-link detection, reconnection with backoff (ADR 0044).
+
+pub mod live;
+
+pub use live::{ConnState, LiveConfig, LiveWs};
+
+// The framework-bound parts (connection-state signals, bridging the byte stream into a framework signal) stay
+// in each UI crate; this crate only provides pure `Transport` implementations: connect, emit encodes upstream,
+// on yields downstream frames.
 
 use content::Outflow;
 use content::codec::ActiveCodec;

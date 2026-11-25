@@ -13,6 +13,8 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unwrap_in_result, clippy::panic_in_result_fn))]
 use leptos::prelude::Get;
 
+mod hook;
+
 use content::codec::{ActiveCodec, CodecType};
 use serde_json::Value;
 use ui_core::Ctx;
@@ -35,6 +37,12 @@ pub fn mount() -> Result<(), String> {
     // The slot this page's options live in (ADR 0038 §2 revised): `data-config` names it, absent means the
     // default, and an empty attribute says the page has no options at all.
     let mut config_slot = Some(ui_core::ctx::DEFAULT_CONFIG_SLOT.to_owned());
+    // The socket's policy (ADR 0044 §2): one `data-transport` object rather than a `data-*` per number —
+    // heartbeat and retry are one decision, and a page that wants the heartbeat off says `{"heartbeat": 0}`.
+    // `None` means the attribute was absent (the defaults apply); `Some` is remembered so a page that also
+    // installed a hook can be told its policy is not being used.
+    let mut live = transport_ws::LiveConfig::default();
+    let mut live_configured = false;
 
     if let Ok(Some(ele)) = doc.query_selector("#main") {
         if let Some(h) = ele.get_attribute("data-host") {
@@ -65,6 +73,17 @@ pub fn mount() -> Result<(), String> {
             && let Ok(t) = c.parse::<CodecType>()
         {
             codec_type = t;
+        }
+        if let Some(raw) = ele.get_attribute("data-transport") {
+            // Malformed JSON, an unknown key, or a dead window inside the probe window: a mount error that
+            // names itself, because a page silently running a different policy than its HTML says is the
+            // failure this whole file is written to avoid.
+            let cfg = transport::reconnect::TransportConfig::parse(raw.trim())
+                .inspect_err(|e| web_sys::console::error_1(&JsValue::from_str(&format!("fluxen: {e}"))))?;
+            live = cfg
+                .policy()
+                .inspect_err(|e| web_sys::console::error_1(&JsValue::from_str(&format!("fluxen: {e}"))))?;
+            live_configured = true;
         }
 
         if let Ok(href) = loc.href()
@@ -103,9 +122,25 @@ pub fn mount() -> Result<(), String> {
         .ok_or("no #main element to mount into")?;
 
     // Build the transport first: failing to connect is a page-level error (Result); don't mount the UI and blow up after.
-    let transport: std::rc::Rc<dyn transport::Transport> = std::rc::Rc::new(
-        transport_ws::WsTransport::new(&url, codec.clone())?,
-    );
+    //
+    // Three modes, decided here and never later (ADR 0040 §3, ADR 0044 §3):
+    //   * the host installed `window.fluxenTransport` → use it (it owns its socket and its retries);
+    //   * otherwise our own live socket → heartbeat + reconnect with backoff;
+    //   * a hook that is present but malformed is an error, not a silent fallback.
+    let transport: std::rc::Rc<dyn transport::Transport> =
+        match hook::from_window(codec.clone())? {
+            Some(hooked) => {
+                if live_configured {
+                    // A knob that silently does nothing is the defect this file keeps refusing: the hook owns
+                    // the socket, so the policy of ours it would have tuned is not in play.
+                    web_sys::console::warn_1(&JsValue::from_str(
+                        "fluxen: data-transport configures the built-in socket; with window.fluxenTransport installed it does nothing — set the heartbeat in the hook",
+                    ));
+                }
+                hooked
+            }
+            None => std::rc::Rc::new(transport_ws::LiveWs::new(&url, codec.clone(), live)?),
+        };
 
     // The UnmountHandle returned by mount_to unmounts the view when dropped — `let _ =` tears the UI down as soon as it mounts
     // (the symptom is exactly "ws works but the UI is blank"). It must be forgotten to live for the whole app lifetime.
