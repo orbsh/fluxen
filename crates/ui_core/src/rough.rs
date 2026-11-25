@@ -160,15 +160,38 @@ fn ops_to_d(set: &OpSet<f32>) -> String {
     d
 }
 
-/// A stable seed per node: its id when it has one, else the id it did not have.
+/// A stable seed per node. What identifies a node is its id when the page gave it one; when it did not,
+/// the id it did not have hashed the same string for every node — so every box on a page without ids was
+/// the same drawing, retraced stroke for stroke. A counter, advanced once per layer and mixed with
+/// whatever does identify the node, makes the wobble a property of the box instead of a property of the
+/// page happening to hold exactly one box.
+///
 /// Never the size — a resize must redraw the same hand, not a new one.
 #[must_use]
 pub fn seed_for(id: Option<&str>) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     id.unwrap_or("").hash(&mut hasher);
+    let nth = NODES.with(|c| {
+        let n = c.get();
+        c.set(n.wrapping_add(0x9E37_79B9_7F4A_7C15));
+        n
+    });
     // 0 is roughr's "pick one for me"; keep it out of the seeded path.
-    hasher.finish() | 1
+    mix(hasher.finish() ^ nth) | 1
+}
+
+/// SplitMix64's finaliser: the counter above is a straight addition, and a hand that walks in step with
+/// the last one is exactly the sameness this is here to break.
+fn mix(mut x: u64) -> u64 {
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^ (x >> 31)
+}
+
+thread_local! {
+    /// One tick per layer built, so two boxes with nothing to tell them apart still get different hands.
+    static NODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0x2545_F491_4F6C_DD1D) };
 }
 
 /// One call per border-capable widget: the layer only exists for a node that asked
@@ -239,6 +262,10 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
     let edges = RwSignal::new(Vec::<String>::new());
     let marks = RwSignal::new(Vec::<String>::new());
     let checks = RwSignal::new(Vec::<String>::new());
+    // The shadow is geometry too: normal mode throws a hard 2px offset (`--shadow-width`), which is the same
+    // box drawn twice — so under the pen it is the same box drawn twice, in a lighter ink, with its own hand.
+    // Nothing in a sketch is blurred; a shadow that is a blur is the one thing the skin cannot draw.
+    let shadows = RwSignal::new(Vec::<String>::new());
     let view_box = RwSignal::new(String::new());
 
     Effect::new(move |_| {
@@ -275,6 +302,7 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
             view_box.set(format!("0 0 {w} {h}"));
             host_mark.set_attribute("data-rough", "ready").ok();
             edges.set(d);
+            shadows.set(border_paths(w, h, seed.rotate_left(41) | 1));
             marks.set(mark_paths(w, h, seed));
             if check {
                 checks.set(check_paths(w, h, seed));
@@ -314,6 +342,13 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
                 .get()
                 .into_iter()
                 .map(|d| leptos::svg::path().class("edge").attr("d", d).into_any());
+            // Drawn first, so the edge's ink sits on top of it: a shadow is behind the thing that casts it.
+            let shadow = shadows
+                .get()
+                .into_iter()
+                .map(|d| leptos::svg::path().class("edge").attr("d", d).into_any())
+                .collect_view();
+            let shade = leptos::svg::g().class("shadow").child(shadow);
             let mark = marks
                 .get()
                 .into_iter()
@@ -324,7 +359,11 @@ fn border_svg(seed: u64, check: bool) -> AnyView {
                 .get()
                 .into_iter()
                 .map(|d| leptos::svg::path().class("check").attr("d", d).into_any());
-            edge.chain(mark).chain(tick).collect_view()
+            std::iter::once(shade.into_any())
+                .chain(edge)
+                .chain(mark)
+                .chain(tick)
+                .collect_view()
         })
         .into_any()
 }
@@ -407,11 +446,14 @@ mod tests {
     }
 
     #[test]
-    fn the_seed_is_never_zero_and_never_empty() {
-        assert_ne!(seed_for(None) & 1, 1u64 ^ 1);
-        assert_ne!(seed_for(Some("card")), 0);
-        assert_eq!(seed_for(Some("card")), seed_for(Some("card")));
-        assert_ne!(seed_for(Some("card")), seed_for(Some("panel")));
+    fn a_seed_belongs_to_the_node_not_to_the_page() {
+        // Two boxes with nothing to tell them apart still get different hands. Without the counter, every
+        // id-less node hashed the same empty string and the page was one drawing repeated.
+        assert_ne!(seed_for(None), seed_for(None));
+        assert_ne!(seed_for(Some("card")), seed_for(Some("card")));
+        // Never 0: that is roughr's "pick one for me", and it would leave the drawing out of our hands.
+        assert_ne!(seed_for(None), 0);
+        assert_eq!(seed_for(None) & 1, 1);
     }
 
     #[test]
