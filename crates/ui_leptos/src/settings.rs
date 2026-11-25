@@ -11,13 +11,6 @@
 use content::codec::CodecType;
 use transport::reconnect::{Policy, TransportConfig};
 
-/// The address's opinion: what a producer can put on a URL it hands out.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Query {
-    pub token: Option<String>,
-    pub codec: Option<String>,
-}
-
 /// The arguments of `mount(el, opts)`. A transport hook is NOT here: a live JS object is not data, so the
 /// caller takes it off the same object and hands it to `hook::wrap` before calling in.
 #[derive(Debug, Clone, Default, serde::Deserialize)]
@@ -27,6 +20,9 @@ pub struct Opts {
     pub path: Option<String>,
     pub codec: Option<String>,
     pub token: Option<String>,
+    /// Extra parameters for the socket's address. The host decides what they mean; the boot only
+    /// joins and escapes them, because the address is the host's fact and not ours (ADR-0046).
+    pub query: Option<std::collections::BTreeMap<String, String>>,
     /// The slot this page's options live in (ADR 0038 §2 revised); an empty string means "no slot at all".
     pub config: Option<String>,
     /// The socket's policy — the shape ADR 0044 §2 defines, so one vocabulary for one decision.
@@ -41,6 +37,8 @@ pub struct Boot {
     pub path: String,
     pub codec: CodecType,
     pub token: Option<String>,
+    /// The host's extra address parameters, already de-duplicated, in their given order.
+    pub query: Vec<(String, String)>,
     /// `None` means "no option slot on this page".
     pub config: Option<String>,
     pub policy: Policy,
@@ -50,11 +48,11 @@ pub struct Boot {
 
 impl Boot {
     /// `Err` is a mount error: a value is present and unusable, which is never downgraded to a default.
-    pub fn resolve(query: &Query, opts: Option<&Opts>) -> Result<Self, String> {
+    pub fn resolve(opts: Option<&Opts>) -> Result<Self, String> {
         let empty = Opts::default();
         let o = opts.unwrap_or(&empty);
 
-        let codec = match o.codec.as_deref().or(query.codec.as_deref()) {
+        let codec = match o.codec.as_deref() {
             None => CodecType::Cbor,
             Some(c) => c
                 .trim()
@@ -86,7 +84,8 @@ impl Boot {
             host: o.host.clone(),
             path,
             codec,
-            token: o.token.clone().or_else(|| query.token.clone()),
+            token: o.token.clone(),
+            query: o.query.clone().unwrap_or_default().into_iter().collect(),
             config,
             policy,
             policy_said: o.policy.is_some(),

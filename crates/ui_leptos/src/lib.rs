@@ -33,7 +33,7 @@ mod settings;
 
 use content::codec::{ActiveCodec, CodecType};
 use serde_json::Value;
-use settings::{Boot, Opts, Query};
+use settings::{Boot, Opts};
 use ui_core::Ctx;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -120,8 +120,7 @@ fn boot(
     let doc = win.document().ok_or("no document")?;
     let loc = doc.location().ok_or("no document.location")?;
 
-    let query = query_of(&loc);
-    let boot = Boot::resolve(&query, opts.as_ref())?;
+    let boot = Boot::resolve(opts.as_ref())?;
 
     let host = match &boot.host {
         Some(h) => h.clone(),
@@ -131,13 +130,16 @@ fn boot(
         CodecType::Json => "json",
         CodecType::Cbor => "cbor",
     };
-    let url = match &boot.token {
-        Some(token) => format!(
-            "ws://{}{}?token={}&codec={}",
-            host, boot.path, token, codec_str
-        ),
-        None => format!("ws://{}{}?codec={}", host, boot.path, codec_str),
-    };
+    // THE ADDRESS IS THE HOST'S (ADR-0046). We do not look at `document.location`: the host read
+    // whatever it had to read (a token in storage, a query parameter, nothing) and handed us the
+    // parts. All we do here is join them, escaped, in a fixed order.
+    let mut url = format!("ws://{}{}?codec={}", host, boot.path, codec_str);
+    if let Some(token) = &boot.token {
+        url.push_str(&format!("&token={}", encode(token)));
+    }
+    for (key, value) in &boot.query {
+        url.push_str(&format!("&{}={}", encode(key), encode(value)));
+    }
     let codec = ActiveCodec::new(boot.codec);
 
     // Three modes, decided here and never later (ADR 0040 §3, ADR 0044 §3, ADR 0045 §2):
@@ -184,17 +186,9 @@ fn boot(
     Ok(())
 }
 
-/// The address's opinion — `?token=` and `?codec=`, the two a producer can put on a URL it hands out.
-fn query_of(loc: &web_sys::Location) -> Query {
-    let mut query = Query::default();
-    if let Ok(href) = loc.href()
-        && let Ok(url) = web_sys::Url::new(&href)
-    {
-        let params = url.search_params();
-        query.token = params.get("token");
-        query.codec = params.get("codec");
-    }
-    query
+/// One address component, escaped the way a query string wants it.
+fn encode(text: &str) -> String {
+    js_sys::encode_uri_component(text).as_string().unwrap_or_else(|| text.to_owned())
 }
 
 /// A mount failure is a state the page must surface: the log *and* the element we were going to mount into.
