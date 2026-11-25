@@ -40,6 +40,26 @@ pub type ValueSlot = RwSignal<Option<Value>>;
 /// the ordinary planes with the ordinary `path`, which is why nothing below it needs machinery of its own.
 pub const DEFAULT_CONFIG_SLOT: &str = "__CONFIG__";
 
+/// The seams a host takes over (ADR 0047). Empty by default: a page that names none behaves exactly
+/// as before, which is how a renderer grows a hook surface without changing anyone's page.
+///
+/// Callbacks are `Rc<dyn Fn>` because `Ctx` is cloned freely across the tree; a hook is shared, not
+/// copied, so the host registers one closure and every clone sees it.
+/// One slot observer: `(name, value)` after the write (ADR 0047 §4).
+pub type SlotObserver = std::sync::Arc<dyn Fn(&str, Option<&Accrete>) + Send + Sync>;
+/// One uplink rewriter: given `(dest, data)`, return a replacement payload or `None` to leave it.
+pub type DestRewriter = std::sync::Arc<dyn Fn(&str, Value) -> Option<Value> + Send + Sync>;
+
+#[derive(Clone, Default)]
+pub struct Hooks {
+    /// `(slot, callback)`: a value landed in that slot — `"*"` matches every name. Called AFTER the
+    /// write, deferred, so a slow observer cannot hold up the render that the write just triggered.
+    pub slots: Vec<(String, SlotObserver)>,
+    /// `(dest, callback)`: the uplink, before it is encoded. `None` leaves the payload as it is; a
+    /// value replaces it. Synchronous by necessity — the frame cannot leave without the answer.
+    pub dests: Vec<(String, DestRewriter)>,
+}
+
 #[derive(Clone)]
 pub struct Ctx {
     pub transport: LeptosTransport,
@@ -62,8 +82,10 @@ pub struct Ctx {
     /// Permanent owner of the slots: the app root scope captured at Ctx::new.
     /// If a slot were built inside the scope of the frame-consuming Effect, an Effect rerun would dispose its storage,
     /// and what is left in the outer map is a dead handle (panic: already disposed).
-    pub(crate) owner: Owner,
+    pub owner: Owner,
     pub loom: Option<Arc<LoomState>>,
+    /// The host's seams (ADR 0047): empty until a page names one.
+    pub hooks: Hooks,
 }
 
 /// The UI side holds the transport plus the downstream frame signal. wasm is single-threaded, shared through Rc.
@@ -123,6 +145,7 @@ impl Ctx {
             drag,
             owner: Owner::current().expect("Ctx::new requires a reactive owner"),
             loom: None,
+            hooks: Hooks::default(),
         };
 
         // Consume downstream frames and dispatch
@@ -160,8 +183,20 @@ impl Ctx {
     }
 
     pub fn set(&self, name: impl AsRef<str>, accrete: Accrete) {
-        self.slot_for_data(name.as_ref())
-            .set(Some(Arc::new(accrete)));
+        let name = name.as_ref();
+        let value = Arc::new(accrete);
+        self.slot_for_data(name).set(Some(value.clone()));
+        // The host's observers run after the write and outside it (ADR 0047 §4): a deferred task, so
+        // the reactive update above is not waiting on anyone's callback. `"*"` matches every name.
+        // NOTE: deliberately inline for now. ADR 0047 §4 asks for deferral (a slow observer must not
+        // hold up the render the write just triggered); `spawn_local` refused the `Rc` here because this
+        // crate is also built for the server, so the deferral needs a runtime-neutral queue. That is the
+        // next slice, not a footnote to leave behind.
+        for (watched, notify) in &self.hooks.slots {
+            if watched == "*" || watched == name {
+                notify(name, Some(&value));
+            }
+        }
     }
 
     /// One way out for every write (ADR 0031 §2): the sink's `scope` decides the
