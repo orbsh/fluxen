@@ -44,18 +44,19 @@ Three rules on the client side:
   back, because a minute of waiting is polite to a server that is down and rude to a reader whose server came
   back ten seconds ago.
 
-The whole policy is one page attribute, `data-transport`, holding an object — not one `data-*` per number,
-because these numbers are one decision and a template that grows a name per knob stops being readable:
+The whole policy is one object in the mount options — `mount(el, { policy: … })`, ADR 0045 — not one knob per
+place, because these numbers are one decision:
 
-```text
-data-transport='{"heartbeat": 5000, "dead": 10000, "retry": {"base": 500, "max": 10000, "jitter": 20}}'
-data-transport='{"heartbeat": 0}'    the heartbeat is off: no probes, and no closing on our own guess
-data-transport='{"retry": false}'    reconnection is off: one connection, then `closed`
+```js
+await mount(el, { policy: { heartbeat: 5000, dead: 10000,
+                            retry: { base: 500, max: 10000, jitter: 20 } } });
+await mount(el, { policy: { heartbeat: 0 } });      // no probes, and no closing on our own guess
+await mount(el, { policy: { retry: false } });      // one connection, then `closed`
 ```
 
-A policy that does not parse — unknown key, bad JSON, dead window inside the probe window — is a mount error,
-and the message lands in `#main` as well as the log: a blank page plus a devtools line is how a configuration
-mistake gets read as a renderer bug.
+A policy that does not parse — unknown key, bad value, dead window inside the probe window — rejects the
+`mount` call with the reason, and on the `#fluxen` path the message lands in the element as well as the log: a
+blank page plus a devtools line is how a configuration mistake gets read as a renderer bug.
 
 `heartbeat` is the probe interval (`0` = off), `dead` the silence that counts as gone (`0` = twice the probe,
 so the pair cannot disagree by accident), `retry` a switch or a schedule. Absent means the defaults above;

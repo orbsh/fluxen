@@ -158,24 +158,29 @@ data: { type: text, source: {default: "hello"} }
 ### 页面自己的传输
 
 `window.fluxenTransport = { emit(bytes), subscribe(push), close? }`——在 mount 之前装好，它就接管整条链路：boot
-读一次、只搬字节（编解码仍在 Rust，仍由 `data-codec`／`?codec=` 决定），上行下行都经它；重连、退避与恢复正常是
+读一次、只搬字节（编解码仍在 Rust，仍由 `mount(el, {codec})`／`?codec=` 决定；也可以把同一个对象作为
+`mount(element, { transport })` 传进来），上行下行都经它；重连、退避与恢复正常是
 宿主的责任（ADR 0040 §3）。没装则跑默认的 `LiveWs`：入向静默 5 秒发一次 `__ping__`（宿主回 `__pong__`）、
 静默 10 秒判死并由页面自己关掉 socket、重连从 500ms 起翻倍到 10 秒封顶并加抖动（ADR 0044）。整条策略写在
-`#main` 的一个属性上：`data-transport='{"heartbeat": 0}'` 关掉探针、`{"retry": false}` 关掉重连，两个数字与退避
+挂载调用里：`policy: {heartbeat: 0}` 关掉探针、`{retry: false}` 关掉重连，两个数字与退避
 表都可以写出来；不认识的键是 mount 报错，不是"设了但没用的旋钮"。装了却缺
 `emit` 或 `subscribe` 是 mount 错误——绝不静默回退到自带的 socket，那会让页面的 JS 与 wasm 各持一条彼此看不见的
 连接。
 
 ## 4. boot，以及它为什么该独立成 crate
 
-今天 `ui_leptos::mount()` 是唯一的 boot：读 `#main` 的 `data-host` / `data-path` / `data-codec` /
-`data-token`，开 `ws://<host><path>`，挂响应式根，并把 `window.fluxen.send` 发布成页面级上行把手。
+`ui_leptos::mount(element, options)` 是唯一的 boot：页面自己指定挂载元素、把 `host` / `path` / `codec` /
+`token` 作为数据传入（调用没说的地方，URL 上的 `?token=`／`?codec=` 仍然生效），它开
+`ws://<host><path>`，挂响应式根，并把 `window.fluxen.send` 发布成页面级上行把手。一页只想用全部缺省、
+不写脚本时，放一个 `<div id="fluxen">` 即可——那是我们的 id，不是宿主的 `#main`（ADR 0045）。自己调 `init` 的页面
+必须把 wasm 路径传进去（`init('/vendor/fluxen/ui_leptos-<hash>_bg.wasm')`）：带哈希的文件名只有 trunk 生成的页面知道，
+而 `init()` 不带参数会去找 `ui_leptos_bg.wasm`，那个文件不存在。
 这对**钉住的发布产物**是好 boot，对"在自己二进制里重新包装核心"的宿主是不合身的。
 
 决定（2026-10-29）：把 `ui_leptos` 拆成
 
-- **`ui-core`**——`ctx` / `render` / `components` / `widgets`。没有 `#main`，没有 `transport-ws`。
-- **`boot`**——`#main` 解析、WS 接线、`mount()`、`window.fluxen.send`。
+- **`ui-core`**——`ctx` / `render` / `components` / `widgets`。不挂载，没有 `transport-ws`。
+- **`boot`**——`mount(element, options)`、`#fluxen` 默认目标、WS 接线、`window.fluxen.send`。
 
 这样 `fluxen` 门面才有内容：它总是重导出 `ui-core`，`boot` 走一个 feature。三种消费方式从此有名字，
 不靠口口相传：
@@ -183,8 +188,8 @@ data: { type: text, source: {default: "hello"} }
 | 方式 | 谁 | 复用 | 自备 |
 |:--|:--|:--|:--|
 | 核心 + 自己的 boot | 今天没有消费者（这条路留给要进程内包装核心的宿主） | `ui-core`、`accrete`、`content`、`forcegraph`、`ui-assets` | 自己的 transport、自己的页面入口 |
-| boot + 自己的帧 | prism（Rust，挂产物）、reflux（Python，钉住产物） | 由示例里的 boot 构建出的 loom（`#main` 解析、WS、`window.fluxen.send`） | 帧本身，走自己的 socket；prism 另备静态根与 `/app.css` |
-| 我们的 boot + 你的 transport | 需要 JS 传输的宿主（ADR 0040） | 示例里的 boot 构建出的 loom（`#main` 解析、`Ctx`、`mount_to`、`window.fluxen.send`） | 只有 transport：`window.fluxenTransport` 的 `emit`/`subscribe`/`close?`，字节进出；codec 仍归 Rust |
+| boot + 自己的帧 | prism（Rust，挂产物）、reflux（Python，钉住产物） | 由示例里的 boot 构建出的 loom（`mount(el, opts)`、WS、`window.fluxen.send`） | 帧本身，走自己的 socket；prism 另备静态根与 `/app.css` |
+| 我们的 boot + 你的 transport | 需要 JS 传输的宿主（ADR 0040） | 示例里的 boot 构建出的 loom（`mount(el, opts)`、`Ctx`、`mount_to`、`window.fluxen.send`） | 只有 transport：`window.fluxenTransport` 的 `emit`/`subscribe`/`close?`，字节进出；codec 仍归 Rust |
 
 两条路的判据是「谁建 socket」，不是「谁写 Rust」：prism 用 Rust 写的是**生产端**（网关、身份、turn），
 渲染器那一侧它和 reflux 一样只挂产物——`crates/prism` 唯一的 fluxen 依赖是 `content`（线上词汇），
@@ -202,7 +207,7 @@ window.fluxenTransport = {
 }
 ```
 
-五条规矩：**在 mount 之前读一次**（`Ctx::new` 构造时就吃掉 transport，之后不能换）；**只搬字节**——codec 仍归 Rust，仍来自 `#main[data-codec]` / `?codec=`；**挂了但形状不对 = mount 报错**，绝不静默回退到我们的 WS（那会让页面以为 JS 掌控传输、而 wasm 自己开了一条）；**重连归钩子**，框架从不重试；两种模式下 `window.fluxen.send` 都在，页面代码不知道用的是哪条传输。代价只有一条：钩子模式下每帧多一次 JS↔wasm 跨界，而默认路径一分钱不付。
+五条规矩：**在 mount 之前读一次**（`Ctx::new` 构造时就吃掉 transport，之后不能换）；**只搬字节**——codec 仍归 Rust，仍来自 `mount(el, {codec})` / `?codec=`；**挂了但形状不对 = mount 报错**，绝不静默回退到我们的 WS（那会让页面以为 JS 掌控传输、而 wasm 自己开了一条）；**重连归钩子**，框架从不重试；两种模式下 `window.fluxen.send` 都在，页面代码不知道用的是哪条传输。代价只有一条：钩子模式下每帧多一次 JS↔wasm 跨界，而默认路径一分钱不付。
 
 ## 5. 实例一：prism，会场
 

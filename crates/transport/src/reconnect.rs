@@ -46,13 +46,12 @@ impl Heartbeat {
     }
 }
 
-/// The page's transport knobs, as one `data-transport` attribute carries them.
+/// The page's transport knobs, as `mount(el, opts).policy` carries them (ADR 0045 §2).
 ///
 /// ```text
-/// data-transport='{"heartbeat": 5000, "dead": 10000, "retry": {"base": 500, "max": 10000, "jitter": 20}}'
-/// data-transport='{"heartbeat": 0}'    no probes: a page that would rather show a stale view than close a
-///                                      socket on its own guess
-/// data-transport='{"retry": false}'    a socket that is never re-attached: single-session pages, and tests
+/// {"heartbeat": 5000, "dead": 10000, "retry": {"base": 500, "max": 10000, "jitter": 20}}
+/// {"heartbeat": 0}    no probes: a page that would rather show a stale view than close a socket on its own guess
+/// {"retry": false}    a socket that is never re-attached: single-session pages, and tests
 /// ```
 ///
 /// One attribute, not five, because these numbers are one policy: a template that grows
@@ -131,7 +130,7 @@ impl TransportConfig {
     /// Read the attribute. Malformed JSON, an unknown key, or a self-contradicting heartbeat is an error the
     /// boot turns into a mount error — never a silently different policy.
     pub fn parse(raw: &str) -> Result<Self, String> {
-        serde_json::from_str(raw).map_err(|e| format!("data-transport: {e}"))
+        serde_json::from_str(raw).map_err(|e| format!("transport policy: {e}"))
     }
 
     /// Resolve to the two halves, each optional.

@@ -183,28 +183,34 @@ appending does not remount the rows above it.
 
 ### The page's own transport
 
-`window.fluxenTransport = { emit(bytes), subscribe(push), close? }` — install it before mount and it owns the
-whole link: the boot reads it once, moves only bytes (the codec stays in Rust and still comes from
-`data-codec` / `?codec=`), and both directions go through it. Retry, backoff and resumption are then the
-host's business (ADR 0040 §3). Without it the default `LiveWs` runs: a `__ping__` after 5 s of inbound
-silence (the host answers `__pong__`), a dead link declared after 10 s of silence and closed by the page
-itself, and reconnection from 500 ms doubling to a 10 s cap with jitter (ADR 0044). The policy is one
-attribute on `#main` — `data-transport='{"heartbeat": 0}'` turns the probes off, `{"retry": false}` turns
-reconnection off, and both numbers plus the schedule can be written out; an unknown key is a mount error
-rather than a knob that does nothing. A hook that is present but missing `emit` or `subscribe` is a mount error — never a silent fallback to our own socket, which would
+`window.fluxenTransport = { emit(bytes), subscribe(push), close? }` — or the same object passed as
+`mount(element, { transport })` — install it before mount and it owns the whole link: the boot reads it once,
+moves only bytes (the codec stays in Rust and still comes from `mount(el, {codec})` / `?codec=`), and both
+directions go through it. Retry, backoff and resumption are then the host's business (ADR 0040 §3). Without it
+the default `LiveWs` runs: a `__ping__` after 5 s of inbound silence (the host answers `__pong__`), a dead link
+declared after 10 s of silence and closed by the page itself, and reconnection from 500 ms doubling to a 10 s
+cap with jitter (ADR 0044). The policy travels with the mount call — `policy: {heartbeat: 0}` turns the probes
+off, `{retry: false}` turns reconnection off, and both numbers plus the schedule can be written out; an unknown
+key rejects the mount rather than being a knob that does nothing. A hook that is present but missing `emit` or `subscribe` is a mount error — never a silent fallback to our own socket, which would
 leave the page's JS and its wasm each holding a socket that the other cannot see.
 
 ## 4. The boot, and why it becomes its own crate
 
-Today `ui_leptos::mount()` is the only boot: it reads `#main`'s `data-host` / `data-path` /
-`data-codec` / `data-token`, opens `ws://<host><path>`, mounts the reactive root, and publishes
-`window.fluxen.send` as the page-level uplink. That is a good boot for a **pinned loom** and a
+`ui_leptos::mount(element, options)` is the only boot: the page names the element and passes `host` / `path` /
+`codec` / `token` as data (`?token=` and `?codec=` on the URL still apply where the call is silent), it opens
+`ws://<host><path>`, mounts the reactive root, and publishes `window.fluxen.send` as the page-level uplink. A
+page that wants all the defaults and no script gets them by having `<div id="fluxen">` — our id, not the host's
+`#main` (ADR 0045). A page that calls `init` itself must pass the wasm's path
+(`init('/vendor/fluxen/ui_leptos-<hash>_bg.wasm')`): the hashed name is only known to the page trunk generates,
+and `init()` with no argument looks for `ui_leptos_bg.wasm`, which does not exist. That is a good boot for a
+**pinned loom** and a
 bad fit for a host that re-wraps the core in its own binary.
 
 Decision (2026-10-29): split `ui_leptos` into
 
-- **`ui-core`** — `ctx` / `render` / `components` / `widgets`. No `#main`, no `transport-ws`.
-- **`boot`** — the `#main` reader, the WS transport wiring, `mount()`, `window.fluxen.send`.
+- **`ui-core`** — `ctx` / `render` / `components` / `widgets`. No mounting, no `transport-ws`.
+- **`boot`** — `mount(element, options)`, the `#fluxen` default target, the WS transport wiring,
+  `window.fluxen.send`.
 
 `fluxen` then has something to be a facade about: it re-exports `ui-core` always, and `boot` behind
 a feature. The three consumption styles get names instead of folklore:
@@ -212,8 +218,8 @@ a feature. The three consumption styles get names instead of folklore:
 | style | who | reuses | supplies |
 |:--|:--|:--|:--|
 | core + own boot | nobody today (the road is there for a host that wraps the core in-process) | `ui-core`, `accrete`, `content`, `forcegraph`, `ui-assets` | its own transport, its own page entry |
-| boot + own frames | prism (Rust, serves the artifact), reflux (Python, pinned loom) | the loom built from the example boot (`#main`, WS, `window.fluxen.send`) | the frames, over its own socket; prism also the static root and `/app.css` |
-| our boot + your transport | a host that needs a JS transport (ADR 0040) | the loom built from the example boot (`#main`, `Ctx`, `mount_to`, `window.fluxen.send`) | only the transport: `window.fluxenTransport`'s `emit`/`subscribe`/`close?`, bytes in and out; the codec stays in Rust |
+| boot + own frames | prism (Rust, serves the artifact), reflux (Python, pinned loom) | the loom built from the example boot (`mount(el, opts)`, WS, `window.fluxen.send`) | the frames, over its own socket; prism also the static root and `/app.css` |
+| our boot + your transport | a host that needs a JS transport (ADR 0040) | the loom built from the example boot (`mount(el, opts)`, `Ctx`, `mount_to`, `window.fluxen.send`) | only the transport: `window.fluxenTransport`'s `emit`/`subscribe`/`close?`, bytes in and out; the codec stays in Rust |
 
 The test for the two rows is who builds the socket, not who writes Rust: what prism writes in Rust is
 the **producer** (gateway, identity, turns). On the renderer's side it serves the artifact, exactly as
@@ -236,7 +242,7 @@ window.fluxenTransport = {
 ```
 
 Five rules: **read once, before mount** (`Ctx::new` consumes the transport, so it cannot be swapped later);
-**bytes only** — the codec stays in Rust and still comes from `#main[data-codec]` / `?codec=`; **present but
+**bytes only** — the codec stays in Rust and still comes from `mount(el, {codec})` / `?codec=`; **present but
 malformed is a mount error**, never a silent fall back to our WebSocket (which would leave a page believing JS owns
 the socket while wasm opened its own); **retry belongs to the hook** — the framework never retries; and
 `window.fluxen.send` exists in both modes, so page code never learns which transport is running. The only cost is

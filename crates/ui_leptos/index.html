@@ -10,7 +10,9 @@
 </head>
 <body>
   <link data-trunk rel="copy-dir" href="assets" />
-  <link data-trunk rel="rust" data-bin="ui_leptos" />
-  <div id="main"></div>
+  <link data-trunk rel="rust" />
+  <!-- Our own id: `#fluxen` means "mount me with the defaults". Any page that configures the boot calls
+       mount(element, options) from its own script instead. -->
+  <div id="fluxen"></div>
 </body>
 </html>

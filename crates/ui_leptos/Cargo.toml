@@ -7,8 +7,10 @@ name = "ui_leptos"
 version = "0.1.0"
 edition = "2024"
 
+### The wasm entry point is the LIBRARY, not a binary: the same artifact carries the automatic start
+### (`#[wasm_bindgen(start)]`, the zero-JS path) and the explicit `mount(element, options)` export.
 [lib]
-crate-type = ["rlib"]
+crate-type = ["cdylib", "rlib"]
 
 # The reference boot: page shell + WS wiring + the JS uplink handle. Rendering
 # lives in `ui-core`; nothing here is a library a consumer depends on (see
@@ -22,7 +24,9 @@ transport-ws.workspace = true
 console_error_panic_hook.workspace = true
 js-sys.workspace = true
 leptos.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+serde-wasm-bindgen = "0.6.5"
 tracing.workspace = true
 tracing-wasm.workspace = true
 wasm-bindgen.workspace = true

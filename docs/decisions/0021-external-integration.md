@@ -19,7 +19,7 @@ prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}
 实现——它的 mirror 不看内容，只转发原始帧。宿主就应当是这个形状：说同样的帧，而不是要求渲染器
 换一套协议。
 
-拆分 `ui_leptos` 的动机是同一个：`mount()` 把 `#main` 解析、`transport-ws` 与页面级上行把手写死
+拆分 `ui_leptos` 的动机是同一个：`mount()` 把配置解析、`transport-ws` 与页面级上行把手写死
 在渲染核心旁边，于是"核心 + 自己的 boot"与"boot + 自己的帧"两种方式里只有后者能成立，`fluxen`
 门面也就没有内容可包。
 
@@ -32,7 +32,7 @@ prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}
    这个契约里：它们住在宿主自己的信封内，渲染器不认——`ev` 通道（ADR 0003）随信封一起归宿主，
    见决策 6。
 3. **boot 从核心拆出。** `ui_leptos` → `ui-core`（`ctx` / `render` / `components` / `widgets`，
-   无 `#main`、无 `transport-ws`）+ `boot`（`#main` 解析、WS 接线、`mount()`、
+   无挂载/配置、无 `transport-ws`）+ `boot`（`mount(element, options)`、`#fluxen` 默认目标、WS 接线、
    `window.fluxen.send`）。`fluxen` 门面总是重导出 `ui-core`，`boot` 走 feature。
 4. **布局是数据，且是第一个视图操作。** 宿主以普通 `create` 帧下发，没有"布局信封"；客户端不需要
    为布局留一条与其它视图操作不同的路径。
@@ -60,7 +60,7 @@ prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}
 | `crates/` | `fluxen`（门面） | 消费者按这一个名字依赖 |
 | `crates/` | `stage` | **例外**：调试工具（mirror/console/静态服务），是给人用的工具，不是示例 |
 | `crates/transport-ws` | `transport-ws` | 92 行，唯一的消费者是 boot；WS 只是一个宿主的倾向，不是协议 |
-| `crates/ui_leptos` | boot（`mount()`、`#main` 解析、`window.fluxen.send`、`main.rs`、`index.html`、trunk 配置、assets/modules） | 发布产物的那半；reflux 用产物、prism 自写 boot，没有人按名字依赖它 |
+| `crates/ui_leptos` | boot（`mount(element, options)`、`#fluxen` 默认目标、`window.fluxen.send`、`index.html`、trunk 配置、assets） | 发布产物的那半；reflux 用产物、prism 自写 boot，没有人按名字依赖它 |
 
 目录名就是包名：`crates/ui_leptos` 的产物是 `ui_leptos-<hash>.js` 与 `ui_leptos-<hash>_bg.wasm`，
 reflux 在 `www/static/vendor/fluxen/` 里钉住的就是这两个名字，改名是一次跨仓 re-pin。
