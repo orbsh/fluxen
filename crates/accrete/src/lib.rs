@@ -875,7 +875,6 @@ pub struct Button {
     pub attrs: Option<ButtonAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
-    pub sink: Option<Sink>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
