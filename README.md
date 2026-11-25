@@ -21,6 +21,35 @@ loom) is a documented contract, not folklore: [docs/external-integration.md](doc
 (English) · [中文](docs/external-integration.zh-CN.md). The rule it states: the renderer never adapts
 to a host — the host supplies a transport and a boot and speaks the renderer's wire.
 
+## Mounting it in a page
+
+The renderer is a library, not an application: a page names an element and passes its settings as data (ADR 0045). There are no attributes, so the question "which of my two configurations wins" does not exist — the call outranks the address (`?codec=`, `?token=`, which a producer can put on a URL it hands out), quietly, because an override is not a disagreement.
+
+```html
+<div id="app"></div>
+<script type="module">
+  import init, { mount } from '/vendor/fluxen/ui_leptos-<hash>.js';
+  await init({ module_or_path: '/vendor/fluxen/ui_leptos-<hash>_bg.wasm' });
+  await mount(document.querySelector('#app'), { codec: 'json', path: '/ws' });
+</script>
+```
+
+Every field is optional:
+
+- `host` — where the socket goes; absent means the document's own host.
+- `path` — the socket's path (default `/channel`), which must start with `/`.
+- `codec` — what this page *sends*: `cbor` (default) or `json`. What arrives is detected per frame, so a gateway may mix encodings freely.
+- `token` — appended to the socket URL; the one setting a link can carry.
+- `config` — the slot this page's options live in (`__CONFIG__` by default); an empty string says this page has no option slot at all (ADR 0038).
+- `policy` — the socket's own numbers: `{heartbeat, dead, retry: {base, max, jitter}}` (ADR 0044 §2). `heartbeat: 0` stops probing *and* stops the page closing itself on silence; `retry: false` means one connection, then a terminal `closed` rather than pretending to reconnect.
+- `transport` — a live hook object, `{emit(bytes), subscribe(push)}`, when the page brings its own socket (ADR 0040). Same shape as `window.fluxenTransport`, but by value: a live object is not data.
+
+`<div id="fluxen">` means "mount me with the defaults", and there loading the module is the whole integration — `init` runs that path. It is our id, not a page landmark: a host's `#main` mounts nothing, so "this page has a renderer" and "this page configures a renderer" never overlap and no opt-out flag exists to arbitrate them.
+
+A value that is present and unusable is a refusal, not a fallback: an unknown key, a codec that is neither `json` nor `cbor`, a `path` without a leading `/`, a policy whose dead window sits inside its probe window. `mount` throws with the reason, and on the `#fluxen` path the same text also lands in the element — a blank page plus one devtools line is how a configuration mistake gets read as a renderer bug.
+
+Uplinks go through `window.fluxen.send(event, data)`, or through the host's own runtime: reflux drives the renderer from its client runtime and never touches that handle.
+
 ## Data binding
 
 Two types, one per direction: a read is a `Source` — `{slot?, scope?, path?, default?}` — and a write is a
