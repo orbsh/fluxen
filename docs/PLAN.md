@@ -40,7 +40,7 @@
 - [x] 32 — 字段的 `sink` 整个删掉（shape 也不再接受，`Input`/`Select` deny unknown keys）：字段只剩 `source` + `kind`（number/bool/text/password，缺省 text，元素类型与解析同一处声明）；本地落地归 loom（`sink: {scope: local, path: /}` 把打包对象并进槽根，`write_local_at` 的根路径按对象合并）；例子里的 13 处字段 sink 全部改成 loom — ADR 0032 §2 — 2026-11-24
 - [x] 34 — 嵌套 loom 的打包键只认 `tag`：`id` 是身份（按它匹配答复）、`dest` 是它自己发送的去向，两者都不是名字，`loom_key` 不再从 `id` 后备；无 `tag` 的内层 loom 不进外层的包（它的字段留在自己包里，自己有 `dest` 就自己发）；顶层 `tag` 不读 — ADR 0032 §4 — 2026-11-24
 - [x] 33 — 读和写分成两个类型：`Source {slot, scope, path, default}` / `Sink {dest, scope, path}`（`dest` 与上行帧同名，`emit` 不再翻译；sink 没有 `default`，两个类型各自 deny unknown keys，`sink: {slot: …}` 解码即错）；例子/文档 29 处 `sink: {slot: …}` 改 `dest`，两条死 `default` 一并删掉 — ADR 0039（0031 §2 加 amend）— 2026-11-24
-- [ ] 32 — 皮肤的边角：`select` 的稳定子树、`button` 的类名、input 保持 CSS 边（void 元素装不下子节点）— ADR 0038 §4 — 待做
+- [x] 32 — 皮肤的边角：`select` 的层是盒子的子节点、行在它里面重建（换选项不重画）；`button` 的 `attrs.class` 接进来了（原来写死类名）；`input` 是 void 元素装不下子节点，所以画在上一层：`span.rough-host` 平时 `display: contents`、进皮肤后承载盒子和层。宿主是布局的一部分，两处曾错：它必须是**块级**的（inline 宿主会收缩包裹子节点，画出的盒子跟着子元素宽度走，于是"输入框宽度是固定的"），以及**开关不吃它被给的宽度**（`is-checkbox`：`flex: 0 0 auto` + `align-self: center` + 子元素 `1.15em`；此前 `bool` 字段带着所有字段共有的 `flex` 类，复选框长成整行宽、对勾浮在中间）。对勾也用同一支笔画（`path.check`，CSS 那份填色字形在皮肤下 `content: none`）— ADR 0038 §4 — 2026-11-25
 - [x] 35 — `move` 动作：把一个**已经在**列表里的行挪到另一个位置，行本身不重建 — ADR 0005 加一节 — 2026-11-24
 - [x] 36 — 节点改名 `bundle` → `loom`：`bundle` 只说"打包"，对"收集输入"与"字段按 `tag` 命名"两层都沉默，读起来又像是 `frame`/`panel`/`tiles` 那一类"装东西的盒子"；`loom` 一次说出三件事——线=字段、织法=`tag`→键、布=送出的对象，且织机天然可嵌套（ADR 0032 §4）。`bus` 否（Prism 自己就是总线、共享通路不属于哪一组、总线不嵌套）、`trunk` 否（本仓构建工具、git 主干、方向朝根而载荷离树） — ADR 0032 §1 — 2026-11-25
 - [x] 37 — 字段的时钟：`input.emit` = `{debounce: ms}` | `{throttle: ms}`，闭枚举互斥，缺省 `{debounce: 250}`；`{debounce: 0}` 回到"每键一帧"。被定时的只有"通知 loom"，字段自己的显示信号照旧每键同步写，所以打字不等窗口；`submit` 先取消挂起的窗口再打包（Enter／按钮永远送屏幕上的值），`reset` 也取消（不让旧值复活） — ADR 0032 §8（§3 加"两个 owner"段）— 2026-11-25
@@ -54,7 +54,7 @@
 
 ## 开着
 
-- [ ] 模块实例在宿主重建或换布局后不进 `unmount` — 2026-10-23 实测，未修
+- [ ] 模块实例在宿主重建或换布局后不进 `unmount` — 2026-10-23 实测，未修；2026-11-25 复核：`on_cleanup` 已按实例登记 `unmount(cid)`（`components/canvas.rs`），宿主重建时是否真的触发仍未测
 
 ## 约定（非代码）
 
@@ -69,7 +69,7 @@
 - [x] 信封归宿主 — ADR 0021 决策 6
 - [x] 线上槽位的词是 `slot` — ADR 0022
 - [x] 上行目标叫 `dest` — ADR 0023
-- [ ] 传输是一个运行时钩子：`window.fluxenTransport = { emit, subscribe, close? }`，mount 前读一次、只搬字节（codec 仍归 Rust）、形状不对即 mount 报错且不静默回退、重连归钩子；默认路径仍是 `WsTransport`，reflux/prism 不装钩子 — ADR 0040 — 待做
+- [x] 传输是一个运行时钩子：`{ emit(bytes), subscribe(push) }`，挂载前读一次（`window.fluxenTransport`，或作为 `mount` 的 `transport` 选项按值传）、只搬字节（codec 仍归 Rust）、形状不对即挂载报错且不静默回退、心跳与重连归钩子（没有 `close`：socket 是钩子的，不是我们的）；默认路径仍是内置的 `LiveWs`，reflux/prism 不装钩子 — ADR 0040，ADR 0045 §2 — 2026-11-25
 
 ## 已修 — 这条路付过的代价
 

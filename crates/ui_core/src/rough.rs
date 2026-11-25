@@ -92,6 +92,45 @@ pub fn mark_paths(w: f32, h: f32, seed: u64) -> Vec<String> {
     paths
 }
 
+/// The tick inside a switch: two segments, down-right then up-right, drawn by the same two hands as
+/// everything else. A switch is the one box whose *content* is a stroke — the CSS version paints a
+/// `clip-path` shape, which is a filled glyph, and a filled glyph next to hand-drawn borders reads as
+/// two different hands on one page. The path is always here and the stylesheet decides when it shows
+/// (`input:checked` is a fact the stylesheet can see for itself), so nothing has to watch the state.
+#[must_use]
+pub fn check_paths(w: f32, h: f32, seed: u64) -> Vec<String> {
+    let km = 1.6; // the tick sits a little inside the edge the pen drew
+    let points = [
+        (0.22 * w + km, 0.52 * h),
+        (0.42 * w + km, 0.74 * h),
+        (0.80 * w, 0.26 * h),
+    ];
+    let mut paths = Vec::new();
+    for s in both_hands(seed.rotate_left(23) | 1) {
+        let Ok(opts) = OptionsBuilder::default()
+            .seed(s)
+            .roughness(0.8)
+            .bowing(0.4)
+            .disable_multi_stroke(true)
+            .build()
+        else {
+            continue;
+        };
+        let pen = Generator::default();
+        for (a, b) in [(points[0], points[1]), (points[1], points[2])] {
+            paths.extend(
+                pen.line(a.0, a.1, b.0, b.1, &Some(opts.clone()))
+                    .sets
+                    .iter()
+                    .filter(|set| set.op_set_type == OpSetType::Path)
+                    .map(ops_to_d)
+                    .filter(|d| !d.is_empty()),
+            );
+        }
+    }
+    paths
+}
+
 /// One op set as SVG path data. Three ops are all a stroked outline uses; an op
 /// whose arity is anything else is skipped rather than trusted — a border that
 /// misses a segment still looks hand-drawn, a panic does not.
@@ -140,25 +179,34 @@ pub fn border_layer(ctx: &Ctx, class: Option<&Vec<String>>, id: Option<&str>) ->
     if !sketchy {
         return ().into_any();
     }
-    sketch_layer(ctx, seed_for(id))
+    sketch_layer(ctx, seed_for(id), false)
 }
 
 /// For a widget whose border is not something the page asked for but something its
 /// element type always paints — a field, a select, a button. There is no `is-border`
 /// to look for, so the only question left is the skin, which `sketch_layer` answers.
 pub fn drawn_border(ctx: &Ctx, id: Option<&str>) -> AnyView {
-    sketch_layer(ctx, seed_for(id))
+    sketch_layer(ctx, seed_for(id), false)
 }
 
 /// A box for a widget that cannot hold its own drawing (a field is void, a textarea holds
 /// text). The wrapper is `display: contents` until the skin is on, so normal mode has no
 /// box of its own and the child lays out exactly as it did; sketching turns it into the
 /// host the drawing needs and takes the child's painted edge away.
-pub fn field_host(ctx: &Ctx, id: Option<&str>, child: AnyView) -> AnyView {
+pub fn field_host(ctx: &Ctx, id: Option<&str>, check: bool, child: AnyView) -> AnyView {
+    // `is-checkbox` is the stylesheet's handle on "this host holds a switch": a switch keeps its own
+    // size in both skins (`flex: 0 0 auto` here, `width: 1.15em` on the child), while every other field
+    // takes the width it is given. Without the marker the two cases cannot be told apart from CSS, since
+    // the host has no attributes of its own to read.
+    let class = if check {
+        "rough-host is-checkbox"
+    } else {
+        "rough-host"
+    };
     span()
-        .class("rough-host")
+        .class(class)
         .child(child)
-        .child(drawn_border(ctx, id))
+        .child(sketch_layer(ctx, seed_for(id), check))
         .into_any()
 }
 
@@ -170,14 +218,15 @@ pub fn sketching(ctx: &Ctx) -> bool {
     matches!(ctx.config_get("sketch"), Some(Value::Bool(true)))
 }
 
-/// The layer, mounted only while the skin asks for it.
-pub fn sketch_layer(ctx: &Ctx, seed: u64) -> AnyView {
+/// The layer, mounted only while the skin asks for it. `check` adds the tick a switch shows when it is
+/// checked — a stroke of the same pen, not a filled glyph.
+pub fn sketch_layer(ctx: &Ctx, seed: u64, check: bool) -> AnyView {
     let ctx = ctx.clone();
     (move || {
         // The page's options are ordinary values now (ADR 0038 §2 revised): `sketch` is a bool a control
         // can own, and the far side's `true` is what the producer sends when it builds the page.
         let sketch = matches!(ctx.config_get("sketch"), Some(Value::Bool(true)));
-        sketch.then(|| border_svg(seed))
+        sketch.then(|| border_svg(seed, check))
     })
     .into_any()
 }
@@ -185,10 +234,11 @@ pub fn sketch_layer(ctx: &Ctx, seed: u64) -> AnyView {
 /// An absolutely positioned `<svg>` over its host box, redrawn when the box
 /// resizes. `data-rough="ready"` on the host is what lets the stylesheet drop the
 /// CSS border's paint; until it is there, the box keeps its plain border.
-fn border_svg(seed: u64) -> AnyView {
+fn border_svg(seed: u64, check: bool) -> AnyView {
     let svg_ref = NodeRef::<svg::Svg>::new();
     let edges = RwSignal::new(Vec::<String>::new());
     let marks = RwSignal::new(Vec::<String>::new());
+    let checks = RwSignal::new(Vec::<String>::new());
     let view_box = RwSignal::new(String::new());
 
     Effect::new(move |_| {
@@ -226,6 +276,9 @@ fn border_svg(seed: u64) -> AnyView {
             host_mark.set_attribute("data-rough", "ready").ok();
             edges.set(d);
             marks.set(mark_paths(w, h, seed));
+            if check {
+                checks.set(check_paths(w, h, seed));
+            }
         });
         match web_sys::ResizeObserver::new(cb.as_ref().unchecked_ref()) {
             Ok(ro) => {
@@ -265,14 +318,20 @@ fn border_svg(seed: u64) -> AnyView {
                 .get()
                 .into_iter()
                 .map(|d| leptos::svg::path().class("mark").attr("d", d).into_any());
-            edge.chain(mark).collect_view()
+            // The tick is a stroke like the rest: same pen, same `currentColor`, and the stylesheet
+            // shows it when the switch says `:checked`.
+            let tick = checks
+                .get()
+                .into_iter()
+                .map(|d| leptos::svg::path().class("check").attr("d", d).into_any());
+            edge.chain(mark).chain(tick).collect_view()
         })
         .into_any()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{border_paths, mark_paths, ops_to_d, seed_for};
+    use super::{border_paths, check_paths, mark_paths, ops_to_d, seed_for};
     use roughr::core::{Op, OpSet, OpSetType, OpType};
 
     #[test]
@@ -320,6 +379,31 @@ mod tests {
         );
         assert_eq!(marks, mark_paths(120.0, 60.0, 7));
         assert_ne!(marks, mark_paths(120.0, 60.0, 8));
+    }
+
+    #[test]
+    fn the_tick_is_stroked_inside_the_box() {
+        let tick = check_paths(20.0, 20.0, 7);
+        assert!(!tick.is_empty(), "no tick for a real switch");
+        // Two segments, two hands: four passes at the very least, and each one starts with a move.
+        assert!(
+            tick.len() >= 4,
+            "a tick is retraced like every other line: {tick:?}"
+        );
+        for one in &tick {
+            assert!(
+                one.starts_with('M'),
+                "a pass must start with a move: {one:?}"
+            );
+            for n in one.split_whitespace().filter_map(|s| s.parse::<f32>().ok()) {
+                assert!(
+                    (-4.0..=24.0).contains(&n),
+                    "the tick left its box: {n} in {one:?}"
+                );
+            }
+        }
+        assert_eq!(tick, check_paths(20.0, 20.0, 7));
+        assert_ne!(tick, check_paths(20.0, 20.0, 8));
     }
 
     #[test]
