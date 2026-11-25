@@ -54,6 +54,7 @@
 
 ## 开着
 
+- [x] 把"面"提升为框架原语：`.is-card`（`--surface` 填充 + 圆角 + `--card-pad` 内边距）进 `utilities`，皮肤下改由笔描边——正常模式靠色阶、线框靠笔，两套皮肤各自用自己有的工具分层；`border_layer` 认 `is-card`，`position: relative` 列表也补上（否则绝对定位的层落到页面上，三张卡被画成一条横线，实测过）— ADR 0038 §3-4 — 2026-11-25；`.round` 仍只在 `.is-border` 旁生效，暂不解绑
 - [ ] 模块实例在宿主重建或换布局后不进 `unmount` — 2026-10-23 实测，未修；2026-11-25 复核：`on_cleanup` 已按实例登记 `unmount(cid)`（`components/canvas.rs`），宿主重建时是否真的触发仍未测
 
 ## 约定（非代码）
