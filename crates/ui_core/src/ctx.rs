@@ -1,4 +1,4 @@
-use crate::hooks::BundleState;
+use crate::hooks::LoomState;
 use crate::render::dispatch;
 use accrete::{Accrete, AccreteOps};
 use content::codec::ActiveCodec;
@@ -18,10 +18,10 @@ static TMPL: LazyLock<RwLock<accrete::template::Templates>> =
 
 /// Globally shared state container: owns layout, data, lists, and transport send/receive.
 ///
-/// `bundle` is the render-time environment: `bundle_` injects its own
-/// `BundleState` and clones `Ctx` for the subtree, so ownership follows the
+/// `loom` is the render-time environment: `loom_` injects its own
+/// `LoomState` and clones `Ctx` for the subtree, so ownership follows the
 /// clone chain; sibling branches each keep their own clone and cannot pollute
-/// each other. Nested bundles shadow the outer one.
+/// each other. Nested looms shadow the outer one.
 /// per-key signal slot: the outer map holds only handles (the outer map is written only when the key set changes),
 /// values are published through the inner signal — an update to one key does not notify subscribers of other keys.
 /// List slot: one shared, immutable snapshot.
@@ -63,7 +63,7 @@ pub struct Ctx {
     /// If a slot were built inside the scope of the frame-consuming Effect, an Effect rerun would dispose its storage,
     /// and what is left in the outer map is a dead handle (panic: already disposed).
     pub(crate) owner: Owner,
-    pub bundle: Option<Arc<BundleState>>,
+    pub loom: Option<Arc<LoomState>>,
 }
 
 /// The UI side holds the transport plus the downstream frame signal. wasm is single-threaded, shared through Rc.
@@ -122,7 +122,7 @@ impl Ctx {
             config,
             drag,
             owner: Owner::current().expect("Ctx::new requires a reactive owner"),
-            bundle: None,
+            loom: None,
         };
 
         // Consume downstream frames and dispatch

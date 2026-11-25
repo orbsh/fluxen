@@ -12,7 +12,7 @@ chart.rs 的现状是两处债：载荷是 ApexCharts spec（类型式 API，不
 2026-10-01）：JS 库、支持 GoG 语法、体积不能太大、交互效果好。
 poloto（纯 Rust SVG）后延——视觉质量不满意；vega/vega-lite 同轮否决。
 
-候选实测（min+gzip，tarball/bundlephobia 双渠道核对）：
+候选实测（min+gzip，tarball/loomphobia 双渠道核对）：
 
 | 库 | gz | GoG | 交互 |
 |---|---|---|---|

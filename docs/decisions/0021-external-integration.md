@@ -8,10 +8,10 @@
 
 已经存在两份消费形态：
 
-- **reflux**（Python 宿主）：生产端构建 SDK 节点与八个动作，静态壳加载**钉住的渲染器 bundle**，
+- **reflux**（Python 宿主）：生产端构建 SDK 节点与八个动作，静态壳加载**钉住的渲染器 loom**，
   页面上行走 `window.fluxen.send`——`mount()` 发布的那只把手。
 - **prism**（Rust 会场，在计划中）：连接面、身份、turn 都在它那里，前端要装进它自己的二进制，
-  不打算用钉住的 bundle。
+  不打算用钉住的 loom。
 
 prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}` ↔ `Message`），让渲染器去认
 连接面的帧形状。方向是反的：fluxen 是纯 UI，不可能为每个使用方单独适配；`transport-ws` 本来就
@@ -38,7 +38,7 @@ prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}
    为布局留一条与其它视图操作不同的路径。
 5. **生产端的输出格式由调用参数决定。** 例：gravity 的 turn 调用带 `protocol` 参数，默认 `data`
    （裸 delta，给非 UI 消费者），`fluxen` 则返回视图帧（对槽做 `append`/`set`）。应用知识留在
-   生产端，槽名不进 bundle。
+   生产端，槽名不进 loom。
 6. **信封归宿主（2026-10-29，已落地）。** `content::Message{ev, sender, created?, content}` 是宿主
    包装，不是线上模型，已从核心里删除：`content` 只剩动作（`Content` 与各 op）与 `Outflow`，`Ctx` 解
    `Vec<Content<Accrete>>`，`ev` 闸随之消失（ADR 0003 的这一部分因此失效）。信封按宿主自己的需要存在，

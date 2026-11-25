@@ -74,7 +74,7 @@ pub fn forcegraph_(accrete: ForceGraph, ctx: &Ctx, id: String) -> AnyView {
             let ctx = emit_ctx.clone();
             let id = emit_id.clone();
             let event = event.to_string();
-            // Same uplink leg as a bundle's submit: a name plus a payload, the
+            // Same uplink leg as a loom's submit: a name plus a payload, the
             // host does not interpret it.
             leptos::task::spawn_local(async move {
                 ctx.send(event, Some(id), data).await;

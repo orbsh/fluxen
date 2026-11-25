@@ -44,19 +44,19 @@ Row identity lives in the data (`data.id`), a reusable layout lives in `rack.ite
 
 ## 4. One field, several ways to send it
 
-A field does not send. It has no exit of its own — its bundle decides when a value leaves and where it goes (ADR 0032 §2) — and what the field does say about itself is `source` (what it shows) and `kind` (what kind of field it is: `number`, `bool`, `text`, `password`, one declaration for the element and the parse). Nesting is what lets one input answer two different questions at once:
+A field does not send. It has no exit of its own — its loom decides when a value leaves and where it goes (ADR 0032 §2) — and what the field does say about itself is `source` (what it shows) and `kind` (what kind of field it is: `number`, `bool`, `text`, `password`, one declaration for the element and the parse). Nesting is what lets one input answer two different questions at once:
 
 ```yaml
-bundle (sink: {dest: message}, submit: [enter, button])              # the message: Enter, once
-  bundle (tag: mention, sink: {dest: mentions}, submit: [change])    # the suggestions: every keystroke
+loom (sink: {dest: message}, submit: [enter, button])              # the message: Enter, once
+  loom (tag: mention, sink: {dest: mentions}, submit: [change])    # the suggestions: every keystroke
     input (tag: q)
 ```
 
-The inner bundle packs on every keystroke and sends the mention outward for autocompletion; the outer one packs on Enter and sends the message. Neither knows the other exists, and the input did not need a mode switch — it needed two bundles around it. Timing resolves to the nearest bundle that declares it (ADR 0032 §3), so a change never reaches the outer bundle and a send never multiplies: if the inner declared `enter` too, Enter would go to the inner only.
+The inner loom packs on every keystroke and sends the mention outward for autocompletion; the outer one packs on Enter and sends the message. Neither knows the other exists, and the input did not need a mode switch — it needed two looms around it. Timing resolves to the nearest loom that declares it (ADR 0032 §3), so a change never reaches the outer loom and a send never multiplies: if the inner declared `enter` too, Enter would go to the inner only.
 
-Clearing follows the same geography: the bundle that sent decides for every field it packed, the nested ones included (ADR 0032 §6), so the outer bundle's `reset: clear` is what empties the box when the message leaves — the inner one, which keeps its value on each keystroke by design, never has to be told.
+Clearing follows the same geography: the loom that sent decides for every field it packed, the nested ones included (ADR 0032 §6), so the outer loom's `reset: clear` is what empties the box when the message leaves — the inner one, which keeps its value on each keystroke by design, never has to be told.
 
-The cost is stated plainly, because it is the price of the choice: **every input that leaves the page sits inside a bundle** — one chat box is `bundle > input`, with the field's `tag` as the key. What that buys is one rule instead of two ("the bundle is the exit") and one place where sending is decided, which is also where the rest of it lives: how many sends are left (`attrs.sends`), what the fields become afterwards (`attrs.reset`), and any check that has to run on the way out. A widget that grew its own sink would need each of those re-invented beside it.
+The cost is stated plainly, because it is the price of the choice: **every input that leaves the page sits inside a loom** — one chat box is `loom > input`, with the field's `tag` as the key. What that buys is one rule instead of two ("the loom is the exit") and one place where sending is decided, which is also where the rest of it lives: how many sends are left (`attrs.sends`), what the fields become afterwards (`attrs.reset`), and any check that has to run on the way out. A widget that grew its own sink would need each of those re-invented beside it.
 
 ## 5. What a frame deliberately does not carry
 

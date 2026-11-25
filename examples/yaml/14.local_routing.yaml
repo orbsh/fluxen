@@ -34,7 +34,7 @@
         - round
         horizontal: true
       children:
-      - type: bundle
+      - type: loom
         attrs: {submit: [change]}
         sink: {dest: chan, scope: local}
         children:

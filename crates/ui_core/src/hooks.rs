@@ -167,7 +167,7 @@ pub(crate) fn node_id(accrete: &impl AccreteOps) -> Option<String> {
     accrete.get_id().clone().filter(|s| !s.is_empty())
 }
 
-/// One packed field: the `tag` the bundle keys it by, the signal holding it, and the value it
+/// One packed field: the `tag` the loom keys it by, the signal holding it, and the value it
 /// started with (`reset: default` restores exactly this).
 pub struct Field {
     pub name: String,
@@ -175,12 +175,12 @@ pub struct Field {
     pub initial: Value,
 }
 
-/// What a bundle hands down to its fields (ADR 0032): the keys it packs, when
+/// What a loom hands down to its fields (ADR 0032): the keys it packs, when
 /// it sends (`modes`), and where the packed object goes (`sink`). Built by
-/// `bundle_` and injected into `Ctx.bundle`; fields and nested bundles read it
+/// `loom_` and injected into `Ctx.loom`; fields and nested looms read it
 /// from the ctx clone they were rendered with, so ownership follows the clone
 /// chain, not render order.
-pub struct BundleState {
+pub struct LoomState {
     /// Keys in walk order, so a pack is deterministic.
     pub fields: Vec<Field>,
     pub modes: accrete::SubmitSet,
@@ -188,21 +188,21 @@ pub struct BundleState {
     pub reset: accrete::ResetMode,
     /// How many sends were granted: `None` or `-1` = unlimited, `n` = n more allowed.
     pub sends: Option<i64>,
-    /// Sends left. Starts at `sends`; each send takes one; zero locks the bundle.
+    /// Sends left. Starts at `sends`; each send takes one; zero locks the loom.
     pub remaining: RwSignal<i64>,
-    /// Nested bundles, so a reset travels down the same tree a pack travels up.
-    pub children: StoredValue<Vec<std::sync::Arc<BundleState>>>,
+    /// Nested looms, so a reset travels down the same tree a pack travels up.
+    pub children: StoredValue<Vec<std::sync::Arc<LoomState>>>,
     pub sink: Option<Sink>,
     /// This submission's instance id — not a field name.
     pub id: Option<String>,
-    /// Enclosing bundle, for `enter`/`button` bubbling.
-    pub parent: Option<std::sync::Arc<BundleState>>,
-    /// The parent's signal this bundle's own packed object lands in (keyed by
-    /// its `tag`, or its `id`). None for a top-level bundle.
+    /// Enclosing loom, for `enter`/`button` bubbling.
+    pub parent: Option<std::sync::Arc<LoomState>>,
+    /// The parent's signal this loom's own packed object lands in (keyed by
+    /// its `tag`, or its `id`). None for a top-level loom.
     pub mirror: Option<RwSignal<Value>>,
 }
 
-impl BundleState {
+impl LoomState {
     pub fn field(&self, tag: &str) -> Option<RwSignal<Value>> {
         self.fields.iter().find(|f| f.name == tag).map(|f| f.sig)
     }
@@ -233,8 +233,8 @@ impl BundleState {
         }
     }
 
-    /// After a send: this bundle's `reset` governs **every field it packed**, nested bundles included — a
-    /// submission is one object, so the aftermath is one decision. A nested bundle that sends on its own
+    /// After a send: this loom's `reset` governs **every field it packed**, nested looms included — a
+    /// submission is one object, so the aftermath is one decision. A nested loom that sends on its own
     /// applies its own mode, over its own subtree only (it never reaches up).
     fn reset_fields(&self) {
         if !matches!(self.reset, accrete::ResetMode::Keep) {
@@ -275,8 +275,8 @@ pub fn empty_like(like: &Value) -> Value {
     }
 }
 
-/// The bundle that owns the send count for this ctx: the nearest one that declares `sends`.
-pub fn lock_owner(b: Option<&std::sync::Arc<BundleState>>) -> Option<std::sync::Arc<BundleState>> {
+/// The loom that owns the send count for this ctx: the nearest one that declares `sends`.
+pub fn lock_owner(b: Option<&std::sync::Arc<LoomState>>) -> Option<std::sync::Arc<LoomState>> {
     let mut cur = b.cloned();
     while let Some(b) = cur {
         if b.sends.is_some() {
@@ -287,30 +287,30 @@ pub fn lock_owner(b: Option<&std::sync::Arc<BundleState>>) -> Option<std::sync::
     None
 }
 
-/// Used up? A bundle that declared `sends` and has none left is locked: its fields are disabled and
+/// Used up? A loom that declared `sends` and has none left is locked: its fields are disabled and
 /// `submit` refuses (the count is the page's own guard, not a permission — the far side still decides).
-pub fn locked(b: Option<&std::sync::Arc<BundleState>>) -> bool {
+pub fn locked(b: Option<&std::sync::Arc<LoomState>>) -> bool {
     lock_owner(b).is_some_and(|b| !b.unlimited() && b.remaining.get() <= 0)
 }
 
-/// The key a bundle contributes to its parent's object: its `tag`, and only its `tag`. Tag is the name a node
-/// takes in the bundle that packs it — the same rule a field follows (ADR 0032 §4). `id` is not a name: it is
+/// The key a loom contributes to its parent's object: its `tag`, and only its `tag`. Tag is the name a node
+/// takes in the loom that packs it — the same rule a field follows (ADR 0032 §4). `id` is not a name: it is
 /// this submission's identity, and letting it double as a key would make the parent's shape move when someone
-/// gave a nested bundle an id for matching replies. `dest` is not a name either: it is where the inner bundle's
+/// gave a nested loom an id for matching replies. `dest` is not a name either: it is where the inner loom's
 /// own sends go, which is a different fact (the autocomplete in §4 sends to `mentions` while the outer object
 /// calls it `mention`). No tag = an unnamed group, which packs nothing into the parent. Empty strings are
 /// absent, same rule as `node_id`.
-pub fn bundle_key(tag: &Option<String>) -> Option<String> {
+pub fn loom_key(tag: &Option<String>) -> Option<String> {
     tag.clone().filter(|s| !s.is_empty())
 }
 
-/// Write this bundle's packed object into its parent's slot, then do the same
+/// Write this loom's packed object into its parent's slot, then do the same
 /// up the chain: an outer pack reads the inner one, so the inner lands first.
-pub fn refresh(b: &std::sync::Arc<BundleState>) {
+pub fn refresh(b: &std::sync::Arc<LoomState>) {
     refresh_inner(b);
 }
 
-fn refresh_inner(b: &BundleState) {
+fn refresh_inner(b: &LoomState) {
     if let Some(m) = &b.mirror {
         m.set(b.pack());
     }
@@ -319,29 +319,29 @@ fn refresh_inner(b: &BundleState) {
     }
 }
 
-/// Send the bundle's packed object to its own sink — the only exit for the
+/// Send the loom's packed object to its own sink — the only exit for the
 /// fields it claimed (ADR 0032). Refresh first so enclosing objects are current
-/// even when the outer bundle never sends.
-pub fn submit(ctx: &Ctx, b: &std::sync::Arc<BundleState>) {
+/// even when the outer loom never sends.
+pub fn submit(ctx: &Ctx, b: &std::sync::Arc<LoomState>) {
     if locked(Some(b)) {
         return;
     }
     refresh(b);
     if let Some(sink) = &b.sink {
         ctx.emit(sink, b.id.clone(), b.pack());
-        // One send happened, so one comes off. Reset after the count, so a bundle granted `sends: 1`
+        // One send happened, so one comes off. Reset after the count, so a loom granted `sends: 1`
         // sends once and is locked while its fields are already back to their starting value.
         b.count_send();
     }
     b.reset_fields();
 }
 
-/// The nearest enclosing bundle that declares `mode`. Nearest wins so one
-/// interaction is one send: a nested bundle cannot make its parent send again.
+/// The nearest enclosing loom that declares `mode`. Nearest wins so one
+/// interaction is one send: a nested loom cannot make its parent send again.
 pub fn nearest(
-    b: Option<&std::sync::Arc<BundleState>>,
+    b: Option<&std::sync::Arc<LoomState>>,
     mode: accrete::SubmitMode,
-) -> Option<std::sync::Arc<BundleState>> {
+) -> Option<std::sync::Arc<LoomState>> {
     let mut cur = b.cloned();
     while let Some(b) = cur {
         if b.modes.has(mode) {
@@ -353,8 +353,8 @@ pub fn nearest(
 }
 
 /// A field's value changed: keep enclosing objects current, then send from the
-/// bundle that owns `change` timing (if any declares it).
-pub fn field_changed(ctx: &Ctx, b: Option<&std::sync::Arc<BundleState>>) {
+/// loom that owns `change` timing (if any declares it).
+pub fn field_changed(ctx: &Ctx, b: Option<&std::sync::Arc<LoomState>>) {
     let Some(b) = b else { return };
     refresh(b);
     if let Some(owner) = nearest(Some(b), accrete::SubmitMode::Change) {
@@ -362,8 +362,8 @@ pub fn field_changed(ctx: &Ctx, b: Option<&std::sync::Arc<BundleState>>) {
     }
 }
 
-/// Enter was pressed in a field: the nearest bundle declaring `enter` sends.
-pub fn enter_pressed(ctx: &Ctx, b: Option<&std::sync::Arc<BundleState>>) {
+/// Enter was pressed in a field: the nearest loom declaring `enter` sends.
+pub fn enter_pressed(ctx: &Ctx, b: Option<&std::sync::Arc<LoomState>>) {
     if let Some(owner) = nearest(b, accrete::SubmitMode::Enter) {
         submit(ctx, &owner);
     }
@@ -409,17 +409,17 @@ mod tests {
     }
 
     #[test]
-    fn a_nested_bundle_is_named_by_its_tag_and_nothing_else() {
-        use super::bundle_key;
+    fn a_nested_loom_is_named_by_its_tag_and_nothing_else() {
+        use super::loom_key;
 
-        assert_eq!(bundle_key(&Some("mention".into())), Some("mention".into()));
-        assert_eq!(bundle_key(&Some(String::new())), None);
-        assert_eq!(bundle_key(&None), None);
+        assert_eq!(loom_key(&Some("mention".into())), Some("mention".into()));
+        assert_eq!(loom_key(&Some(String::new())), None);
+        assert_eq!(loom_key(&None), None);
         // An id is identity, not a name: it must not decide the parent object's shape.
-        let n = accrete(json!({"type": "bundle", "id": "login-42"}));
-        let Accrete::bundle(b) = &n else {
-            panic!("expected bundle")
+        let n = accrete(json!({"type": "loom", "id": "login-42"}));
+        let Accrete::loom(b) = &n else {
+            panic!("expected loom")
         };
-        assert_eq!(bundle_key(&b.tag), None);
+        assert_eq!(loom_key(&b.tag), None);
     }
 }

@@ -76,8 +76,8 @@ sink:   { dest: "draft", scope: both }   # the value flows out
 > address is the `dest` an outflow already carries (ADR 0023). `source` is a `Source`, `sink` is a `Sink`;
 > nothing else about this section changes.
 
-- `text` accepts `source`; `input` and `select` accept `source` (their `sink` is gone: the enclosing bundle
-  sends, ADR 0032 §2); `bundle`, `frame` and `panel` accept `sink`.
+- `text` accepts `source`; `input` and `select` accept `source` (their `sink` is gone: the enclosing loom
+  sends, ADR 0032 §2); `loom`, `frame` and `panel` accept `sink`.
 - `scope: local` — an assignment, nothing leaves the page. `scope: remote` — the existing `set` op.
   `scope: both` — assign locally and mirror the change up; the far side stays authoritative on
   replay, which is what makes a "local draft that the server has seen" expressible without a

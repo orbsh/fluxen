@@ -10,8 +10,8 @@ use serde_json::{Value, to_value};
 /// A select (ADR 0031 §2): options come from `options` (the list plane), the
 /// current value from `source`, the choice goes out through `sink`.
 ///
-/// A `tag` makes it a field of the enclosing bundle (ADR 0032): the choice lands
-/// in the bundle's signal and the bundle owns the exit and the timing. No tag =
+/// A `tag` makes it a field of the enclosing loom (ADR 0032): the choice lands
+/// in the loom's signal and the loom owns the exit and the timing. No tag =
 /// no uplink (ADR 0032 §2 revised): a `local` sink still lands the choice on the page, and that is all.
 pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
@@ -23,7 +23,7 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
         .tag
         .as_ref()
         .filter(|t| !t.is_empty())
-        .and_then(|tag| ctx.bundle.as_ref().and_then(|b| b.field(tag)));
+        .and_then(|tag| ctx.loom.as_ref().and_then(|b| b.field(tag)));
 
     // Initial value read untracked (same reason as `input_`: a component that
     // emits must not subscribe to the slot its own send writes).
@@ -35,16 +35,16 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
     };
     let current = RwSignal::new(initial.as_str().map(String::from).unwrap_or_default());
 
-    // The shown choice follows the bundle's copy, so a reset shows up here too (same rule as `input_`).
+    // The shown choice follows the loom's copy, so a reset shows up here too (same rule as `input_`).
     if let Some(sig) = field {
         Effect::new(move |_| {
             current.set(sig.get().as_str().map(String::from).unwrap_or_default());
         });
     }
 
-    // A bundle that used up its `sends` disables the select with its fields.
+    // A loom that used up its `sends` disables the select with its fields.
     let locked_ctx = ctx.clone();
-    let is_locked = move || locked(locked_ctx.bundle.as_ref()).then_some("");
+    let is_locked = move || locked(locked_ctx.loom.as_ref()).then_some("");
 
     // The rows are rebuilt on every choice, so they hang inside the box rather than being the box: the layer
     // is a child of it and stays put while a choice re-picks the rows (ADR 0038 §4).
@@ -70,10 +70,10 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
                 div()
                     .on(leptos::ev::click, move |_| {
                         // A select with no tag keeps the choice to itself: a field has no exit
-                        // (ADR 0032 §2), so a bundle is what sends a choice anywhere.
+                        // (ADR 0032 §2), so a loom is what sends a choice anywhere.
                         if let Some(sig) = field {
                             sig.set(v.clone());
-                            field_changed(&click_ctx, click_ctx.bundle.as_ref());
+                            field_changed(&click_ctx, click_ctx.loom.as_ref());
                         }
                         if let Some(s) = v.as_str() {
                             c.set(s.to_string());
