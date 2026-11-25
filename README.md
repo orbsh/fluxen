@@ -39,6 +39,7 @@ Every field is optional:
 - `host` — where the socket goes; absent means the document's own host.
 - `path` — the socket's path (default `/channel`), which must start with `/`.
 - `codec` — what this page *sends*: `cbor` (default) or `json`. What arrives is detected per frame, so a gateway may mix encodings freely.
+- `hooks` — four seams: the socket's `open`/`close`, a whole-page rebuild (`create`), slot observation (`slots`), and uplink rewriting (`dests`). The semantics (when they fire, replay, coalescing, error isolation) are ADR 0047.
 - `query` — extra parameters for the socket's address (`Record<string, string>`), order kept, each escaped; what the keys mean is the host's business. A **token** rides here: one more query parameter, not a special setting.
 - `config` — the slot this page's options live in (`__CONFIG__` by default); an empty string says this page has no option slot at all (ADR 0038).
 - `policy` — the socket's own numbers: `{heartbeat, dead, retry: {base, max, jitter}}` (ADR 0044 §2). `heartbeat: 0` stops probing *and* stops the page closing itself on silence; `retry: false` means one connection, then a terminal `closed` rather than pretending to reconnect.
