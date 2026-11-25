@@ -3588,6 +3588,7 @@ dependencies = [
 name = "ui_leptos"
 version = "0.1.0"
 dependencies = [
+ "accrete",
  "console_error_panic_hook",
  "content",
  "futures",
