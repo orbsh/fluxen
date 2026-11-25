@@ -10,7 +10,7 @@
 同一张三维关系图有过两个实现：
 
     crates/forcegraph            4884 行 Rust + three-d 0.19，wasm 里渲染、拾取、布局
-    examples/modules/forcegraph 3d-force-graph（vasturiano）的 JS 模块，走 ADR 0007 契约
+    assets/modules/forcegraph 3d-force-graph（vasturiano）的 JS 模块，走 ADR 0007 契约
 
 **两个都是三维的，而且都基于 three.js**：`three-d` 是 Rust 侧的 three.js 绑定，在 wasm 里
 驱动 WebGL2；`3d-force-graph` 把 three.js 打包进 JS 库。差别不在维度，在实现位置（wasm 内
@@ -34,7 +34,7 @@ vs 模块边界外）与能力（同帧拾取、发光层、边的朝向几何�
 `style` 词表。它不是 canvas 的一种，也不走 `url + options` 那条路。
 
 保留它，删掉 JS 模块那一版
-（`examples/modules/forcegraph/`、`examples/yaml/19.canvas.forcegraph.yaml`、
+（`assets/modules/forcegraph/`、`examples/yaml/19.canvas.forcegraph.yaml`、
 Dockerfile 里 3d-force-graph 的装配）。
 
 ## 定制能力往哪里长

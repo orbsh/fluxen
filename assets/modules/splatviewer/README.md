@@ -1,6 +1,6 @@
 # splatviewer 素材下载地址
 
-模块（index.js，纯 JS 无构建）见 examples/modules/splatviewer/。
+模块（index.js，纯 JS 无构建）见 assets/modules/splatviewer/。
 泼溅场景 .ksplat 来自 GaussianSplats3D 官方演示数据包：
 
 | 文件 | 下载地址 |

@@ -25,7 +25,7 @@ enum Cmd {
         #[arg(long, default_value = "8281")]
         trunk: u16,
         /// dist dir served when trunk is down (relative to cwd)
-        #[arg(long, default_value = "examples/renderer/dist")]
+        #[arg(long, default_value = "crates/ui_leptos/dist")]
         dist: String,
     },
     /// Offline: parse a YAML frame file and print the wire JSON — the action list
@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
     let default_serve = || Cmd::Serve {
         port: 3002,
         trunk: 8281,
-        dist: "examples/renderer/dist".into(),
+        dist: "crates/ui_leptos/dist".into(),
     };
     match cli.cmd.unwrap_or_else(default_serve) {
         Cmd::Serve { port, trunk, dist } => {

@@ -4,7 +4,7 @@
 #   wasm-bindgen --target web --out-dir pkg \
 #     target/wasm32-unknown-unknown/release/browser3d.wasm
 # The pkg/ contents (browser3d.js + browser3d_bg.wasm), together with this directory's index.js,
-# are copied into examples/renderer/assets/3dbrowser/ (that dir is not in git); the Canvas component's
+# are copied into crates/ui_leptos/assets/3dbrowser/ (that dir is not in git); the Canvas component's
 # url points at index.js.
 [workspace]
 

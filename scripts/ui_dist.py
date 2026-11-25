@@ -2,7 +2,7 @@
 """Cut a renderer release out of a trunk build: four files, a manifest, and a tarball.
 
     python3 scripts/ui_dist.py                  # build, then assemble into dist-release/
-    python3 scripts/ui_dist.py --no-build       # assemble whatever examples/renderer/dist holds
+    python3 scripts/ui_dist.py --no-build       # assemble whatever crates/ui_leptos/dist holds
     python3 scripts/ui_dist.py --tag v0.1.0 --out /tmp/rel
 
 What ships, and what deliberately does not:
@@ -38,7 +38,7 @@ import sys
 import tarfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-DIST = ROOT / "examples" / "renderer" / "dist"
+DIST = ROOT / "crates" / "ui_leptos" / "dist"
 OUT = ROOT / "dist-release"
 CSS = ("assets/core.css", "assets/custom.css")
 
@@ -53,8 +53,8 @@ def sh(*args: str, cwd: pathlib.Path = ROOT) -> str:
 
 def build() -> None:
     """`trunk build --release` — the only build path this script knows."""
-    print(f"[dist] trunk build --release in examples/renderer (trunk {sh('trunk', '--version')})", flush=True)
-    out = subprocess.run(["trunk", "build", "--release"], cwd=ROOT / "examples" / "renderer")
+    print(f"[dist] trunk build --release in crates/ui_leptos (trunk {sh('trunk', '--version')})", flush=True)
+    out = subprocess.run(["trunk", "build", "--release"], cwd=ROOT / "crates" / "ui_leptos")
     if out.returncode != 0:
         raise SystemExit("[dist] trunk failed — see its output above")
 
@@ -114,7 +114,7 @@ def write(out: pathlib.Path, files: list[tuple[str, pathlib.Path]], tag: str, re
         "renderer": "fluxen",
         "tag": tag,
         "rev": rev,
-        "built": "trunk build --release (examples/renderer)",
+        "built": "trunk build --release (crates/ui_leptos)",
         "entry": {"js": js, "wasm": wasm},
         "files": {},
     }
@@ -149,7 +149,7 @@ def write(out: pathlib.Path, files: list[tuple[str, pathlib.Path]], tag: str, re
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="ui_dist", description="Cut a renderer release from a trunk build.")
-    ap.add_argument("--no-build", action="store_true", help="use examples/renderer/dist as it stands")
+    ap.add_argument("--no-build", action="store_true", help="use crates/ui_leptos/dist as it stands")
     ap.add_argument("--out", default=str(OUT), help=f"where to assemble (default: {OUT.relative_to(ROOT)})")
     ap.add_argument("--tag", default=None, help="release tag (default: the exact git tag, else `dev`)")
     ap.add_argument("--rev", default=None, help="commit the bundle was built from (default: HEAD)")

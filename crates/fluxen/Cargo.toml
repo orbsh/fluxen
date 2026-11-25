@@ -6,7 +6,7 @@ description = "Facade crate: the rendering core"
 
 # The facade is the one name a consumer depends on. It is the CORE, always:
 # a boot is a host's own business (ours is the example renderer under
-# examples/renderer), so no feature gate re-exports one.
+# crates/ui_leptos), so no feature gate re-exports one.
 [dependencies]
 ui-core = { workspace = true }
 

@@ -19,7 +19,7 @@ reflux（Python，钉住发布产物）。
 | `forcegraph` | 三维图核心（相机、布局、拾取）——不认框架、不认 DSL、不认协议 |
 | `ui-assets` | CSS 登记处（`manganis` 要求资源定义在 crate 内） |
 
-刻意不在表里的：`transport-ws`（`examples/transport-ws`）与 boot（`examples/renderer`）。两者都在 `examples/` 下——它们是**我们自己的宿主**，不是消费者
+刻意不在表里的：`transport-ws` 与 boot（`ui_leptos`）。它们也是 crate，但它们是**我们自己的宿主**——参考构建要发的支持性代码，不是消费者
 依赖的面。判据一句话：`crates/` 只放外部按名字依赖的东西；我们自己的宿主实现住 `examples/`；`stage` 留在
 crate 里，因为它是调试**工具**而不是示例。核心不依赖这两者中的任何一个。
 

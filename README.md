@@ -83,14 +83,14 @@ Endpoints once running (default port 3002):
   create/set/append/move/remove/patch/tmpl files are all first-class
 - everything else — the UI itself: reverse-proxyed to `trunk serve` when its
   port (default 8281) is up at startup, otherwise served statically from the
-  trunk dist dir (default `examples/renderer/dist`). Probe is TCP-only and
+  trunk dist dir (default `crates/ui_leptos/dist`). Probe is TCP-only and
   sticky — restart `stage serve` after starting trunk.
 
 Start and open <http://localhost:3002/>:
 
 ```
 cargo run -p stage -- serve            # mirror + UI + console, one process
-cargo run -p stage -- serve --trunk 8281 --dist examples/renderer/dist   # override
+cargo run -p stage -- serve --trunk 8281 --dist crates/ui_leptos/dist   # override
 ```
 
 The UI's WS host defaults to the page origin, so no `?token`-style config is
@@ -164,7 +164,7 @@ The renderer ships as release assets, so a host needs neither this repo nor `tru
 
 ```
 python3 scripts/ui_dist.py            # build, then assemble into dist-release/
-python3 scripts/ui_dist.py --no-build # assemble an existing examples/renderer/dist
+python3 scripts/ui_dist.py --no-build # assemble an existing crates/ui_leptos/dist
 ```
 
 A `v*` tag runs the same script in CI (`.github/workflows/ui-release.yml`) and publishes:

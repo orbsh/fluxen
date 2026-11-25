@@ -1,26 +1,26 @@
 target/
 crates/*/target/
-examples/modules/*/target/
-examples/renderer/target/
+assets/modules/*/target/
+crates/ui_leptos/target/
 crates/*/dist/
-examples/renderer/dist/
+crates/ui_leptos/dist/
 .git/
 docs/
 examples/*
-!examples/modules
-!examples/renderer
-!examples/transport-ws
+!assets/modules
+!crates/ui_leptos
+!crates/transport-ws
 README*.md
 
 # Upstream media is fetched inside the build (see the Dockerfile): the context
 # stays small and the image deterministic.
 **/*.ksplat
 **/*.glb
-# The renderer crate moved under `examples/renderer`, and its deployed media sits
+# The renderer crate moved under `crates/ui_leptos`, and its deployed media sits
 # beside its sources now — same six recipes, new addresses.
-examples/renderer/assets/3dbrowser/
-examples/renderer/assets/g2chart/
-examples/renderer/assets/editor/
-examples/renderer/assets/monaco/
-examples/renderer/assets/forcegraph/
+crates/ui_leptos/assets/3dbrowser/
+crates/ui_leptos/assets/g2chart/
+crates/ui_leptos/assets/editor/
+crates/ui_leptos/assets/monaco/
+crates/ui_leptos/assets/forcegraph/
 dist-release/

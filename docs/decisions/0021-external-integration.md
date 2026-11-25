@@ -59,19 +59,20 @@ prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}
 | `crates/` | `forcegraph`、`ui-assets` | 组件与资源登记，核心依赖 |
 | `crates/` | `fluxen`（门面） | 消费者按这一个名字依赖 |
 | `crates/` | `stage` | **例外**：调试工具（mirror/console/静态服务），是给人用的工具，不是示例 |
-| `examples/transport-ws` | `transport-ws` | 92 行，唯一的消费者是 boot；WS 只是一个宿主的倾向，不是协议 |
-| `examples/renderer` | boot（`mount()`、`#main` 解析、`window.fluxen.send`、`main.rs`、`index.html`、trunk 配置、assets/modules） | 发布产物的那半；reflux 用产物、prism 自写 boot，没有人按名字依赖它 |
+| `crates/transport-ws` | `transport-ws` | 92 行，唯一的消费者是 boot；WS 只是一个宿主的倾向，不是协议 |
+| `crates/ui_leptos` | boot（`mount()`、`#main` 解析、`window.fluxen.send`、`main.rs`、`index.html`、trunk 配置、assets/modules） | 发布产物的那半；reflux 用产物、prism 自写 boot，没有人按名字依赖它 |
 
-包名不随目录改：`examples/renderer` 的包名仍是 `ui_leptos`。产物文件名是 `ui_leptos-<hash>.js`
-与 `ui_leptos-<hash>_bg.wasm`，reflux 在 `www/static/vendor/fluxen/` 里钉住的就是这两个名字，
-改名是一次跨仓 re-pin。名字与位置不一致是有意的，代价写在 PLAN 的落地记录里。
+目录名就是包名：`crates/ui_leptos` 的产物是 `ui_leptos-<hash>.js` 与 `ui_leptos-<hash>_bg.wasm`，
+reflux 在 `www/static/vendor/fluxen/` 里钉住的就是这两个名字，改名是一次跨仓 re-pin。
 
-`examples/modules/*` 是另一回事（独立的 wasm 模块 workspace，编出 blob 给 canvas 宿主用）；本条的
-`examples/` 指**示例宿主**。搬运时保持工作区语义：`cargo test --workspace` 不该因此开始依赖 wasm-only 的
-东西，若真发生就把示例放在嵌套工作区里（`examples/modules/3dbrowser` 已是这个先例）。
+`assets/` 是第三类，不是第四种 crate：`assets/modules/*` 是页面资源的**源**（3dbrowser 是独立的 wasm 模块
+workspace，其余是零构建的 JS 模块），`crates/ui_leptos/assets/` 是它们的**产物**（gitignore 掉，trunk 整个拷进
+dist）。源与产物分开放，是因为 dist 不该带进模块的 `Cargo.toml`。
 
-搬完之后 `crates/` 的承诺变成一句话：**这里没有 boot，也没有任何具体传输实现**——两者都是宿主的，而我们的
-宿主放在 `examples/`，和别人的宿主处在同一个位置。
+于是三者的界线不再是"crates 给消费者、examples 给我们"，而是"**发出去的代码** vs **用它的例子**"：
+`crates/` 是发行物（核心、工具，以及我们自己的宿主——`ui_leptos` 与 `transport-ws` 也在其中，它们是**支持性**
+crate：我们的宿主，不是外部依赖的目标）；`assets/` 是页面资源；`examples/` 只剩可运行的示例（yaml 页面、
+walkthrough 脚本）。把宿主放进 `examples/` 会让它看起来可删——它是发布产物的那一半。
 
 ## 后果
 

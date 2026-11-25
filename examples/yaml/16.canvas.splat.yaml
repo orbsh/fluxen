@@ -1,6 +1,6 @@
 # Canvas example (ADR 0007): the splatviewer module — Gaussian splat scene display.
-# Prerequisites: the module is in examples/renderer/assets/splatviewer/ (plain JS, no build; recipe in the
-# header comment of examples/modules/splatviewer/index.js); the layout side sends 00.main.yaml first.
+# Prerequisites: the module is in crates/ui_leptos/assets/splatviewer/ (plain JS, no build; recipe in the
+# header comment of assets/modules/splatviewer/index.js); the layout side sends 00.main.yaml first.
 # The splat assets truck.ksplat / bonsai.ksplat come from the
 # official GaussianSplats3D demo data (INRIA 3DGS dataset scenes, demo use, shipped with the repository;
 # licence follows the source scenes — research/demo use, verify yourself for commercial use).

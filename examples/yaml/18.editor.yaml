@@ -1,8 +1,8 @@
 # Code editor example (ADR 0016): Monaco goes through the module channel (ADR 0007), and the library is only pulled in mount()
 # (ADR 0015); saving = Ctrl/Cmd+S inside the editor → uplink `{code, lang}` (the same leg as form submit).
-# Prerequisites: the wrapper module is in examples/renderer/assets/editor/ (plain JS, no build; recipe in the
-# header comment of examples/renderer/modules/editor/index.js), and Monaco's AMD subset is in
-# examples/renderer/assets/monaco/vs/ (same story — both are gitignored build artifacts);
+# Prerequisites: the wrapper module is in crates/ui_leptos/assets/editor/ (plain JS, no build; recipe in the
+# header comment of assets/modules/editor/index.js), and Monaco's AMD subset is in
+# crates/ui_leptos/assets/monaco/vs/ (same story — both are gitignored build artifacts);
 # the layout side sends 00.main.yaml first.
 #
 # One of each of the two shapes, showing two data sources for the same contract:

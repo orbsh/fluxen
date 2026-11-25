@@ -1,7 +1,7 @@
 # 0040 — The transport is one runtime hook, not a second artifact
 
-Status: **Accepted** (2026-11-25). Implemented: `examples/renderer/src/hook.rs` (the read-and-wrap, with the
-malformed case as a mount error) and `examples/transport-ws/src/live.rs` (the default socket, with the retry
+Status: **Accepted** (2026-11-25). Implemented: `crates/ui_leptos/src/hook.rs` (the read-and-wrap, with the
+malformed case as a mount error) and `crates/transport-ws/src/live.rs` (the default socket, with the retry
 that §3 hands to whoever owns it — see ADR 0044).
 
 ---

@@ -84,10 +84,10 @@ Implementation choices worth naming:
   is already there is a no-op, and an append never re-frames the camera. The
   final frame is a `focus` directive — the equivalent of "a search landed".
 
-Prerequisites: examples/renderer/assets/3dbrowser/ (with MaterialsVariantsShoe.glb),
-examples/renderer/assets/splatviewer/ (with truck.ksplat), examples/renderer/assets/g2chart/
-(the chart module + its g2.min.js), and examples/renderer/assets/editor/ +
-examples/renderer/assets/monaco/ (the editor wrapper + Monaco's AMD subset). Build recipes
+Prerequisites: crates/ui_leptos/assets/3dbrowser/ (with MaterialsVariantsShoe.glb),
+crates/ui_leptos/assets/splatviewer/ (with truck.ksplat), crates/ui_leptos/assets/g2chart/
+(the chart module + its g2.min.js), and crates/ui_leptos/assets/editor/ +
+crates/ui_leptos/assets/monaco/ (the editor wrapper + Monaco's AMD subset). Build recipes
 for all of them are in the Dockerfile. The graph needs no assets: its renderer is compiled
 into the wasm bundle.
 Run from the repo root (paths below are relative to it).

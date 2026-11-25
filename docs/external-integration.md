@@ -20,11 +20,11 @@ Reuse — the core, no I/O, no browser assumptions:
 | `forcegraph` | the 3-D graph core (camera, layout, picking) — no framework, no DSL, no protocol |
 | `ui-assets` | the CSS registry (`manganis` requires assets to live in a crate) |
 
-Deliberately NOT in that list: `transport-ws` (`examples/transport-ws`) and the boot
-(`examples/renderer`). Both live under `examples/` — they are OUR host, not part of the surface a
-consumer depends on. The criterion is one line: `crates/` holds what
-an external consumer depends on by name; our own host implementations live in `examples/`; `stage`
-stays a crate because it is a debugging TOOL, not an example. Core depends on neither.
+Deliberately NOT in that list: `transport-ws` and the boot (`ui_leptos`). They are crates like everything
+else, but they are OUR host — supporting code the reference build ships, not a surface a consumer depends
+on. The criterion is one line: `crates/` holds what ships (core, tools, and our own host);
+`assets/` holds page assets and the sources of the JS/wasm modules a page loads; `examples/` holds
+runnable demonstrations of the wire. Core depends on neither the boot nor the transport.
 
 Supply:
 
