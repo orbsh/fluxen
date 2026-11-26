@@ -1,0 +1,31 @@
+# Two series, two forms, one coordinate system (ADR 0051): 张三 as bars, 李四 as a line, on the same y scale.
+#
+# The legend is drawn by the module, not by G2: click a name to hide that series, click its swatch for the
+# series' own options (form: interval / line / area / point, and colour: L / C / H). The small button in the
+# chart's top-right corner shows the current coordinate and cycles it on click (cartesian / theta / polar).
+#
+# 前置：先发 00.main.yaml（整副骨架，右侧 chat 槽在它里面），再发本文件。
+action: append
+slot: chat
+data:
+  type: canvas
+  url: /assets/g2chart/index.js
+  options:
+    marks: [interval, line, area, point]
+    coordinate: [cartesian, theta, polar]
+  source:
+    default:
+      type: view
+      children:
+        - type: interval
+          data:
+            - {year: "2020", person: 张三, income: 120}
+            - {year: "2021", person: 张三, income: 140}
+            - {year: "2022", person: 张三, income: 180}
+          encode: {x: year, y: income, color: person}
+        - type: line
+          data:
+            - {year: "2020", person: 李四, income: 100}
+            - {year: "2021", person: 李四, income: 130}
+            - {year: "2022", person: 李四, income: 165}
+          encode: {x: year, y: income, color: person}
