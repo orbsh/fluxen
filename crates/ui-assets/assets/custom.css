@@ -113,9 +113,29 @@
         }
     }
 
-    /* The colour field's sliders (ADR 0052). Each row hands its bar a gradient through `--bar`, so the track
-       paints what moving it changes. The thumb is a DOT INSIDE the bar, not a handle across it: the bar's colour
-       is the information, and a tall thumb covers the position it is reporting. */
+    /* The colour field's sliders (ADR 0052). What each bar paints lives HERE, once: a row carries three numbers
+       (`--l`, `--c`, `--h`) and its `data-term`, and the rule turns that into a gradient. The chart module's copy
+       of this panel is plain JS with no renderer behind it — it draws the same rows (`.color-row`, `data-term`)
+       and sets the same three numbers, so the two panels cannot drift apart in what they show.
+
+       The thumb is a DOT INSIDE the bar, not a handle across it: the bar's colour is the information, and a tall
+       thumb covers the position it is reporting. */
+    .color-row[data-term="L"] input[type="range"] {
+        --bar: linear-gradient(to right, oklch(0 0 0), oklch(1 0 0));
+    }
+
+    /* Chroma at the lightness and hue the field currently holds: moving this bar can only take colour in or out. */
+    .color-row[data-term="C"] input[type="range"] {
+        --bar: linear-gradient(to right, oklch(var(--l, 0.7) 0 var(--h, 0)),
+            oklch(var(--l, 0.7) 0.4 var(--h, 0)));
+    }
+
+    /* The wheel, at one stop every 30°: a ramp whose ends are two hues interpolates between those two in oklab
+       and misses everything on the other side. Lightness is held at 0.7 so the spectrum stays readable. */
+    .color-row[data-term="H"] input[type="range"] {
+        --bar: linear-gradient(to right, oklch(0.7 0.15 0), oklch(0.7 0.15 30), oklch(0.7 0.15 60), oklch(0.7 0.15 90), oklch(0.7 0.15 120), oklch(0.7 0.15 150), oklch(0.7 0.15 180), oklch(0.7 0.15 210), oklch(0.7 0.15 240), oklch(0.7 0.15 270), oklch(0.7 0.15 300), oklch(0.7 0.15 330), oklch(0.7 0.15 360));
+    }
+
     .color-row input[type="range"] {
         appearance: none;
         -webkit-appearance: none;

@@ -82,27 +82,6 @@ pub fn literal(light: f64, chroma: f64, hue: f64) -> String {
     )
 }
 
-/// The bar behind a slider, so the slider says what it moves instead of being a grey line: `L` is black to
-/// white, `C` ramps from the grey of the current lightness and hue out to the cap, and `H` is the wheel itself.
-/// The wheel is written as one stop every 30° — a ramp whose ends are two hues interpolates between those two in
-/// oklab and misses the colours on the other side.
-fn bar_gradient(index: usize, light: f64, chroma: f64, hue: f64) -> String {
-    match index {
-        0 => "linear-gradient(to right, oklch(0 0 0), oklch(1 0 0))".to_string(),
-        1 => format!(
-            "linear-gradient(to right, {}, {})",
-            literal(light, 0.0, hue),
-            literal(light, MAX_CHROMA, hue)
-        ),
-        _ => {
-            let stops: Vec<String> = (0..=12)
-                .map(|i| literal(0.7, 0.15, f64::from(i) * 30.0))
-                .collect();
-            format!("linear-gradient(to right, {})", stops.join(", "))
-        }
-    }
-}
-
 fn chip_style(has_value: bool, light: f64, chroma: f64, hue: f64) -> String {
     let base = "width: 16px; height: 16px; border-radius: 4px; flex: 0 0 auto;";
     if has_value {
@@ -196,7 +175,17 @@ fn row_view(
 
     div()
         .class("color-row flex row")
-        .style("align-items: center; gap: 6px;")
+        .attr("data-term", name)
+        // The bar each slider paints is one rule in `custom.css` (`.color-row[data-term=…]`), so the chart
+        // module's copy of this panel — plain JS, no renderer involved — gets the same bars by carrying the
+        // same class and the same three numbers.
+        .style(move || {
+            let (l, c, h) = terms.get();
+            format!(
+                "align-items: center; gap: 6px; --l: {l:.4}; --c: {c:.4}; --h: {};",
+                num(2, h)
+            )
+        })
         .child(
             span()
                 .class("muted")
@@ -209,13 +198,7 @@ fn row_view(
                 .attr("min", min.to_string())
                 .attr("max", max.to_string())
                 .attr("step", step.to_string())
-                .style(move || {
-                    let (l, c, h) = terms.get();
-                    format!(
-                        "flex: 1 1 auto; min-width: 90px; --bar: {};",
-                        bar_gradient(index, l, c, h)
-                    )
-                })
+                .style("flex: 1 1 auto; min-width: 90px;")
                 .prop("value", move || {
                     let (l, c, h) = terms.get();
                     num(index, [l, c, h][index])
@@ -439,7 +422,7 @@ fn input_value(e: &web_sys::Event) -> String {
 
 #[cfg(test)]
 mod color_tests {
-    use super::{MAX_CHROMA, bar_gradient, literal, terms_of, triple};
+    use super::{MAX_CHROMA, literal, terms_of, triple};
 
     #[test]
     fn the_value_it_packs_is_a_triple() {
@@ -467,15 +450,5 @@ mod color_tests {
     fn the_end_of_the_hue_bar_is_not_its_start() {
         assert_eq!(terms_of("0.5 0.1 360"), Some((0.5, 0.1, 360.0)));
         assert_eq!(triple(0.5, 0.1, 360.0), "0.50 0.10 360");
-    }
-
-    #[test]
-    fn a_bar_paints_what_its_slider_moves() {
-        assert!(bar_gradient(0, 0.5, 0.1, 0.0).starts_with("linear-gradient(to right, oklch(0 0 0)"));
-        assert_eq!(
-            bar_gradient(1, 0.5, 0.1, 120.0),
-            "linear-gradient(to right, oklch(0.50 0.00 120), oklch(0.50 0.40 120))"
-        );
-        assert_eq!(bar_gradient(2, 0.5, 0.1, 0.0).matches("oklch(").count(), 13);
     }
 }

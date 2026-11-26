@@ -501,9 +501,20 @@ function openMenu(view, item, anchor) {
   colorRow.appendChild(swatch);
   panel.appendChild(colorRow);
 
+  // The bars this panel shows are the field's bars: `custom.css` paints `.color-row[data-term]` from these three
+  // numbers, so the module carries the same class and writes the same variables rather than its own copy of the
+  // gradients (ADR 0051 §24, ADR 0052 §3).
+  const paintBars = () => {
+    panel.style.setProperty("--l", terms.l.toFixed(4));
+    panel.style.setProperty("--c", terms.c.toFixed(4));
+    panel.style.setProperty("--h", String(Math.round(terms.h)));
+  };
+  paintBars();
+
   const apply = () => {
     item.color = oklchCss(terms.l, terms.c, terms.h);
     swatch.style.background = item.color;
+    paintBars();
     schedulePaint(view);
   };
 
@@ -515,6 +526,10 @@ function openMenu(view, item, anchor) {
   for (const [name, min, max, step, set] of rows) {
     const key = name.toLowerCase();
     const row = el("div", "display:flex;align-items:center;gap:6px;");
+    // The class and the term are what `custom.css` keys the bar on; the renderer's own colour field draws the
+    // same two attributes (widgets/color.rs).
+    row.className = "color-row";
+    row.dataset.term = name;
     row.appendChild(el("span", "opacity:.6;width:34px;", name));
 
     const slider = el("input", "flex:1 1 auto;min-width:90px;");
