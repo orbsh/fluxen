@@ -112,4 +112,55 @@
             flex-shrink: 1;
         }
     }
+
+    /* The colour field's sliders (ADR 0052). Each row hands its bar a gradient through `--bar`, so the track
+       paints what moving it changes. The thumb is a DOT INSIDE the bar, not a handle across it: the bar's colour
+       is the information, and a tall thumb covers the position it is reporting. */
+    .color-row input[type="range"] {
+        appearance: none;
+        -webkit-appearance: none;
+        height: 14px;
+        background: transparent;
+        cursor: pointer;
+    }
+
+    .color-row input[type="range"]::-webkit-slider-runnable-track {
+        height: 14px;
+        border-radius: 7px;
+        background: var(--bar, var(--secondary));
+        box-shadow: inset 0 0 0 1px var(--border-color);
+    }
+
+    .color-row input[type="range"]::-webkit-slider-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 10px;
+        height: 10px;
+        margin-top: 2px;
+        border: none;
+        border-radius: 50%;
+        background: var(--fg);
+        box-shadow: 0 0 0 2px var(--bg);
+    }
+
+    .color-row input[type="range"]::-moz-range-track {
+        height: 14px;
+        border-radius: 7px;
+        background: var(--bar, var(--secondary));
+        box-shadow: inset 0 0 0 1px var(--border-color);
+    }
+
+    .color-row input[type="range"]::-moz-range-thumb {
+        width: 10px;
+        height: 10px;
+        border: none;
+        border-radius: 50%;
+        background: var(--fg);
+        box-shadow: 0 0 0 2px var(--bg);
+    }
+
+    .color-row input[type="range"]:focus-visible {
+        outline: 2px solid var(--fg);
+        outline-offset: 2px;
+    }
 }

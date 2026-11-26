@@ -17,6 +17,7 @@ use crate::rough;
 use accrete::Color;
 use leptos::ev;
 use leptos::html::*;
+use leptos::leptos_dom::helpers::window_event_listener;
 use leptos::prelude::*;
 use serde_json::Value;
 use wasm_bindgen::JsCast;
@@ -41,6 +42,16 @@ fn num(index: usize, value: f64) -> String {
     }
 }
 
+/// A hue folded onto the wheel, except that `360` is left alone: it names the same colour as `0`, and the bar
+/// has an end at both.
+fn wrap_hue(hue: f64) -> f64 {
+    if (0.0..=360.0).contains(&hue) {
+        hue
+    } else {
+        hue.rem_euclid(360.0)
+    }
+}
+
 fn terms_of(value: &str) -> Option<(f64, f64, f64)> {
     let parts: Vec<f64> = value
         .split_whitespace()
@@ -48,7 +59,9 @@ fn terms_of(value: &str) -> Option<(f64, f64, f64)> {
         .collect();
     match parts.as_slice() {
         [light, chroma, hue] if (0.0..=1.0).contains(light) && (0.0..=1.0).contains(chroma) => {
-            Some((*light, *chroma, hue.rem_euclid(360.0)))
+            // `360` stays `360`: it is where the hue bar ENDS, and folding it to `0` there is what made the
+            // slider jump back to the start the moment it reached the far end. Only a value off the wheel wraps.
+            Some((*light, *chroma, wrap_hue(*hue)))
         }
         _ => None,
     }
@@ -67,6 +80,27 @@ pub fn literal(light: f64, chroma: f64, hue: f64) -> String {
         num(1, chroma),
         num(2, hue)
     )
+}
+
+/// The bar behind a slider, so the slider says what it moves instead of being a grey line: `L` is black to
+/// white, `C` ramps from the grey of the current lightness and hue out to the cap, and `H` is the wheel itself.
+/// The wheel is written as one stop every 30° — a ramp whose ends are two hues interpolates between those two in
+/// oklab and misses the colours on the other side.
+fn bar_gradient(index: usize, light: f64, chroma: f64, hue: f64) -> String {
+    match index {
+        0 => "linear-gradient(to right, oklch(0 0 0), oklch(1 0 0))".to_string(),
+        1 => format!(
+            "linear-gradient(to right, {}, {})",
+            literal(light, 0.0, hue),
+            literal(light, MAX_CHROMA, hue)
+        ),
+        _ => {
+            let stops: Vec<String> = (0..=12)
+                .map(|i| literal(0.7, 0.15, f64::from(i) * 30.0))
+                .collect();
+            format!("linear-gradient(to right, {})", stops.join(", "))
+        }
+    }
 }
 
 fn chip_style(has_value: bool, light: f64, chroma: f64, hue: f64) -> String {
@@ -149,7 +183,7 @@ fn row_view(
             match index {
                 0 => l = value,
                 1 => c = value,
-                _ => h = value.rem_euclid(360.0),
+                _ => h = wrap_hue(value),
             }
             terms.set((l, c, h));
             has_value.set(true);
@@ -175,7 +209,13 @@ fn row_view(
                 .attr("min", min.to_string())
                 .attr("max", max.to_string())
                 .attr("step", step.to_string())
-                .style("flex: 1 1 auto; min-width: 90px;")
+                .style(move || {
+                    let (l, c, h) = terms.get();
+                    format!(
+                        "flex: 1 1 auto; min-width: 90px; --bar: {};",
+                        bar_gradient(index, l, c, h)
+                    )
+                })
                 .prop("value", move || {
                     let (l, c, h) = terms.get();
                     num(index, [l, c, h][index])
@@ -303,6 +343,36 @@ pub fn color_(accrete: Color, ctx: &Ctx) -> AnyView {
         open.set(false);
     };
 
+    // Both legs of closing hang on the window, the way `panel` does it (components/panel.rs): an outside click
+    // can land anywhere, and `Escape` only reaches a focused element — hovering opens this panel without
+    // focusing anything, so a keydown listener on the panel itself never fired.
+    let root = NodeRef::<Div>::new();
+    {
+        let on_key = window_event_listener(ev::keydown, move |e| {
+            if open.get_untracked() && e.key() == "Escape" {
+                close();
+            }
+        });
+        let on_click = window_event_listener(ev::click, move |e| {
+            if !open.get_untracked() {
+                return;
+            }
+            // The face and the panel are both inside this element, and a click there is not "outside".
+            let inside = root
+                .get_untracked()
+                .zip(e.target().and_then(|t| t.dyn_into::<web_sys::Node>().ok()))
+                .map(|(el, target)| el.contains(Some(&target)))
+                .unwrap_or(false);
+            if !inside {
+                close();
+            }
+        });
+        on_cleanup(move || {
+            on_key.remove();
+            on_click.remove();
+        });
+    }
+
     let panel = {
         let ctx = ctx.clone();
         let accrete = accrete.clone();
@@ -312,15 +382,11 @@ pub fn color_(accrete: Color, ctx: &Ctx) -> AnyView {
                 let rows: Vec<AnyView> = (0..3)
                     .map(|i| row_view(&ctx, &accrete, &tag, field, terms, has_value, texts, i))
                     .collect();
-                let close_esc = close;
                 div()
                     .style("position: absolute; top: 0; left: 0; z-index: 30;")
-                    .attr("tabindex", "0")
-                    .on(ev::keydown, move |e: web_sys::KeyboardEvent| {
-                        if e.key() == "Escape" {
-                            close_esc();
-                        }
-                    })
+                    // A click inside the panel must not reach the face's toggle, or picking a value would
+                    // unpin the panel and the first mouse-leave would close it mid-drag.
+                    .on(ev::click, |e| e.stop_propagation())
                     .child(
                         div()
                             .class("color-panel is-border is-shadow")
@@ -342,21 +408,12 @@ pub fn color_(accrete: Color, ctx: &Ctx) -> AnyView {
         }
     };
 
-    let scrim = move || {
-        open.get().then(|| {
-            div()
-                .class("color-scrim")
-                .style("position: fixed; inset: 0; z-index: 20;")
-                .on(ev::click, move |_| close())
-                .into_any()
-        })
-    };
-
     let face_layer = rough::drawn_border(&ctx, None);
     div()
         .class(css)
         .attr("disabled", is_locked)
         .attr("id", node_id)
+        .node_ref(root)
         .style("position: relative; align-items: center; gap: 6px; cursor: pointer;")
         .on(ev::mouseenter, hover_in)
         .on(ev::mouseleave, hover_out)
@@ -368,7 +425,6 @@ pub fn color_(accrete: Color, ctx: &Ctx) -> AnyView {
                 .child(header_view(terms, has_value))
                 .child(face_layer),
         )
-        .child(scrim)
         .child(panel)
         .into_any()
 }
@@ -383,7 +439,7 @@ fn input_value(e: &web_sys::Event) -> String {
 
 #[cfg(test)]
 mod color_tests {
-    use super::{MAX_CHROMA, literal, terms_of, triple};
+    use super::{MAX_CHROMA, bar_gradient, literal, terms_of, triple};
 
     #[test]
     fn the_value_it_packs_is_a_triple() {
@@ -403,5 +459,23 @@ mod color_tests {
     fn a_hue_outside_the_wheel_comes_back_inside_it() {
         assert_eq!(terms_of("0.5 0.1 400"), Some((0.5, 0.1, 40.0)));
         assert_eq!(terms_of("0.5 0.1 -40"), Some((0.5, 0.1, 320.0)));
+    }
+
+    /// The far end of the hue bar is `360`, not `0`. Folding it was what made the slider jump back to the start
+    /// as soon as it reached the end — and the value comes back through the loom, so the fold happened twice.
+    #[test]
+    fn the_end_of_the_hue_bar_is_not_its_start() {
+        assert_eq!(terms_of("0.5 0.1 360"), Some((0.5, 0.1, 360.0)));
+        assert_eq!(triple(0.5, 0.1, 360.0), "0.50 0.10 360");
+    }
+
+    #[test]
+    fn a_bar_paints_what_its_slider_moves() {
+        assert!(bar_gradient(0, 0.5, 0.1, 0.0).starts_with("linear-gradient(to right, oklch(0 0 0)"));
+        assert_eq!(
+            bar_gradient(1, 0.5, 0.1, 120.0),
+            "linear-gradient(to right, oklch(0.50 0.00 120), oklch(0.50 0.40 120))"
+        );
+        assert_eq!(bar_gradient(2, 0.5, 0.1, 0.0).matches("oklch(").count(), 13);
     }
 }
