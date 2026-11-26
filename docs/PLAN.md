@@ -76,6 +76,7 @@
 
 ## 已修 — 这条路付过的代价
 
+- [x] 图表模块四件事一起坏：内置图例一直画着（`legend: true` 从未显式关过）、切回平面直角坐标不重绘（`options()` 是 patch，删掉 `coordinate` 节点等于没改）、两个序列都画成柱时叠成一根（分组与堆叠是层的 `transform`，每序列一个 child 里没有那个通道）、折线只有直段 — 2026-11-26 修（ADR 0053）；实测：坐标三轮切换三个不同画面且第三轮与初始逐像素相同，分组/堆叠画布哈希互异且切回一致，平滑与折角同像素数不同几何，`legend:false` 的 A/B 让画布顶部那块墨整块消失（9 行起密集色块 → 16 行起一条 6px 竖线）
 - [x] 镜像构建死在 truck 场景那步，`curl: (23)`：`crates/ui_leptos/assets/` 自 `c57e5b8` 起整棵被 gitignore，干净检出里没有 `splatviewer/` 目录，`curl -o` 写不进去（同类坑 3dbrowser 那步已修过、这步漏了）；顺带补 `assets/modules/splatviewer/index.js` 的拷贝，原先镜像里只有场景、`/assets/splatviewer/index.js` 是 404 — 2026-11-26 修；实测：`git archive HEAD` 出的干净树 + 改好的 Dockerfile，`docker build` 全程通过（`cargo build -p stage` 48s、`trunk build` 出 dist），镜像 `0cbc86d`；CI 上 27 次全红（`0b5caae` 之后）应随之转绿
 - [x] 颜色面板的三条腿一起坏：悬浮打开时 Esc 无效（keydown 挂在面板自己身上，而悬浮不聚焦），点外部关不掉（遮罩的 click 冒泡到方片的开关，关掉后立刻被重新钉上），`H` 拖到末端跳回起点（`rem_euclid(360)` 把 `360` 折成 `0`，值经 loom 回来又折一次）— 2026-11-26 修；实测无焦点 Esc 关、点外部关、点面板内部不关，`H` 停在 `360`，`gate_settings` 13/13（ADR 0052 §3/§6/§7）
 - [x] trunk 0.22 拒绝 copy-dir 的绝对 href，`x start` 在装配阶段就死 — 2026-10-23 修

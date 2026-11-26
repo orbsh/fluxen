@@ -67,6 +67,20 @@ const COORD_ICON = {
     "</svg>",
 };
 
+// Two bars next to each other versus one bar in two pieces: the button shows which it is, like the coordinate one.
+const STACK_ICON = {
+  grouped:
+    '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">' +
+    '<rect x="2" y="5" width="4" height="7.5" fill="currentColor"/>' +
+    '<rect x="8" y="2" width="4" height="10.5" fill="currentColor" opacity=".55"/>' +
+    "</svg>",
+  stacked:
+    '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">' +
+    '<rect x="3" y="8.5" width="8" height="4" fill="currentColor"/>' +
+    '<rect x="3" y="2" width="8" height="6" fill="currentColor" opacity=".55"/>' +
+    "</svg>",
+};
+
 function specOf(bytes) {
   if (!bytes || !bytes.length) return {};
   const v = decode(bytes);
@@ -234,7 +248,7 @@ function mergeItems(old, fresh) {
   return fresh.map((item) => {
     const had = byName.get(item.name);
     if (!had) return item;
-    const merged = Object.assign({}, item, { color: had.color, hidden: had.hidden });
+    const merged = Object.assign({}, item, { color: had.color, hidden: had.hidden, smooth: had.smooth });
     if (item.mark != null) merged.mark = had.mark;
     return merged;
   });
@@ -242,9 +256,15 @@ function mergeItems(old, fresh) {
 
 function buildSpec(state) {
   const root = Object.assign({}, state.view);
+  // The legend above the plot is ours (ADR 0051 §1). G2 draws its own whenever a colour channel exists, so it is
+  // switched off on every render, whatever the frame asked for — two legends, one of them unclickable, is worse
+  // than the frame's `legend` option being ignored.
+  root.legend = false;
+  // The coordinate is stated, never deleted: `options()` patches the spec tree, so removing the node leaves the
+  // last one in place and switching BACK to a plane chart repaints the polar one (measured: theta -> cartesian
+  // stayed round until `coordinate: {type: "cartesian"}` was written out).
   const coord = state.coords[state.coord];
-  if (coord && coord !== "cartesian") root.coordinate = { type: coord };
-  else delete root.coordinate;
+  root.coordinate = { type: coord || "cartesian" };
   root.type = "view";
 
   if (state.mode === "layers") {
@@ -255,19 +275,61 @@ function buildSpec(state) {
     return root;
   }
 
+  const visible = state.items.filter((item) => !item.hidden);
+  const folded = foldBars(state, visible);
+  if (folded) {
+    root.children = [folded];
+    return root;
+  }
+
   const children = [];
-  for (const item of state.items) {
-    if (item.hidden) continue;
+  for (const item of visible) {
     const child = Object.assign({}, item.child);
     for (const k of VIEW_KEYS) delete child[k];
     child.type = item.mark;
     if (item.color) {
       child.style = Object.assign({}, child.style, { fill: item.color, stroke: item.color });
     }
+    // `smooth` is G2's own line shape; a straight line is the absence of it, so sharp needs no value.
+    if (item.smooth && (item.mark === "line" || item.mark === "area")) {
+      child.style = Object.assign({}, child.style, { shape: "smooth" });
+    }
     children.push(child);
   }
   root.children = children;
   return root;
+}
+
+/// Bars of two or more series only read as columns when they are ONE layer. `dodgeX` (side by side) and
+/// `stackY` (one on top of another) are transforms of a layer, and the grouping channel lives in that layer:
+/// separate children have nothing to be dodged against, so they paint over each other and a two-series bar chart
+/// looks like a one-series one. Folding the all-interval series back into the single interval child they were
+/// split from gives the transforms something to work with; each series' colour rides in the scale, and hiding a
+/// series means leaving its rows out. A mixed chart (bars plus a line) does not fold — the forms have to stay
+/// apart — and keeps the old overlaying children.
+function foldBars(state, visible) {
+  if (visible.length < 2) return null;
+  if (!visible.every((item) => item.mark === "interval")) return null;
+  const first = visible[0].child || {};
+  const field = colorFieldOf(first) || "series";
+  const data = [];
+  for (const item of visible) {
+    const rows = item.child && Array.isArray(item.child.data) ? item.child.data : [];
+    for (const row of rows) data.push(Object.assign({}, row, { [field]: item.name }));
+  }
+  const child = Object.assign({}, first, {
+    type: "interval",
+    data,
+    encode: Object.assign({}, first.encode, { color: field }),
+    transform: [{ type: state.stack === "stacked" ? "stackY" : "dodgeX" }],
+  });
+  const colors = visible.map((item) => item.color || (item.child && item.child.style && item.child.style.fill));
+  if (colors.every(Boolean)) {
+    child.scale = Object.assign({}, first.scale, {
+      color: { domain: visible.map((item) => item.name), range: colors },
+    });
+  }
+  return child;
 }
 
 // ---------------------------------------------------------------- the legend
@@ -327,7 +389,9 @@ export async function mount(host, data, _host2, options) {
     plot,
     // The whole normalized shape rides in the state: which mode it is (series / layers), the layers themselves,
     // and the data they share. Dropping any of them turns a layered radar into a series chart with no marks.
-    state: Object.assign({}, norm, { coords, marks, coord: coords.indexOf(start) }),
+    // `stack` is chart-level, like the coordinate: it says how the bars of ALL series compose, so it cannot live
+    // in a per-series panel.
+    state: Object.assign({}, norm, { coords, marks, coord: coords.indexOf(start), stack: "grouped" }),
     menu: null,
     scrim: null,
     pending: null,
@@ -405,6 +469,7 @@ function drawLegend(view) {
     legend.appendChild(row);
   });
   drawCoordButton(view);
+  drawStackButton(view);
 }
 
 function drawCoordButton(view) {
@@ -433,6 +498,40 @@ function drawCoordButton(view) {
   button.addEventListener("click", (event) => {
     event.stopPropagation();
     state.coord = (state.coord + 1) % state.coords.length;
+    paint(view);
+  });
+  plot.appendChild(button);
+}
+
+/// Only when there is something to compose: two or more series, all of them bars. One bar per x has no grouping
+/// question to ask, and a bars-plus-line chart has no stacking answer.
+function drawStackButton(view) {
+  const { plot, state } = view;
+  const old = plot.querySelector(".g2c-stack");
+  if (old) old.remove();
+  const visible = state.items.filter((item) => !item.hidden);
+  if (visible.length < 2 || !visible.every((item) => item.mark === "interval")) return;
+  const stacked = state.stack === "stacked";
+  const button = el(
+    "button",
+    "position:absolute;top:2px;right:26px;z-index:5;width:20px;height:20px;padding:0;display:flex;" +
+      "align-items:center;justify-content:center;border:none;border-radius:4px;background:transparent;" +
+      "color:inherit;opacity:.5;cursor:pointer;"
+  );
+  button.type = "button";
+  button.className = "g2c-stack";
+  button.innerHTML = stacked ? STACK_ICON.stacked : STACK_ICON.grouped;
+  button.title = stacked ? "柱：堆叠 · 点击改成分组" : "柱：分组 · 点击改成堆叠";
+  button.setAttribute("aria-label", button.title);
+  button.addEventListener("mouseenter", () => {
+    button.style.opacity = "1";
+  });
+  button.addEventListener("mouseleave", () => {
+    button.style.opacity = ".5";
+  });
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    state.stack = stacked ? "grouped" : "stacked";
     paint(view);
   });
   plot.appendChild(button);
@@ -488,6 +587,35 @@ function openMenu(view, item, anchor) {
     marksRow.appendChild(button);
   }
   panel.appendChild(marksRow);
+
+  // 拐角：一条折线是走直段还是走曲线。它属于这一条自己的形状，与形态、颜色同一层级——两个序列可以一个折角一个
+  // 平滑。柱子没有拐角可谈，所以这个只在 line / area 时出现。
+  if (item.mark === "line" || item.mark === "area") {
+    const cornerRow = el("div", "display:flex;gap:4px;flex-wrap:wrap;align-items:center;");
+    cornerRow.appendChild(el("span", "opacity:.6;width:34px;", "拐角"));
+    for (const [value, label] of [
+      [false, "折角"],
+      [true, "平滑"],
+    ]) {
+      const on = Boolean(item.smooth) === value;
+      const button = el(
+        "button",
+        "padding:1px 6px;font-size:11px;border:none;border-radius:4px;cursor:pointer;" +
+          (on ? "background:rgba(0,0,0,.12);font-weight:600;" : "background:transparent;opacity:.7;"),
+        label
+      );
+      button.type = "button";
+      button.className = value ? "g2c-smooth" : "g2c-sharp";
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        item.smooth = value;
+        await paint(view);
+        openMenu(view, item, anchorOf(view, item.name) || anchor);
+      });
+      cornerRow.appendChild(button);
+    }
+    panel.appendChild(cornerRow);
+  }
 
   // 颜色：三根滑块，与渲染器的 color 字段同一套形状（L/C/H 各一滑块加一个数字框）
   const shown = seriesColor(view, item, state.items.indexOf(item));
