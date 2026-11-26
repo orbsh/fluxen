@@ -1,6 +1,6 @@
 # 0046 — 地址的意见归宿主：boot 不读页面 URL
 
-状态：Accepted（未实现）
+状态：Accepted（`lib.rs` 已按此走：boot 只拼装宿主交进来的地址参数，不再读 `document.location` 的查询串。`settings.rs` 的模块注释与测试仍停在旧形状——`cargo check -p ui_leptos --tests` 报 21 个错，待补）
 
 ## 问题
 
