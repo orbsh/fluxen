@@ -2,13 +2,13 @@ use crate::Ctx;
 use crate::ctx::render_accrete;
 use crate::hooks::{field_changed, locked, use_common_css, use_source_list, use_source_untracked};
 use crate::rough;
-use accrete::{AccreteOps, Dir, Select, classify::Classify};
+use accrete::{AccreteOps, Dir, Picker, classify::Classify};
 use leptos::ev;
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::{Value, to_value};
 
-/// A select (ADR 0031 §2): the rows come from a list plane, the current choice from `source`, and the choice
+/// A picker's menu (ADR 0031 §2): the rows come from a list plane, the current choice from `source`, and the choice
 /// goes out through the enclosing `loom` (ADR 0032) when there is a `tag`.
 ///
 /// ADR 0049 gives it three shapes, all from `attrs` and all off by default:
@@ -17,14 +17,14 @@ use serde_json::{Value, to_value};
 ///   own state: it is a gesture, not a value, so it never travels.
 /// - `dir` — the rows run `row` (a row of buttons) or `col` (the default list).
 /// - `multiple` — several keys may be chosen; the field then packs the list of them instead of one.
-pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
+pub fn picker_(accrete: Picker, ctx: &Ctx) -> AnyView {
     let ctx = ctx.clone();
     let attrs = accrete.attrs.clone().unwrap_or_default();
     let folded = attrs.expand.unwrap_or(false);
     let sideways = matches!(attrs.dir, Some(Dir::Row) | Some(Dir::RowReverse));
     let multiple = attrs.multiple.unwrap_or(false);
 
-    let mut css = vec!["select", "flex"];
+    let mut css = vec!["picker", "flex"];
     use_common_css(&mut css, &accrete);
     let css = css.join(" ");
 
@@ -90,7 +90,7 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
                         .style(place)
                         .child(
                             div()
-                                .class("select-menu is-border is-shadow")
+                                .class("picker-menu is-border is-shadow")
                                 .style(box_style.clone())
                                 .child(row_views(
                                     &ctx, &accrete, &tag, chosen, field, folded, multiple, open, false,
@@ -106,7 +106,7 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
             .style("position: relative;")
             .child(
                 div()
-                    .class("select-trigger flex row as-stretch")
+                    .class("picker-trigger flex row as-stretch")
                     .style("align-items: center; gap: 6px; cursor: pointer;")
                     .on(ev::click, toggle)
                     .child(summary)
@@ -116,7 +116,7 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
                 move || {
                     open.get().then(|| {
                         div()
-                            .class("select-scrim")
+                            .class("picker-scrim")
                             .style("position: fixed; inset: 0; z-index: 20;")
                             .on(ev::click, close)
                             .into_any()
@@ -164,7 +164,7 @@ pub fn select_(accrete: Select, ctx: &Ctx) -> AnyView {
 #[allow(clippy::too_many_arguments)]
 fn row_views(
     ctx: &Ctx,
-    accrete: &Select,
+    accrete: &Picker,
     tag: &Option<String>,
     chosen: RwSignal<Vec<String>>,
     field: Option<RwSignal<Value>>,
@@ -266,7 +266,7 @@ pub fn clicked(keys: &[String], key: &str, multiple: bool) -> Vec<String> {
 }
 
 #[cfg(test)]
-mod select_tests {
+mod picker_tests {
     use super::{clicked, keys_of, pack};
     use serde_json::{Value, json};
 

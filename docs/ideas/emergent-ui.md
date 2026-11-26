@@ -10,7 +10,7 @@ Its companion is `islands.md`: islands answer *who owns which region*, this note
 
 - Any block at any moment: `set` / `patch` on a named slot, `append` / `remove` by row identity, `create` for the root. Slot granularity is exactly what "one block appears" needs.
 - **`tiles` (ADR 0010's `pages`, ADR 0031 §4) is the keep-alive switcher, and both semantics are per container** — `display="render"` mounts only the selected row and its state goes with the unmount; `display="dom"` keeps every row in the DOM and flips a `hide` class on the others. The producer picks which, per container, which is the "optional" a per-component solution cannot give.
-- The in-page flip is wired end to end: a `select`'s `sink {scope: local}` writes the value plane → a `source` reads that slot (`hooks.rs::value_of`) → the container's step effect sets the key → only the class closure re-runs, so no row is rebuilt. One click buys a tab switch with zero state loss and no server round trip. The far side can still name a cursor with `set` (it is the fallback of a `both` read), but it cannot outrank the page's own click — `inject`, which could, is gone (ADR 0038).
+- The in-page flip is wired end to end: a `picker`'s `sink {scope: local}` writes the value plane → a `source` reads that slot (`hooks.rs::value_of`) → the container's step effect sets the key → only the class closure re-runs, so no row is rebuilt. One click buys a tab switch with zero state loss and no server round trip. The far side can still name a cursor with `set` (it is the fallback of a `both` read), but it cannot outrank the page's own click — `inject`, which could, is gone (ADR 0038).
 - `tiles` rows are keyed (`tachys::view::keyed::keyed`, key = row id), which is the renderer's own proof that DOM identity can survive a data write.
 - `panel` is the opposite by design: a closed cell renders no children at all (`components/panel.rs`), so a closed body losing state is the contract. Memory-cheap is why it exists; making it keep-alive would be another cell, not a change to the default.
 - Overlays for the non-blocking case: `panel`'s four cells; drag: `frame`'s `attrs.draggable` / `attrs.accept`; identity: the auth gate draws the login surface in place of the page, which is emergent UI the framework already owns.
@@ -20,7 +20,7 @@ Its companion is `islands.md`: islands answer *who owns which region*, this note
 
 1. **Continuity is not on the wire.** A decaying quantity (stamina, cooldown, remaining context) is a 60 fps value; the wire carries discrete facts and the client runtime is a read-only mirror by design. Continuity lives in CSS transitions in the styling layer, or in a module (canvas) that draws itself.
 2. **Replacement takes local state with it, and the fix is the container, not per-component slots.** Values can be hoisted into a slot — `tiles`' step slot already is one — but focus, scroll position, IME composition and module state (Monaco, GL contexts) have no op and no binding, so no amount of naming preserves them. Only *not rebuilding* does, which is a property of the container (`tiles`' two keep-alive modes), not an annotation every component carries. Per-component hoisting is also the wrong end: it turns one structural decision into N components' worth of bookkeeping.
-3. **Situation facts mostly cannot come up.** Uplink has five doors (input/textarea Enter, select option click, form submit button, module `host.send`, forcegraph node-click) plus `hello` / `nav`; `ResizeObserver` is wired only for canvas/forcegraph/`tiles` resize. A fact like "the viewport is narrow" never reaches the producer today.
+3. **Situation facts mostly cannot come up.** Uplink has five doors (input/textarea Enter, picker option click, form submit button, module `host.send`, forcegraph node-click) plus `hello` / `nav`; `ResizeObserver` is wired only for canvas/forcegraph/`tiles` resize. A fact like "the viewport is narrow" never reaches the producer today.
 
 ## Viewport, in three layers
 
@@ -47,7 +47,7 @@ That is already the model: the server holds the page tree and the slots, the cli
 
 ## A first experiment, with no new types
 
-One page drawing `pages(display="dom")` with two panes — one holding an `input`, one holding a `chart` — its `select` bound to a local slot, flipped by an in-page emit from the client and pre-set by one `set` from the server. What to measure: does the hidden input keep its text after a round trip; does the chart keep its GL context and its animation phase; what does keeping both panes mounted cost in memory and in frame size. That single page decides whether the keep-alive path is usable or merely present.
+One page drawing `pages(display="dom")` with two panes — one holding an `input`, one holding a `chart` — its `picker` bound to a local slot, flipped by an in-page emit from the client and pre-set by one `set` from the server. What to measure: does the hidden input keep its text after a round trip; does the chart keep its GL context and its animation phase; what does keeping both panes mounted cost in memory and in frame size. That single page decides whether the keep-alive path is usable or merely present.
 
 ## Open
 

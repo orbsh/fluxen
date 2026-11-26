@@ -36,8 +36,9 @@ never the fields.
 **A field has no `sink` at all** (decided and implemented 2026-11-24). Keeping it for a `local` landing made one
 node answer two questions — "which field is this" and "where does the page state get written" — and it left the
 schema allowing a shape the runtime then had to warn about. What a field keeps is what a field is: `id`, `tag`,
-`attrs`, `source` (what it shows) and `kind` (what kind of field it is: element type and parse, one declaration —
-`number`, `bool`, `text`, `password`; absent means text). The one thing that leaves with `sink` is the field's part
+`attrs`, `source` (what it shows) and `kind` (what kind of field it is: element type, parse, and — for a number — the
+interval it admits; one declaration, absent means free text). `kind` is a sum type now: a bare word for the kinds that
+declare nothing, a map with a `type` for the ones that do (ADR 0050). The one thing that leaves with `sink` is the field's part
 in an emit: the `id` an outflow carries is the emitting node's, and a field no longer emits.
 
 **Which id a submission carries.** An outflow is `{event, id?, data}` and the `id` is the emitting node's
@@ -49,7 +50,7 @@ identity: it is the key an item keeps when a field sits in a list (ADR 0031 §4)
 address. Nothing about it goes over the wire. `kind` is spelled that way because `type` is already the node's own discriminator on the wire,
 and it is not the read's or the write's: a field has one type. The local landing a field used to own now belongs
 to a loom whose own sink is `local` with `submit: ["change"]` — one wrapper, the same cost §4 describes, and the
-count and the reset come with it. `Bind` lost `type` in the same move, and `Input`/`Select` refuse unknown keys,
+count and the reset come with it. `Bind` lost `type` in the same move, and `Input`/`Picker` refuse unknown keys,
 so a page still carrying the old `sink` hears about it instead of quietly losing the write. A downstream SDK that
 refused that dead shape in its own build step (reflux's `_check_uplinks`) drops it at the same time, because it
 was the same rule kept in a second place. Tracked as scratch ticket #470.

@@ -1,14 +1,14 @@
 use crate::Ctx;
 use crate::hooks::{enter_pressed, field_changed, locked, use_common_css, value_of};
 use crate::rough;
-use accrete::{AccreteOps, Input, JsType};
+use accrete::{AccreteOps, Input, InputKind};
 use leptos::ev;
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::Value;
 use wasm_bindgen::JsCast;
 
-fn default_option_jskind(v: &Option<JsType>) -> Value {
+fn default_option_jskind(v: &Option<InputKind>) -> Value {
     v.as_ref()
         .map(|x| x.default_value())
         .unwrap_or_else(|| Value::String(String::new()))
@@ -20,12 +20,12 @@ fn default_option_jskind(v: &Option<JsType>) -> Value {
 /// A `type: bool` field is a checkbox, and a checkbox keeps its state in `checked()`, never in `value()`
 /// (a box with no `value` attribute reports the string `"on"`, which parsed as a bool is always false —
 /// a skin toggle written that way could only ever turn things off).
-fn target_value(kind: &Option<JsType>, target: Option<web_sys::EventTarget>) -> String {
+fn target_value(kind: &Option<InputKind>, target: Option<web_sys::EventTarget>) -> String {
     let Some(t) = target else {
         return String::new();
     };
     if let Some(i) = t.dyn_ref::<web_sys::HtmlInputElement>() {
-        if matches!(kind, Some(JsType::bool)) {
+        if kind.as_ref().is_some_and(|k| k.is_bool()) {
             return if i.checked() {
                 "true".into()
             } else {
@@ -40,32 +40,43 @@ fn target_value(kind: &Option<JsType>, target: Option<web_sys::EventTarget>) -> 
     String::new()
 }
 
-/// The text an element shows for a value — the same spelling the `value` binding uses.
-fn as_text(v: &Value) -> String {
-    match v {
-        Value::Number(n) => n.to_string(),
-        Value::Bool(b) => b.to_string(),
-        v => v.as_str().unwrap_or("").to_string(),
-    }
-}
-
 #[cfg(test)]
 mod parse_tests {
-    use super::parse;
-    use accrete::JsType;
+    use super::{display_of, parse};
+    use accrete::InputKind;
     use serde_json::json;
+
+    fn number() -> Option<InputKind> {
+        Some(InputKind::number)
+    }
 
     /// The declared type decides the JSON the loom packs — a field that says `number` sends a number,
     /// and one that says nothing sends what was typed (a "42" in a text field stays text).
     #[test]
     fn the_declared_type_is_what_lands_in_the_object() {
-        assert_eq!(parse(&Some(JsType::number), "42"), json!(42.0));
-        assert_eq!(parse(&Some(JsType::number), "4.5"), json!(4.5));
-        assert_eq!(parse(&Some(JsType::number), ""), json!(0.0));
-        assert_eq!(parse(&Some(JsType::bool), "true"), json!(true));
-        assert_eq!(parse(&Some(JsType::bool), "false"), json!(false));
+        assert_eq!(parse(&number(), "42"), json!(42.0));
+        assert_eq!(parse(&number(), "4.5"), json!(4.5));
+        // Nothing written is nothing set — not a zero the page would then send as a choice.
+        assert_eq!(parse(&number(), ""), json!(null));
+        assert_eq!(parse(&number(), "  "), json!(null));
+        assert_eq!(parse(&number(), "abc"), json!(null));
+        let flag = Some(InputKind::bool);
+        assert_eq!(parse(&flag, "true"), json!(true));
+        assert_eq!(parse(&flag, "false"), json!(false));
         assert_eq!(parse(&None, "42"), json!("42"));
-        assert_eq!(parse(&Some(JsType::text), "42"), json!("42"));
+        assert_eq!(parse(&Some(InputKind::text), "42"), json!("42"));
+    }
+
+    /// The box says `18`, not the JSON spelling of the parse (`18.0`). A display re-read from the parse after
+    /// every keystroke moves the caret: type `1`, the box becomes `1.0`, the `8` lands at the end, and the
+    /// field holds `1.08`.
+    #[test]
+    fn an_integral_number_prints_without_its_point() {
+        assert_eq!(display_of(&json!(18.0)), "18");
+        assert_eq!(display_of(&json!(1.08)), "1.08");
+        assert_eq!(display_of(&json!(null)), "");
+        assert_eq!(display_of(&json!(true)), "true");
+        assert_eq!(display_of(&json!("4.5")), "4.5");
     }
 }
 
@@ -75,10 +86,33 @@ fn seed_of(accrete: &accrete::Input) -> Option<&str> {
     accrete.tag.as_deref().or(accrete.id.as_deref())
 }
 
-fn parse(kind: &Option<JsType>, raw: &str) -> Value {
+/// How a value sits in a box. An integral float prints without its `.0`, so a member of `18` reads as `18`
+/// rather than as the JSON spelling `18.0`.
+fn display_of(v: &Value) -> String {
+    match v {
+        Value::Number(n) => match n.as_f64() {
+            Some(f) if f.fract() == 0.0 => format!("{f:.0}"),
+            Some(f) => f.to_string(),
+            None => n.to_string(),
+        },
+        Value::Bool(b) => b.to_string(),
+        _ => v.as_str().unwrap_or("").to_string(),
+    }
+}
+
+/// What a field's contents mean, in the shape its kind names. An empty number is **null**, not zero: "not
+/// written" and "written as nothing" are the same thing to a person, and neither of them is a value.
+fn parse(kind: &Option<InputKind>, raw: &str) -> Value {
     match kind {
-        Some(JsType::bool) => Value::Bool(raw == "true"),
-        Some(JsType::number) => Value::from(raw.parse::<f64>().unwrap_or(0.0)),
+        Some(k) if k.is_bool() => Value::Bool(raw == "true"),
+        Some(k) if k.is_number() => {
+            let text = raw.trim();
+            if text.is_empty() {
+                Value::Null
+            } else {
+                text.parse::<f64>().map(Value::from).unwrap_or(Value::Null)
+            }
+        }
         _ => Value::String(raw.to_string()),
     }
 }
@@ -87,7 +121,7 @@ fn parse(kind: &Option<JsType>, raw: &str) -> Value {
 /// later submit packs what is on screen; whether a change is also a send is the
 /// loom's decision (`attrs.submit`), never the field's.
 fn on_input(
-    kind: Option<JsType>,
+    kind: Option<InputKind>,
     slot: RwSignal<Value>,
     field: Option<RwSignal<Value>>,
     tag: Option<String>,
@@ -137,7 +171,7 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     // A switch is a box, not a column of text: `flex` makes it a flex item that grows with the row, which
     // turned every checkbox into a full-width bar with the tick in the middle. Every other kind of field
     // does want that growth, so the class is added per kind rather than for all of them.
-    let is_bool = matches!(accrete.kind, Some(JsType::bool));
+    let is_bool = accrete.kind.as_ref().is_some_and(|k| k.is_bool());
     let mut css = vec!["input", "is-shadow"];
     if !is_bool {
         css.push("flex");
@@ -205,15 +239,27 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
 
     // The element keeps its own text once someone types in it, and a binding that writes the same string it
     // wrote last time is skipped — so a reset (`clear`/`default`) would change the signal and leave the box
-    // full. This pushes the signal onto the element whenever they disagree, which is idempotent for the
+    // full. This pushes the value onto the element whenever they disagree, which is idempotent for the
     // ordinary case (`slot` == element) and the only way a reset becomes visible.
+    //
+    // What it pushes is the **draft**, not the signal's own spelling: a box re-written from the parse after
+    // every keystroke loses the caret (`1` comes back as `1.0`, so the `8` lands at the end and the field
+    // holds `1.08`). Text survives that round trip; a number does not.
+    let draft = RwSignal::new(display_of(&slot.get_untracked()));
     let node_el = NodeRef::<leptos::html::Input>::new();
     let node_area = NodeRef::<leptos::html::Textarea>::new();
     {
         let slot = slot;
         let switch = is_switch;
+        let kind = kind.clone();
         Effect::new(move |_| {
-            let want = as_text(&slot.get());
+            let incoming = slot.get();
+            // A write this box did not make (a reset, another writer) replaces the draft; this box's own write
+            // comes back as the parse of the draft, so it is left alone and the caret stays put.
+            if parse(&kind, &draft.get_untracked()) != incoming {
+                draft.set(display_of(&incoming));
+            }
+            let want = draft.get_untracked();
             if let Some(el) = node_el.get_untracked() {
                 // A checkbox shows `checked`, not `value`, and it has the same memory problem: a reset that
                 // writes `false` onto a box the reader ticked would otherwise only reach the signal.
@@ -237,12 +283,10 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
     let placeholder = value_of(&ctx, accrete.placeholder.as_ref(), false)
         .and_then(|d| d.as_str().map(String::from));
 
-    let ty = match &kind {
-        Some(JsType::number) => "number",
-        Some(JsType::bool) => "checkbox",
-        Some(x) => x.input_type(),
-        None => "text",
-    };
+    let ty = kind
+        .as_ref()
+        .map(|k| k.input_type())
+        .unwrap_or("text");
 
     if accrete.multiline {
         // A textarea shows its value as content; the display is a snapshot of the signal, which now
@@ -266,20 +310,11 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
         return rough::field_host(&ctx, seed_of(&accrete), false, el);
     }
 
-    // Reactivity sinks into the attribute closure: `value` is a DynProperty, so a
-    // signal write lands on the DOM value property directly. Wrapping the whole
-    // element tree in a top-level closure instead makes the rebuild a no-op for
-    // dirty string attributes ("signal cleared, text still there").
-    let value = move || {
-        let v = slot.get();
-        match &v {
-            Value::Number(n) => n.to_string(),
-            Value::Bool(b) => b.to_string(),
-            _ => v.as_str().unwrap_or("").to_string(),
-        }
-    };
+    let value = move || draft.get();
     let checked = move || slot.get().as_bool().unwrap_or(false);
 
+    // An input states a form, not a domain (ADR 0050): the element type is the whole of it, and an
+    // interval belongs to the picker that takes one by dragging.
     let base = input()
         .class(css.as_str())
         .r#type(ty)
@@ -287,11 +322,12 @@ pub fn input_(accrete: Input, ctx: &Ctx) -> AnyView {
         .node_ref(node_el)
         .on(ev::input, on_input(kind.clone(), slot, field, tag.clone(), emit, ctx.clone()))
         .on(ev::keydown, on_key(false, field, ctx.clone()));
-    let el = match (&kind, placeholder) {
-        (Some(JsType::bool), Some(ph)) => base.checked(checked).placeholder(ph).into_any(),
-        (Some(JsType::bool), None) => base.checked(checked).into_any(),
-        (_, Some(ph)) => base.value(value).placeholder(ph).into_any(),
-        (_, None) => base.value(value).into_any(),
+    let bool_kind = kind.as_ref().is_some_and(|k| k.is_bool());
+    let el = match (bool_kind, placeholder) {
+        (true, Some(ph)) => base.checked(checked).placeholder(ph).into_any(),
+        (true, None) => base.checked(checked).into_any(),
+        (false, Some(ph)) => base.value(value).placeholder(ph).into_any(),
+        (false, None) => base.value(value).into_any(),
     };
     rough::field_host(&ctx, seed_of(&accrete), is_switch, el)
 }

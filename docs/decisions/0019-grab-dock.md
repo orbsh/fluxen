@@ -9,7 +9,7 @@
 需求是液态化文档里那一下「按住一条消息往旁边一拖，它离开主河，变成一个独立的小流」
 （`~/.hermes/wiki/liquefaction.md` §界面）。渲染器今天表达不出来。
 
-上行面只有五处：`input`／`textarea` 回车、`select` 点选项、`form` 的 submit 按钮、
+上行面只有五处：`input`／`textarea` 回车、`picker` 点选项、`form` 的 submit 按钮、
 `canvas`／`chart`／`editor` 模块的 `host.send`、`forcegraph` 的 `node-click`。`tiles`
 的行、`text`、`panel` 的头都上不了行；`forcegraph` 里的拖是相机与节点物理，松手没超过
 阈值才算点击，拖本身不上报。

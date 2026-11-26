@@ -24,7 +24,7 @@ Expressing that as two binding shapes gives the renderer two resolution paths fo
 
 ### Why not a prefix
 
-`slot: "local:search"` cannot say "both", and the frame that needs both is the common one (a select
+`slot: "local:search"` cannot say "both", and the frame that needs both is the common one (a picker
 whose value is local while the choice is also sent up). Worse, an open prefix cannot be validated:
 `loca:search` is indistinguishable from a deliberate name, so a typo becomes a silently different
 value. Open-ended prefixes in an address are a parsing convention where a closed enumeration would
@@ -57,7 +57,7 @@ is shipped to users yet.
 ### The problem
 
 The same `bind` meant different things depending on the node: on `text` a read, on `input` a read
-plus a write-back, on `select` a read plus a report. A frame that writes upstream cannot be
+plus a write-back, on `picker` a read plus a report. A frame that writes upstream cannot be
 identified by reading the frame; you must know every component's default semantics. And a read-only
 target looks exactly like a writable one until something silently does nothing.
 
@@ -76,7 +76,7 @@ sink:   { dest: "draft", scope: both }   # the value flows out
 > address is the `dest` an outflow already carries (ADR 0023). `source` is a `Source`, `sink` is a `Sink`;
 > nothing else about this section changes.
 
-- `text` accepts `source`; `input` and `select` accept `source` (their `sink` is gone: the enclosing loom
+- `text` accepts `source`; `input` and `picker` accept `source` (their `sink` is gone: the enclosing loom
   sends, ADR 0032 §2); `loom`, `frame` and `panel` accept `sink`.
 - `scope: local` — an assignment, nothing leaves the page. `scope: remote` — the existing `set` op.
   `scope: both` — assign locally and mirror the change up; the far side stays authoritative on
@@ -94,7 +94,7 @@ sink:   { dest: "draft", scope: both }   # the value flows out
 ### What this deletes
 
 `report` disappears. Sending an action to the far side was never a separate mechanism — it is a value
-flowing out. A select that tells the island what was chosen is
+flowing out. A picker that tells the island what was chosen is
 `sink: { dest: "choice", scope: remote }`: one op, one address, no third channel to keep
 consistent.
 

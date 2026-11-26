@@ -44,9 +44,15 @@ pub trait WrapOps {
     fn wrap(self) -> Self::Target;
 }
 
+/// The form a value arrives in: an `<input>` element's own type (ADR 0032 §2). One behaviour with
+/// different forms and limits — every arm of this enum fills a box in, and the differences are
+/// cosmetic (a box that hides its text, a box with steppers) plus the parse.
+///
+/// Contrast `PickerKind`, the other way to keep a word table small (ADR 0050): there one name
+/// covers several *different* components.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub enum JsType {
+pub enum InputKind {
     #[allow(non_camel_case_types)]
     bool,
     #[allow(non_camel_case_types)]
@@ -62,7 +68,8 @@ pub enum JsType {
     submit,
 }
 
-impl JsType {
+impl InputKind {
+    /// The `type` an `<input>` element takes.
     pub fn input_type(&self) -> &'static str {
         match self {
             Self::bool => "checkbox",
@@ -74,13 +81,123 @@ impl JsType {
         }
     }
 
+    pub fn is_bool(&self) -> bool {
+        matches!(self, Self::bool)
+    }
+
+    pub fn is_number(&self) -> bool {
+        matches!(self, Self::number)
+    }
+
+    /// What an empty field packs. A number is **null**: "not written" is not zero, and turning one
+    /// into the other is how a page sets a value nobody typed.
     pub fn default_value(&self) -> Value {
         // JSON scalars have infallible constructors: no serializer round trip,
         // so nothing can fail for a value this module itself chose.
         match self {
-            Self::number => Value::from(0),
+            Self::number => Value::Null,
             Self::bool => Value::Bool(false),
             _ => Value::String(String::new()),
+        }
+    }
+}
+
+/// How a picker takes its value (ADR 0050). A picker is several components under one name — a menu,
+/// a slider, a switch — so unlike `InputKind` its kind carries the domain: an interval for the
+/// slider, a word list for the menu, nothing at all for the switch.
+///
+/// The wire keeps the asymmetry, because the asymmetry carries information: a kind that declares
+/// nothing is a bare word, and a kind that declares something is a map with a `type`.
+///
+/// ```text
+/// kind: bool
+/// kind: text
+/// kind: {type: number, min: 0, max: 64, step: 1}
+/// kind: {type: text, candidates: [solid, dashed]}
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(untagged)]
+pub enum PickerKind {
+    /// Nothing to declare: which component it is, is the whole answer.
+    Bare(PickerBare),
+    /// A component that states its domain.
+    Stated(PickerStated),
+}
+
+/// The picker kinds with no parameters.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum PickerBare {
+    /// A menu of options — the picker as it has always been. Which options is the `options` slot's
+    /// business, not the kind's.
+    #[default]
+    Text,
+    /// Two values, and there is nothing to say about them. The switch.
+    Bool,
+}
+
+/// The picker kinds that declare their domain.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum PickerStated {
+    /// An interval — the slider. `min` and `max` are not optional: a slider that does not say which
+    /// numbers it takes is the control that quietly accepts 99.5 and loses it later.
+    ///
+    /// `step: None` is a continuous choice: a smooth drag, a slider with no detents. HTML refuses a
+    /// step of zero, so a declared `0` reads back as `None` rather than as a divide-by-nothing.
+    Number {
+        min: f64,
+        max: f64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        step: Option<f64>,
+    },
+    /// A menu with a closed word list spelled in the frame. An empty list is a menu whose options
+    /// come from the slot alone, which is why it stays off the wire.
+    Text {
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        candidates: Vec<String>,
+    },
+}
+
+impl Default for PickerKind {
+    /// A picker that says nothing is a menu — the same thing `kind` absent has always meant.
+    fn default() -> Self {
+        Self::Bare(PickerBare::Text)
+    }
+}
+
+impl PickerKind {
+    pub fn is_bool(&self) -> bool {
+        matches!(self, Self::Bare(PickerBare::Bool))
+    }
+
+    pub fn is_menu(&self) -> bool {
+        matches!(self, Self::Bare(PickerBare::Text) | Self::Stated(PickerStated::Text { .. }))
+    }
+
+    pub fn is_number(&self) -> bool {
+        matches!(self, Self::Stated(PickerStated::Number { .. }))
+    }
+
+    /// The interval a slider admits, with a non-positive step read as "no step". `None` for the
+    /// kinds that have no interval to give.
+    pub fn numbers(&self) -> Option<(f64, f64, Option<f64>)> {
+        match self {
+            Self::Stated(PickerStated::Number { min, max, step }) => {
+                Some((*min, *max, step.filter(|s| *s > 0.0)))
+            }
+            _ => None,
+        }
+    }
+
+    /// The closed word list, when the kind declares one.
+    pub fn word_list(&self) -> &[String] {
+        match self {
+            Self::Stated(PickerStated::Text { candidates }) => candidates,
+            _ => &[],
         }
     }
 }
@@ -994,7 +1111,7 @@ pub struct Input {
     /// has one type, and it is not the read's or the write's). Named `kind` because `type` is the node's own
     /// discriminator on the wire. Absent = text.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub kind: Option<JsType>,
+    pub kind: Option<InputKind>,
 
     /// Multi-line is a layout of the field, not a different node.
     #[serde(default, skip_serializing_if = "is_false")]
@@ -1067,7 +1184,7 @@ impl Input {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(any(feature = "ops", feature = "classify"), derive(ClassifyAttrs))]
-pub struct SelectAttr {
+pub struct PickerAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub class: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1086,23 +1203,29 @@ pub struct SelectAttr {
     pub multiple: Option<bool>,
 }
 
-/// An option field (ADR 0031 §2): a list plane of nodes, one of which is the current choice. ADR 0049 adds the
-/// three shapes in `SelectAttr` — folded, a direction, several choices — without a second node.
+/// A picker (ADR 0031 §2): the field you cannot type into — a menu of option rows, one of which is the
+/// current choice. ADR 0049 adds the three shapes in `PickerAttr` (folded, a direction, several choices)
+/// without a second node, and ADR 0050 adds `kind`: the same node is also the slider and the switch.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "ops", derive(AccreteOps))]
 #[cfg_attr(feature = "classify", derive(ClassifyAccrete))]
 #[serde(deny_unknown_fields)]
-pub struct Select {
+pub struct Picker {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     /// The field's name inside an enclosing loom (same rule as `input`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<SelectAttr>,
+    pub attrs: Option<PickerAttr>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
+    /// Which component this picker is (ADR 0050): a menu of rows (absent), a slider that states its
+    /// interval, or a switch. The kind carries what the component itself needs; the options slot
+    /// carries the rows a menu shows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<PickerKind>,
 
     /// Second value: the option rows (list plane).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1279,7 +1402,7 @@ pub enum Accrete {
     button(Button),
     image(Image),
     input(Input),
-    select(Select),
+    picker(Picker),
     /// A colour field: what it packs is the whole `L C H` triple a colour member reads, so the picker and the
     /// value stay one thing, and nothing downstream has to know a colour picker was involved (ADR 0052).
     color(Color),

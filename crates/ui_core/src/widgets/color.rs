@@ -4,7 +4,7 @@
 //!
 //! The value is the written-out triple `"<light> <chroma> <hue>"`, exactly what colour members already store,
 //! so the picker and the value stay one thing and nothing downstream knows a picker was involved. Nothing here
-//! computes colour either: the swatch is `oklch()` handed to the browser, the same reason `select` renders its
+//! computes colour either: the swatch is `oklch()` handed to the browser, the same reason `picker` renders its
 //! options as nodes instead of computing a menu.
 //!
 //! Opening: hover on a pointer device, click, or focus — ADR 0026's lesson is that state must not live only in

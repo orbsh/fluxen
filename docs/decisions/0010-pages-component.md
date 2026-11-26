@@ -10,7 +10,7 @@
 与页面内容（整棵 Accrete 子树）。15.tabs.yaml 的初版把两者绑到同一个
 local 值上，被用户判为无实用价值——页内容不可能等于被点的 id。
 
-正解模型（用户定稿 2026-10-01）：select emit 一个事件对象（如
+正解模型（用户定稿 2026-10-01）：picker emit 一个事件对象（如
 `{"event":"channel::select","data":"2"}`）落槽；Pages 订阅该槽、按
 `path`（`/data`）提取键，在其内部以 id 为键维护字典（复用列表行
 `id` 的既有纪律——行身份在数据里），命中哪个键就显示哪个页面。
@@ -43,7 +43,7 @@ chat 页的滚动位置、表单草稿、canvas 的 GL 上下文，隐藏 DOM �
 `event: Option<String>`，缺省 = 槽名（槽即频道）。这是本 ADR 唯一的
 wire 字段追加（`Local` 从 `{slot, path?}` 变 `{slot, path?, event?}`，
 path 仍是订阅侧字段、发射侧忽略）。Event/Field/Submit 行为不变。
-示例 select 帧：`kind: local, slot: page` emit 出
+示例 picker 帧：`kind: local, slot: page` emit 出
 `{"event":"page","data":"2"}`；显式 `event: "channel::select"` 则
 `{"event":"channel::select","data":"2"}`。
 
@@ -95,7 +95,7 @@ Tiles {
 
 - 15.tabs.yaml 重写为诚实形态：菜单 = list 槽的短标签行；页面 =
   另一批内容互异的行（首页=文本块、文档=表单、关于=chat 样例行）；
-  select `sink: {dest: page, scope: local}`；`tiles` 是 `source: {slot: pages}` +
+  picker `sink: {dest: page, scope: local}`；`tiles` 是 `source: {slot: pages}` +
   `window: {size: 1}` + `step: {slot: page}`；标题用同一路径
   演示"同事件两处取件"。
 - 测试：emit 包装形状单测（Local 带/不带 event、id 透传）；Pages
@@ -107,7 +107,7 @@ Tiles {
 
 - 路由/历史同步（地址栏）：仍是 ADR 0008 §5 的独立后置单元。
 - 键模板/动态 path：查找在 Pages 私有字典里，不需要寻址语法变复杂。
-- Pages 多信号源/优先级：一 value 一 select，两键定死。
+- Pages 多信号源/优先级：一 value 一 picker，两键定死。
 - `tiles` 的定位/滚动 API（scroll-to 某行）：无真实需求前不加。
 
 ## 后果
