@@ -46,7 +46,7 @@ data:
           submit: [change]
         sink: {dest: channel::select}
         children:
-        - type: select
+        - type: picker
           tag: channel
           options: {slot: channel::list}
     - type: frame

@@ -478,7 +478,7 @@
         border-radius: 50%;
     }
 
-    :where(.select) {
+    :where(.picker) {
         & > * > * {
             cursor: pointer;
             transition: all 0.3s ease-in-out 0s;
@@ -1451,7 +1451,7 @@
     }
 
     /* …and the painted offset goes where the pen already draws one: a box holds one shadow, not two. */
-    html[data-sketch="true"] :is(.is-border, .button, .select).is-shadow,
+    html[data-sketch="true"] :is(.is-border, .button, .picker).is-shadow,
     html[data-sketch="true"] .rough-host .is-shadow {
         box-shadow: none;
     }
@@ -1549,7 +1549,7 @@
        for the same reason as a border: a pen may spill. */
     html[data-sketch="true"] .is-border,
     html[data-sketch="true"] .is-card,
-    html[data-sketch="true"] .select,
+    html[data-sketch="true"] .picker,
     html[data-sketch="true"] .button {
         position: relative;
         overflow: visible;

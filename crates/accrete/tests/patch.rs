@@ -62,7 +62,7 @@ fn append_string_value() {
 fn append_array_value() {
     // A literal list channel: no slot, `default` is the array itself.
     let mut b = accrete(json!({
-        "type": "select",
+        "type": "picker",
         "options": { "default": ["a"] }
     }));
     b.append_at("/options/default", json!("b"))

@@ -153,18 +153,18 @@ fn a_module_url_is_the_only_way_to_name_a_renderer() {
 }
 
 #[test]
-fn a_select_says_read_and_options() {
+fn a_picker_says_read_and_options() {
     // Two channels on one node: the value in (`source`) and the option rows (a named second channel).
-    // The choice does not leave through the select: that is the enclosing loom's business, and the
+    // The choice does not leave through the picker: that is the enclosing loom's business, and the
     // schema no longer has a shape to spell it (ADR 0032 §2).
     let a: Accrete = serde_json::from_value(json!({
-        "type": "select",
+        "type": "picker",
         "source": {"slot": "page", "scope": "local"},
         "options": {"slot": "menu"}
     }))
     .unwrap();
-    let Accrete::select(s) = &a else {
-        panic!("expected select")
+    let Accrete::picker(s) = &a else {
+        panic!("expected picker")
     };
     assert_eq!(s.source.as_ref().unwrap().scope, Scope::Local);
     assert_eq!(s.options.as_ref().unwrap().slot.as_deref(), Some("menu"));
@@ -175,15 +175,15 @@ fn a_select_says_read_and_options() {
     assert_eq!(
         back,
         json!({
-            "type": "select",
+            "type": "picker",
             "source": {"slot": "page", "scope": "local"},
             "options": {"slot": "menu"}
         })
     );
-    // The dead shape does not decode: a select with its own sink is gone, not ignored.
+    // The dead shape does not decode: a picker with its own sink is gone, not ignored.
     assert!(
         serde_json::from_value::<Accrete>(json!({
-            "type": "select",
+            "type": "picker",
             "source": {"slot": "page", "scope": "local"},
             "sink": {"dest": "page", "scope": "local"}
         }))
@@ -200,7 +200,7 @@ fn a_value_can_be_local_now_and_mirrored_up() {
         "type": "loom",
         "sink": {"dest": "island", "scope": "both"},
         "children": [{
-            "type": "select",
+            "type": "picker",
             "tag": "page",
             "source": {"slot": "page", "default": "talk"},
             "options": {"slot": "nav"}
@@ -213,8 +213,8 @@ fn a_value_can_be_local_now_and_mirrored_up() {
     let sink = b.sink.as_ref().unwrap();
     assert_eq!(sink.dest.as_deref(), Some("island"));
     assert!(sink.scope.local() && sink.scope.remote());
-    let Accrete::select(s) = &b.children.as_ref().unwrap()[0] else {
-        panic!("expected select")
+    let Accrete::picker(s) = &b.children.as_ref().unwrap()[0] else {
+        panic!("expected picker")
     };
     assert_eq!(s.source.as_ref().unwrap().default, Some(json!("talk")));
 }

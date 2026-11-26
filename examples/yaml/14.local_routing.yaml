@@ -38,7 +38,7 @@
         attrs: {submit: [change]}
         sink: {dest: chan, scope: local}
         children:
-        - type: select
+        - type: picker
           tag: chan
           source: {slot: chan, scope: local}
           options: {slot: menu}

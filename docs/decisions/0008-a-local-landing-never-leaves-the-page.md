@@ -8,7 +8,7 @@
 
 需求：点击频道列表切频道、点菜单切页面——组件间的联动全部发生在浏览器内，不该走 transport 往返（上行 → 服务端 → 再下发，一个点击绕世界一圈）。
 
-当时的现状（2026-10-01）是：发射侧三条路径全部硬编码上行——`use_target`（hooks.rs，button/select 的事件闭包 → `ctx.send`）、input 的 Enter 直发、form 聚合字段后按事件名 submit，落点没有任何维度；接收侧的机制却已经存在且组件无关——`source` 读一个具名槽，文本渲染它、canvas 的载荷读它、`tiles` 订阅它的列表槽。缺的只是把"事件的落点"从服务端改成本地信号。
+当时的现状（2026-10-01）是：发射侧三条路径全部硬编码上行——`use_target`（hooks.rs，button/picker 的事件闭包 → `ctx.send`）、input 的 Enter 直发、form 聚合字段后按事件名 submit，落点没有任何维度；接收侧的机制却已经存在且组件无关——`source` 读一个具名槽，文本渲染它、canvas 的载荷读它、`tiles` 订阅它的列表槽。缺的只是把"事件的落点"从服务端改成本地信号。
 
 一个死变体 `Target { target }` 当时全仓无消费者（ui 不读、stage/examples 不产）。用户裁决（2026-10-01）：不复活——`Target` 太模糊，删除，改用本地落点。
 
@@ -43,9 +43,9 @@ scope 含 local, 无 path  -> 整个 Outflow 存进以 dest 命名的值槽     
 scope 含 remote          -> ctx.send(dest, id, payload)            // 上线（ADR 0023）
 ```
 
-`use_target`（hooks.rs，button/select 等）、input 的 Enter、`loom` 的 submit 打包都只是这个助手的入口。本地那条分支写进去的是同一个 `content::Outflow { dest, id?, data }`——所以一次本地 emit 与一个上行帧是同一种形状（ADR 0010），整条链没有 socket 也能演练。
+`use_target`（hooks.rs，button/picker 等）、input 的 Enter、`loom` 的 submit 打包都只是这个助手的入口。本地那条分支写进去的是同一个 `content::Outflow { dest, id?, data }`——所以一次本地 emit 与一个上行帧是同一种形状（ADR 0010），整条链没有 socket 也能演练。
 
-订阅侧统一在 `use_source_value` 读：`source.path` 走 WIRE SHAPE 提取。凡取值走它的组件（`text`、`select` 的值、`tiles` 的列表、canvas/chart/diagram 的载荷）天然可订阅，无需逐个改造。
+订阅侧统一在 `use_source_value` 读：`source.path` 走 WIRE SHAPE 提取。凡取值走它的组件（`text`、`picker` 的值、`tiles` 的列表、canvas/chart/diagram 的载荷）天然可订阅，无需逐个改造。
 
 Canvas 的 `host.send` 同样只到 `ctx.send`——将来 Canvas 要事件绑定（ADR 0007 的后置项），落点机制对它没有特判。本 ADR 不做 Canvas 事件字段。
 
@@ -53,7 +53,7 @@ Canvas 的 `host.send` 同样只到 `ctx.send`——将来 Canvas 要事件绑�
 
 - `stage schema` 跟着 serde 走，导出侧不需手改（ADR 0037 起每个 arm 自带 `$ref`）。
 - 下游客端从快照重生成（reflux 的 `tools/sync_schema.py --write` → `gen_sdk.py`）。
-- 示例：`examples/yaml/14.local_routing.yaml`（菜单 select 发射进 `chan` 值槽、header 订阅同槽）。
+- 示例：`examples/yaml/14.local_routing.yaml`（菜单 picker 发射进 `chan` 值槽、header 订阅同槽）。
 - fluxora 存档不动。
 
 ### 4. 边沿与电平（约定，非机制）

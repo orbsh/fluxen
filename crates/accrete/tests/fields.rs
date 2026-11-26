@@ -87,6 +87,46 @@ fn a_grid_round_trips_with_its_header_and_rows() {
     assert_eq!(header.selector, "--goods-head");
     assert_eq!(header.layers, 2);
 
+    // ADR 0050: `input` states a form, not a domain — its kind stays a bare word, and a number box
+    // carries no interval (that is the slider's business, under `picker`).
+    let row = roundtrip(json!({"type": "input", "kind": "number"}));
+    let Accrete::input(i) = &row else {
+        panic!("not input: {row:?}")
+    };
+    let kind = i.kind.clone().expect("kind");
+    assert_eq!(kind.input_type(), "number");
+    assert!(kind.is_number());
+
+    // A picker is several components under one name, so its kind carries the domain: an interval for
+    // the slider must be stated, and a number that states none does not decode at all.
+    let row = roundtrip(json!({
+        "type": "picker",
+        "kind": {"type": "number", "min": 0, "max": 64, "step": 1}
+    }));
+    let Accrete::picker(p) = &row else {
+        panic!("not picker: {row:?}")
+    };
+    assert_eq!(
+        p.kind.as_ref().and_then(|k| k.numbers()),
+        Some((0.0, 64.0, Some(1.0)))
+    );
+    assert!(serde_json::from_value::<Accrete>(json!({
+        "type": "picker",
+        "kind": {"type": "number"}
+    }))
+    .is_err());
+    // A switch states nothing, so it is a bare word; the menu keeps the slot's rows.
+    let sw = roundtrip(json!({"type": "picker", "kind": "bool"}));
+    let Accrete::picker(p) = &sw else {
+        panic!("not picker: {sw:?}")
+    };
+    assert!(p.kind.as_ref().is_some_and(|k| k.is_bool()));
+    let plain = roundtrip(json!({"type": "picker"}));
+    let Accrete::picker(p) = &plain else {
+        panic!("not picker: {plain:?}")
+    };
+    assert!(p.kind.is_none(), "absent kind means the menu, not a slider");
+
     // The row is a node of its own, and its fields are its children — one selector per field.
     let rows = t.children.as_ref().expect("children");
     assert_eq!(rows.len(), 1);

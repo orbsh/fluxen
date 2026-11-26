@@ -3,7 +3,7 @@ use accrete::{Accrete, AccreteOps, Sink, Source, classify::Classify};
 use leptos::prelude::*;
 use serde_json::Value;
 
-/// Append common CSS: a non-horizontal Box/Case/Text/Tab/Select gets `col`, and the class list is extended.
+/// Append common CSS: a non-horizontal Box/Case/Text/Tab/Picker gets `col`, and the class list is extended.
 ///
 /// `Tiles` is left out: it names its own direction from `attrs.dir` (ADR 0035), and a second opinion
 /// here would fight it — `dir: row` has to be able to say row, whatever this function would add.
@@ -12,7 +12,7 @@ where
     T: Classify + AccreteOps,
 {
     let t = accrete.get_type();
-    let mut v = t != "Tiles" && ["Box", "Frame", "Entry", "Text", "Tab", "Select"].contains(&t);
+    let mut v = t != "Tiles" && ["Box", "Frame", "Entry", "Text", "Tab", "Picker"].contains(&t);
     if let Some(a) = accrete.borrow_attrs() {
         if a.is_horizontal() {
             v = false;

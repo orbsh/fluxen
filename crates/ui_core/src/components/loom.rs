@@ -2,7 +2,7 @@ use crate::Ctx;
 use crate::ctx::render_children;
 use crate::hooks::{LoomState, Field, loom_key, node_id, refresh, use_common_css};
 use crate::rough;
-use accrete::{Accrete, AccreteOps, Loom, JsType};
+use accrete::{Accrete, AccreteOps, Loom};
 use leptos::html::*;
 use leptos::prelude::*;
 use serde_json::Value;
@@ -18,10 +18,17 @@ fn field_default(node: &Accrete) -> Value {
     // serde_json has an infallible constructor for every JSON scalar, so the
     // default never needs a `to_value(..).unwrap()` round trip.
     match kind {
-        Some(JsType::number) => {
-            Value::from(default.as_ref().and_then(|x| x.as_f64()).unwrap_or(0.0))
-        }
-        Some(JsType::bool) => {
+        // A number field with nothing written is *unset*, not zero: packing a zero nobody typed is how a
+        // page switches a feature off on its first frame.
+        Some(k) if k.is_number() => default
+            .as_ref()
+            .and_then(|x| match x {
+                Value::Number(n) => Some(Value::Number(n.clone())),
+                Value::String(s) => s.trim().parse::<f64>().ok().map(Value::from),
+                _ => None,
+            })
+            .unwrap_or(Value::Null),
+        Some(k) if k.is_bool() => {
             Value::Bool(default.as_ref().and_then(|x| x.as_bool()).unwrap_or(false))
         }
         _ => Value::String(
@@ -62,7 +69,7 @@ fn collect(node: &Accrete, out: &mut Vec<Field>) {
                 out.push(Field::new(tag.clone(), RwSignal::new(initial.clone()), initial));
             }
         }
-        Accrete::select(s) => {
+        Accrete::picker(s) => {
             if let Some(tag) = s.tag.as_ref().filter(|t| !t.is_empty())
                 && !out.iter().any(|f| &f.name == tag)
             {
