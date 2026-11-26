@@ -96,7 +96,11 @@
           class:
           - --message
           - box
-          - ac-start
+          # A wrapping column sizes each LINE to its content, and `align-content: start` keeps it that way:
+          # a tile that asks to stretch (a canvas, a chart) then stretches to the line, which is only as wide as
+          # the widest tile — a 98px chart in a 730px column. `ac-stretch` lets the line fill the column, and the
+          # frames that hug a side (`as-end`, `as-start`) still do: alignment is each frame's, not the container's.
+          - ac-stretch
           - gap
           - scrolly
         source: {slot: chat}

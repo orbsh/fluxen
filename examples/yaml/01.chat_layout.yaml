@@ -62,7 +62,7 @@ data:
             class:
             - --message
             - box
-            - ac-start
+            - ac-stretch
             - gap
             - scrolly
           source: {slot: chat}

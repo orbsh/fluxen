@@ -44,7 +44,11 @@ const views = new Map();
 let nextId = 1;
 
 const DEFAULT_MARKS = ["interval", "line", "area", "point"];
-const DEFAULT_COORDS = ["cartesian", "theta", "polar"];
+// The list the button cycles is DECLARED, never guessed: a bar chart has nothing to say in the pie coordinate
+// (`theta`) and a time series nothing to say in `polar`, so offering them by default is offering a picture that
+// reads as broken. A frame that wants the cycle lists the coordinates in `options.coordinate`; otherwise the
+// chart stays where the spec put it and no button is drawn.
+
 
 // A coordinate is the whole picture's axis, so its button shows the state instead of naming a menu.
 const COORD_ICON = {
@@ -361,12 +365,13 @@ function seriesColor(view, item, index) {
 export async function mount(host, data, _host2, options) {
   await ensureG2();
   const opts = options && typeof options === "object" ? options : {};
-  const declared = Array.isArray(opts.coordinate) && opts.coordinate.length ? opts.coordinate : DEFAULT_COORDS.slice();
+  const declared = Array.isArray(opts.coordinate) ? opts.coordinate.filter((c) => typeof c === "string" && c) : [];
   const marks = Array.isArray(opts.marks) && opts.marks.length ? opts.marks : DEFAULT_MARKS.slice();
 
   const spec = specOf(data);
   const norm = normalize(spec);
   const start = (spec.coordinate && spec.coordinate.type) || "cartesian";
+  // The spec's own coordinate is always first and always present; anything else is opt-in by the frame.
   const coords = declared.includes(start) ? declared.slice() : [start, ...declared];
 
   const root = el("div", "display:flex;flex-direction:column;width:100%;height:100%;min-height:0;");

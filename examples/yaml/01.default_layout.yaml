@@ -30,7 +30,7 @@ data:
     attrs:
       class:
       - box
-      - ac-start
+      - ac-stretch
       - gap
       - scrolly
     source: {slot: chat}
