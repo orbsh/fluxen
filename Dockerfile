@@ -134,8 +134,18 @@ RUN mkdir -p crates/ui_leptos/assets/editor crates/ui_leptos/assets/monaco \
 
 # The truck scene, mirrored in this repo's own `assets` release (why: the scene's
 # upstream home is a 590 MB multi-scene zip — see assets/modules/splatviewer/README.md).
+#
+# Both the mkdir and the cp are load-bearing, for the two reasons the 3dbrowser step states:
+# `crates/ui_leptos/assets/` is gitignored as a whole, so a clean checkout has no `splatviewer/`
+# directory at all — and `curl -o` into a missing directory dies with `(23) client returned ERROR on
+# write`, a WRITE failure that reads like a failed download (it is what the image build has been dying
+# on since the wholesale ignore landed). And the module's `index.js` is tracked under `assets/modules/splatviewer/`,
+# not in the deployed tree, so without the copy the image serves the scene and 404s the module the
+# example points at (`/assets/splatviewer/index.js`).
 ARG FLUXEN_ASSETS_RELEASE=assets
-RUN curl -fsSL \
+RUN mkdir -p crates/ui_leptos/assets/splatviewer \
+    && cp assets/modules/splatviewer/index.js crates/ui_leptos/assets/splatviewer/ \
+    && curl -fsSL \
       "https://github.com/orbsh/fluxen/releases/download/${FLUXEN_ASSETS_RELEASE}/truck.ksplat" \
       -o crates/ui_leptos/assets/splatviewer/truck.ksplat \
     && echo "e8ed0a5cc03fe7d91c5cea7a53c72e0f3a8bdd805157bee24def1ab059b23654  crates/ui_leptos/assets/splatviewer/truck.ksplat" | sha256sum -c -

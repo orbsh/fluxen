@@ -76,6 +76,7 @@
 
 ## 已修 — 这条路付过的代价
 
+- [x] 镜像构建死在 truck 场景那步，`curl: (23)`：`crates/ui_leptos/assets/` 自 `c57e5b8` 起整棵被 gitignore，干净检出里没有 `splatviewer/` 目录，`curl -o` 写不进去（同类坑 3dbrowser 那步已修过、这步漏了）；顺带补 `assets/modules/splatviewer/index.js` 的拷贝，原先镜像里只有场景、`/assets/splatviewer/index.js` 是 404 — 2026-11-26 修；实测：`git archive HEAD` 出的干净树 + 改好的 Dockerfile，`docker build` 全程通过（`cargo build -p stage` 48s、`trunk build` 出 dist），镜像 `0cbc86d`；CI 上 27 次全红（`0b5caae` 之后）应随之转绿
 - [x] 颜色面板的三条腿一起坏：悬浮打开时 Esc 无效（keydown 挂在面板自己身上，而悬浮不聚焦），点外部关不掉（遮罩的 click 冒泡到方片的开关，关掉后立刻被重新钉上），`H` 拖到末端跳回起点（`rem_euclid(360)` 把 `360` 折成 `0`，值经 loom 回来又折一次）— 2026-11-26 修；实测无焦点 Esc 关、点外部关、点面板内部不关，`H` 停在 `360`，`gate_settings` 13/13（ADR 0052 §3/§6/§7）
 - [x] trunk 0.22 拒绝 copy-dir 的绝对 href，`x start` 在装配阶段就死 — 2026-10-23 修
 - [x] 文本节点第二次 `.class()` 抹掉第一次；markdown 正文没有排版规则 — 2026-10-12 修
