@@ -109,3 +109,16 @@ an ordering question (the object must exist before the module runs) and a global
 
 **Auto-boot on `#main` with a `__fluxenAutoMount` opt-out.** Works, and puts a flag in the contract whose only
 job is to undo the other half of the contract. `#fluxen` (§3) makes the two cases disjoint instead.
+
+## 7. 验证（2026-11-25，真浏览器五页）
+
+Every case below ran in a real browser against the built artifact. Five rather than one, because each exercises a
+different half of the decision:
+
+| 用例 | 通过条件 |
+|---|---|
+| `#fluxen` 默认路径 | 页面渲染出帧，没有任何 `mount` 调用 |
+| `mount(#app, {codec:'json'})` | 页面渲染出帧，`data-*` 都不在场 |
+| `policy: {heartbeat: 0}` | 静默 7 秒，零条 `__ping__` |
+| 坏 codec | `mount` 的 promise 被拒，原因写明是哪一个值 |
+| `transport` 按值传入 | 页面无 `__fluxenConn`，且能渲染 hook 推来的帧 |

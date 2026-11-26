@@ -88,6 +88,7 @@ struct PatchOp {
 - **`position` 总是写进帧**（`0` 也写）：`append` 的 `0` 就是它的默认（末尾），而 `move` 的末尾只是若干落点之一，省掉它读起来像"没有意见"，这个动作没有别的意见可给，所以缺席即解码错误。
 - **落点等于原位时不写信号**：写一遍槽会让 keyed 列表白重画一次。
 - **行节点被复用，焦点由渲染器接住**：列表是 keyed 的（`data.id`），行身份没变，节点就不重建；但 DOM 的移动仍是"取下、插回"，那一下焦点会丢，所以移动前后记下焦点元素与光标、下一帧放回（`ctx.rs` 的 `Typing`/`resume`），且只在没人抢走焦点时放回。判据：十行列表把最后一行挪到最前，帧里只有一条 `move`，那一行的输入框仍是同一个节点、内容与光标都在。
+- **连带**：`content::Content` 的动作集从七变八，`stage -- schema` 一并导出 `move`；下游 reflux 落了 `wire.move(slot, id, position)` 与 `Slot.move(id, position)`，`reflux/docs/ideas/reactive-signals.md` §七那条「wire 没有 move」的天花板随之撤掉。
 
 ## 理由
 
