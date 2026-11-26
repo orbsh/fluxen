@@ -1,10 +1,9 @@
-//! What a page says about its own boot, and which of the two places wins (ADR 0045).
+//! What a page says about its own boot (ADR 0045), and the one thing it no longer says: the address (ADR 0046).
 //!
-//! Two sources, not three: the address (`?token=`, `?codec=` — the producer can put these on a URL it hands
-//! out) and the arguments of `mount(el, opts)`. The call wins, quietly: that is an override, not two
-//! declarations of the same intent, so there is nothing to warn about and no precedence arithmetic to keep.
-//! Attributes are gone on purpose — a `data-*` vocabulary plus a "which one wins when they disagree" rule
-//! existed only because one setting could be said twice; one door removes the question.
+//! One door: the arguments of `mount(el, opts)`. The address is the host's fact — it reads its own URL or its own
+//! storage and hands the extra socket parameters in as `query`; the boot joins and escapes them without
+//! interpreting the keys. Attributes are gone for the same reason: a setting that could be said twice needs a
+//! rule for which one wins, and no page ever asked that question.
 //!
 //! The resolution is plain data so it has tests that need no browser; the DOM is read by the caller.
 
@@ -100,55 +99,40 @@ mod tests {
 
     #[test]
     fn nothing_said_is_the_defaults() {
-        let b = Boot::resolve(&Query::default(), None).expect("resolve");
+        let b = Boot::resolve(None).expect("resolve");
         assert_eq!(b.host, None);
         assert_eq!(b.path, "/channel");
         assert_eq!(b.codec, CodecType::Cbor);
-        assert_eq!(b.token, None);
+        assert!(b.query.is_empty());
         assert_eq!(b.config.as_deref(), Some(ui_core::ctx::DEFAULT_CONFIG_SLOT));
         assert_eq!(b.policy, Policy::default());
         assert!(!b.policy_said);
     }
 
     #[test]
-    fn the_call_wins_over_the_address() {
-        let q = Query {
-            codec: Some("json".into()),
-            token: Some("url".into()),
-        };
-        let b = Boot::resolve(&q, None).expect("resolve");
-        assert_eq!(b.codec, CodecType::Json);
-        assert_eq!(b.token.as_deref(), Some("url"));
-
-        let o = opts(r#"{"codec": "cbor", "token": "call"}"#);
-        let b = Boot::resolve(&q, Some(&o)).expect("resolve");
-        assert_eq!(b.codec, CodecType::Cbor);
-        assert_eq!(b.token.as_deref(), Some("call"));
+    fn the_address_parameters_are_the_hosts_and_we_only_join_them() {
+        // ADR 0046: the boot has no field for a token and no branch for one — it is one more query pair.
+        let b = Boot::resolve(Some(&opts(r#"{"query": {"ui:x": "1", "token": "abc"}}"#)))
+            .expect("resolve");
+        assert_eq!(
+            b.query,
+            vec![("token".to_owned(), "abc".to_owned()), ("ui:x".to_owned(), "1".to_owned())],
+            "in key order; escaping happens where the URL is built"
+        );
     }
 
     #[test]
-    fn a_field_the_call_omits_keeps_the_address_word() {
-        let q = Query {
-            codec: Some("json".into()),
-            token: Some("url".into()),
-        };
-        let o = opts(r#"{"path": "/ws"}"#);
-        let b = Boot::resolve(&q, Some(&o)).expect("resolve");
-        assert_eq!(b.path, "/ws");
-        assert_eq!(b.codec, CodecType::Json);
-        assert_eq!(b.token.as_deref(), Some("url"));
+    fn a_token_is_not_an_option_of_its_own() {
+        assert!(serde_json::from_str::<Opts>(r#"{"token": "abc"}"#).is_err());
     }
 
     #[test]
     fn a_value_that_cannot_be_used_is_an_error_not_a_default() {
-        assert!(Boot::resolve(&Query::default(), Some(&opts(r#"{"codec": "protobuf"}"#))).is_err());
-        assert!(Boot::resolve(&Query::default(), Some(&opts(r#"{"path": "channel"}"#))).is_err());
+        assert!(Boot::resolve(Some(&opts(r#"{"codec": "protobuf"}"#))).is_err());
+        assert!(Boot::resolve(Some(&opts(r#"{"path": "channel"}"#))).is_err());
         // A policy that contradicts itself is refused where it is read...
-        let err = Boot::resolve(
-            &Query::default(),
-            Some(&opts(r#"{"policy": {"heartbeat": 5000, "dead": 1000}}"#)),
-        )
-        .unwrap_err();
+        let err =
+            Boot::resolve(Some(&opts(r#"{"policy": {"heartbeat": 5000, "dead": 1000}}"#))).unwrap_err();
         assert!(err.contains("dead"), "{err}");
         // ...and a misspelled knob is refused before that, by the options' own shape.
         assert!(serde_json::from_str::<Opts>(r#"{"policy": {"hearbeats": 1}}"#).is_err());
@@ -157,7 +141,7 @@ mod tests {
     #[test]
     fn a_policy_in_the_call_is_said_and_parsed() {
         let o = opts(r#"{"policy": {"heartbeat": 0, "retry": false}}"#);
-        let b = Boot::resolve(&Query::default(), Some(&o)).expect("resolve");
+        let b = Boot::resolve(Some(&o)).expect("resolve");
         assert!(b.policy_said);
         assert_eq!(b.policy.heartbeat, None);
         assert_eq!(b.policy.backoff, None);
@@ -165,8 +149,7 @@ mod tests {
 
     #[test]
     fn an_empty_slot_option_means_no_slot_at_all() {
-        let b =
-            Boot::resolve(&Query::default(), Some(&opts(r#"{"config": ""}"#))).expect("resolve");
+        let b = Boot::resolve(Some(&opts(r#"{"config": ""}"#))).expect("resolve");
         assert_eq!(b.config, None);
     }
 
