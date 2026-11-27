@@ -43,6 +43,26 @@ function ensureG2() {
 const views = new Map();
 let nextId = 1;
 
+/// The module draws its own chrome (legend swatches, the series panel, the coordinate button), and every colour
+/// in it is the renderer's: `--ring` for a hairline, `--wash` for a chosen state, `--surface` for a panel. The
+/// rule they come from (ADR 0055) is that a colour literal lives in the token layer and nowhere else — a module
+/// is not an exception just because it writes styles from JS, so its styles read the variables instead.
+const CHROME_ID = "g2c-chrome";
+function ensureChrome() {
+  if (document.getElementById(CHROME_ID)) return;
+  const style = document.createElement("style");
+  style.id = CHROME_ID;
+  style.textContent = [
+    ".g2c-swatch,.g2c-chip{box-shadow:inset 0 0 0 1px var(--ring);}",
+    ".g2c-swatch.is-hidden{background:repeating-linear-gradient(45deg,transparent 0 2px,var(--ring) 2px 4px);}",
+    // The cast is INK, not the hairline colour: a shadow is the absence of light, and `--ring` (which follows
+    // the ink of the scheme) would make a dark panel glow white in dark mode.
+    ".g2c-menu{box-shadow:0 6px 20px var(--shadow-ink),inset 0 0 0 1px var(--wash);}",
+    ".g2c-menu button.is-on{background:var(--wash);font-weight:600;}",
+  ].join("");
+  document.head.appendChild(style);
+}
+
 const DEFAULT_MARKS = ["interval", "line", "area", "point"];
 // The list the button cycles is DECLARED, never guessed: a bar chart has nothing to say in the pie coordinate
 // (`theta`) and a time series nothing to say in `polar`, so offering them by default is offering a picture that
@@ -434,16 +454,15 @@ function drawLegend(view) {
     // A layered spec (the radar) has no per-series form to offer: its children are one composite, so the swatch
     // is a readout rather than a button (ADR 0051).
     const switchable = state.mode === "series";
+    ensureChrome();
     const swatch = el(
       switchable ? "button" : "span",
       "width:12px;height:12px;padding:0;border:none;border-radius:3px;flex:0 0 auto;" +
         (switchable ? "cursor:pointer;" : "") +
-        "box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);" +
-        (shown
-          ? "background:" + shown + ";"
-          : "background:repeating-linear-gradient(45deg,transparent 0 2px,rgba(0,0,0,.18) 2px 4px);")
+        (shown ? "background:" + shown + ";" : "")
     );
-    swatch.className = "g2c-swatch";
+    // The hidden state is a class: the stripes are the sheet's, and an inline `background` would win over it.
+    swatch.className = shown ? "g2c-swatch" : "g2c-swatch is-hidden";
     if (switchable) {
       swatch.type = "button";
       swatch.title = "形态与颜色";
@@ -565,8 +584,7 @@ function openMenu(view, item, anchor) {
   const panel = el(
     "div",
     "position:fixed;z-index:60;display:flex;flex-direction:column;gap:6px;padding:8px;min-width:210px;" +
-      "background:var(--surface,#fff);color:inherit;border-radius:8px;font-size:12px;" +
-      "box-shadow:0 6px 20px rgba(0,0,0,.18),inset 0 0 0 1px rgba(0,0,0,.10);"
+      "background:var(--surface);color:inherit;border-radius:8px;font-size:12px;"
   );
   panel.className = "g2c-menu";
   panel.style.left = `${Math.round(rect.left)}px`;
@@ -579,10 +597,11 @@ function openMenu(view, item, anchor) {
     const button = el(
       "button",
       "padding:1px 6px;font-size:11px;border:none;border-radius:4px;cursor:pointer;" +
-        (mark === item.mark ? "background:rgba(0,0,0,.12);font-weight:600;" : "background:transparent;opacity:.7;"),
+        (mark === item.mark ? "" : "background:transparent;opacity:.7;"),
       mark
     );
     button.type = "button";
+    if (mark === item.mark) button.className = "is-on";
     button.addEventListener("click", async (event) => {
       event.stopPropagation();
       item.mark = mark;
@@ -606,11 +625,11 @@ function openMenu(view, item, anchor) {
       const button = el(
         "button",
         "padding:1px 6px;font-size:11px;border:none;border-radius:4px;cursor:pointer;" +
-          (on ? "background:rgba(0,0,0,.12);font-weight:600;" : "background:transparent;opacity:.7;"),
+          (on ? "" : "background:transparent;opacity:.7;"),
         label
       );
       button.type = "button";
-      button.className = value ? "g2c-smooth" : "g2c-sharp";
+      button.className = (value ? "g2c-smooth" : "g2c-sharp") + (on ? " is-on" : "");
       button.addEventListener("click", async (event) => {
         event.stopPropagation();
         item.smooth = value;
@@ -627,7 +646,8 @@ function openMenu(view, item, anchor) {
   const seed = hexToOklch(shown) || [0.7, 0.12, 200];
   const terms = { l: seed[0], c: seed[1], h: seed[2] };
 
-  const swatch = el("span", "width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);");
+  const swatch = el("span", "width:14px;height:14px;border-radius:3px;");
+  swatch.className = "g2c-chip";
   swatch.style.background = oklchCss(terms.l, terms.c, terms.h);
   const colorRow = el("div", "display:flex;align-items:center;gap:6px;");
   colorRow.appendChild(el("span", "opacity:.6;width:34px;", "颜色"));

@@ -74,14 +74,11 @@
 
 @layer tokens {
     :root {
-        --fg: light-dark(oklch(0.18 0 0), oklch(0.98 0 0));
-        --bg: light-dark(oklch(1 0 0), oklch(0.15 0 0));
-        /* The layer above the page: the same paper, a shade off it. A card that is exactly the page colour
-           has to lean on its edge to be seen at all; a shade is the difference between "flat" and "above",
-           and it is a token so a host can tune the step without forking the sheet. Light mode steps DOWN
-           from white, dark mode steps UP from the page — away from the page colour is up in both. */
-        --surface: light-dark(oklch(0.965 0 0), oklch(0.205 0 0));
-
+        /* ---- The palette: six colours, and no rule picks a seventh --------
+           Three say what a thing IS (`accent` / `primary` / `secondary`), three say what it MEANS
+           (`disabled` / `warn` / `error`). Everything else on the page is derived from these six and the two
+           mode endpoints below — `crates/ui-assets/tests/tokens.rs` fails the build when a rule outside this
+           layer writes a colour literal. */
         --accent: oklch(0.7 0.12 182.49);
         --primary: oklch(0.98 0.06 107.14);
         --secondary: oklch(0.93 0 0);
@@ -90,12 +87,42 @@
         --warn: oklch(0.84 0.12 92.82);
         --error: oklch(0.63 0.19 23.03);
 
+        /* ---- The mode endpoints: paper and ink -----------------------------
+           Not a colour choice — the pair IS light and dark, and `light-dark()` is what switches them. */
+        --fg: light-dark(oklch(0.18 0 0), oklch(0.98 0 0));
+        --bg: light-dark(oklch(1 0 0), oklch(0.15 0 0));
+
+        /* ---- Derived: computed here, only read in the rules -----------------
+           The layer above the page: the same paper, one step toward the ink. A card that is exactly the page
+           colour has to lean on its edge to be seen at all; a step is the difference between "flat" and
+           "above". Written as a mix rather than two lightnesses, so a host that moves the paper or the ink
+           takes the cards with it — in both schemes, and in the same direction, away from the page. */
+        --surface: light-dark(
+            color-mix(in oklab, var(--bg) 96%, var(--fg)),
+            color-mix(in oklab, var(--bg) 93%, var(--fg))
+        );
+
+        /* A line is the border colour, and the pointer's two washes are alpha over whatever is under them —
+           page, card, panel — instead of a grey that punches a hole of its own colour. */
+        --border-color: var(--secondary);
+        --wash: color-mix(in oklab, var(--fg) 12%, transparent);
+        --ring: color-mix(in oklab, var(--fg) 18%, transparent);
+
+        /* The two absolutes. A shadow is the absence of light and glass has a highlight, in both schemes;
+           deriving them from the palette is how dark mode ends up with a white glow around every card. */
+        --ink: oklch(0 0 0);
+        --gloss: oklch(1 0 0);
+        --shadow-color: var(--ink);
+        --shadow-ink: oklch(from var(--shadow-color) l c h / 0.1);
+
         --round: 10px;
         --input-round: 0.35em;
 
+        /* `--border-style` looks dead in this sheet because its CONSUMER is the host: the reference page's
+           settings switch it (solid → dashed) and `--border` follows. A token with one reader and zero writers
+           here is still a promise to whoever writes it. */
         --border-width: 1px;
         --border-style: solid;
-        --border-color: var(--secondary);
         --border: var(--border-width) var(--border-style) var(--border-color);
     }
 }
@@ -484,12 +511,12 @@
             transition: all 0.3s ease-in-out 0s;
 
             &:hover {
-                background-color: var(--secondary);
+                background-color: var(--wash);
             }
         }
 
         & .selected {
-            background: var(--secondary);
+            background: var(--wash);
         }
     }
 
@@ -632,7 +659,7 @@
         /* The group layer of a two-layer header: the cell covers the fields under it (the renderer
            counts them off the keys), and the line it draws is lighter than the header's own. */
         & > .tiles-head > .tiles-hcell.group {
-            border-bottom: 0.05em solid var(--secondary);
+            border-bottom: 0.05em solid var(--border-color);
             font-weight: 600;
         }
 
@@ -646,7 +673,7 @@
 
         &.dir-row > .tiles-head > .tiles-hcell.group,
         &.dir-row-reverse > .tiles-head > .tiles-hcell.group {
-            border-right: 0.05em solid var(--secondary);
+            border-right: 0.05em solid var(--border-color);
         }
 
         & > .tiles-row > .tiles-cell {
@@ -654,7 +681,7 @@
                frame's, not the longest string's. */
             min-width: 0;
             padding: 0.4em 0;
-            border-bottom: 0.05em solid var(--secondary);
+            border-bottom: 0.05em solid var(--border-color);
         }
 
         /* A child entry is one step down per level: the indent is the whole of "grouped", and the
@@ -995,7 +1022,7 @@
        accent-tinted shadow and everything else casts black. */
     .is-shadow {
         --csstools-color-scheme--light: initial;
-        --shadow-color: oklch(0 0 0);
+        --shadow-color: var(--ink);
         --shadow-ink: oklch(from var(--shadow-color) l c h / 0.1);
         box-shadow:
             0 1px 3px 0 var(--shadow-ink),
@@ -1031,7 +1058,6 @@
 
     .is-filter-gray {
         filter: grayscale(100%);
-        filter: #808080;
     }
 
     .is-glass {
@@ -1040,12 +1066,12 @@
         &.is-shadow {
             box-shadow:
         /* Bottom and right depth effect */
-                inset -0.75px -0.5px oklch(1 0 0 / 0.1),
+                inset -0.75px -0.5px oklch(from var(--gloss) l c h / 0.1),
                 /* Top and left depth effect */ inset 0.75px 0.5px
-                    oklch(1 0 0 / 0.02),
-                /* Shadow effect */ 3px 2px 10px oklch(0 0 0 / 0.25),
+                    oklch(from var(--gloss) l c h / 0.02),
+                /* Shadow effect */ 3px 2px 10px oklch(from var(--ink) l c h / 0.25),
                 /* Short subsurface effect */ inset 0 0 10px 5px
-                    oklch(1 0 0 / 0.02);
+                    oklch(from var(--gloss) l c h / 0.02);
         }
     }
 
@@ -1295,7 +1321,7 @@
         transition: 120ms transform ease-in-out;
         box-shadow: inset 1em 1em var(--accent);
         /* Windows High Contrast Mode */
-        background-color: var(--secondary);
+        background-color: var(--bg);
     }
 
     input[type="checkbox"]:checked::before {
@@ -1304,7 +1330,7 @@
 
     input[type="checkbox"]:focus {
         border: 0.15em solid var(--accent);
-        outline: max(2px, 0.15em) solid var(--secondary);
+        outline: max(2px, 0.15em) solid var(--border-color);
         outline-offset: max(2px, 0.15em);
     }
 
@@ -1319,7 +1345,7 @@
     textarea {
         margin: 0 0 0 0;
         border: none;
-        border: var(--border-width) solid var(--secondary);
+        border: var(--border);
         border-radius: 4px;
         outline: none;
         background-color: transparent;
