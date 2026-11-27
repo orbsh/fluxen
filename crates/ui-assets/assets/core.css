@@ -279,15 +279,15 @@
             justify-content: stretch;
         }
 
-        &.jc-s-around {
+        &.jc-around {
             justify-content: space-around;
         }
 
-        &.jc-s-between {
+        &.jc-between {
             justify-content: space-between;
         }
 
-        &.jc-s-evently {
+        &.jc-evenly {
             /* grid */
             justify-content: space-evenly;
         }
@@ -308,15 +308,15 @@
             align-content: stretch;
         }
 
-        &.ac-s-around {
+        &.ac-around {
             align-content: space-around;
         }
 
-        &.ac-s-between {
+        &.ac-between {
             align-content: space-between;
         }
 
-        &.ac-s-evently {
+        &.ac-evenly {
             /* grid */
             align-content: space-evenly;
         }
@@ -819,16 +819,23 @@
 
     .drop-armed {
         outline-style: solid;
-        outline-color: var(--secondary);
+        outline-color: var(--border-color);
     }
 
     .drop-over {
         outline: 2px solid var(--accent);
-        background-color: var(--secondary);
+        background-color: var(--wash);
     }
 }
 
 @layer utilities {
+    /* ---- The six flex knobs: a class IS the property and the value ------
+       `ac` / `ai` / `as` / `jc` / `ji` / `js` (align- and justify-, across content / items / self), then the CSS
+       value's own word: `jc-between`, `ac-stretch`, `as-baseline`. One compression is allowed and it is the only
+       one: `space-between` / `space-around` / `space-evenly` keep the word that tells them apart — nothing else
+       ends in `between` — so `jc-s-between` is a shorthand of a shorthand and says nothing a reader can use.
+       `crates/ui-assets/tests/utilities.rs` holds the names to the values: a typo or a compression fails. */
+
     /* ---- Sizing: one prefix per dimension ----------------------------
        `gap-*` is only gap, `pad-*` is only padding, `text-*` is only font-size. One `.md` used to
        mean all three at once, and only took effect in combination with `flex` / `gap` / `box`, so nobody could say what they were measuring.
