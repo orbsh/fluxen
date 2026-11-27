@@ -2,6 +2,12 @@
 *
 # Except this file
 !.gitignore
+# The sources that live in the repo's own `assets/`, linked in here: a served
+# path, not a second copy.
 !core.css
 !custom.css
 !loading.js
+# mermaid.min.js is NOT here: the Dockerfile fetches
+# mermaid@11.6.0/dist/mermaid.min.js from unpkg and checks the sha256. Locally, run
+# the same two lines (or copy the file in) before `trunk serve` if a diagram frame
+# has to render — nothing else needs it.

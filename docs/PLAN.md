@@ -61,6 +61,8 @@
 
 - [x] 52 — 静态源并成一棵树：`crates/ui-assets/assets/{core,custom}.css` 与 `loading.js` 移到仓库根 `assets/`（模块源码 `assets/modules/**` 旁边），服务目录 `crates/ui_leptos/assets/` 保持不变、这三处改指 `../../../assets/…` —— 服务布局与源码布局不是恒等映射（`/assets/g2chart/index.js` 来自 `assets/modules/g2chart/index.js`），所以不能整目录链接；`loading.js` 的服务 URL 仍是 `/assets/loading.js`，帧里存的地址一个都不用改。`favicon.ico`/`header.svg` 是零引用孤儿，直接删。`crates/ui-assets` 这个 crate 随之退场（它的 `manganis` 登记表自 dioxus 后端退场后就没有读者），两组样式表测试搬到 `crates/ui_core/tests/`。**不显然的耦合**：`Dockerfile` 的 `COPY assets/modules ./assets/modules` 必须改成 `COPY assets ./assets`，否则镜像里符号链接悬空、dist 静默没有 CSS — 2026-11-26
 
+- [x] 53 — `mermaid.min.js` 退出仓库：它与 `mermaid@11.6.0/dist/mermaid.min.js` 逐字节相同（2666850 B，sha256 `3a93016a…`），于是照 G2 / Monaco 的做法改由 Dockerfile 钉版本 + sha256 从 unpkg 取，`.dockerignore` 不再收本地副本（本地取法写在 `crates/ui_leptos/assets/.gitignore` 的注释里）。`git rm --cached` 只让工作树不再跟踪它，历史里那份 blob 仍在 — 2026-11-26
+
 ## 开着
 
 - [ ] 图里的 canvas 不跟随暗色：坐标轴、图例标签的颜色来自 G2 的默认主题（浅色），页面切到暗色时轴上的字几乎看不见（2026-11-26 实测）。模块外的界面已经全部走 token（ADR 0055），画布里的这一层还没接——它要么读同一个 `--fg`，要么由帧指定主题，二选一，未定

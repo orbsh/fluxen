@@ -22,6 +22,8 @@
 3. **mermaid 是唯一真正跟页面走的库**：`index.html` 一行
    `<script src="/assets/mermaid.min.js">`，2666850 B 原始 / 771617 B gzip（本机
    `gzip -c` 实测），每次开页都下载并解析，哪怕整棵树里没有 diagram 节点。
+   它的字节后来不再进 git：`mermaid@11.6.0/dist/mermaid.min.js` 与上游逐字节相同（sha256
+   `3a93016a…`），于是改由 Dockerfile 按版本 + sha256 取（2026-11-26，同 G2 / Monaco 的做法）。
 
 ADR 0012 的"明确不做的替代方案"里正好有这一条（**"首次非空载荷才 mount"**），当时的
 理由是"收益为零、风险不对等"——收益只算作"不占位"，而 resize 那条腿已经免费拿到。

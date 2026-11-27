@@ -36,7 +36,7 @@ COPY assets ./assets
 # sources are what `trunk build` compiles below. Their deployed media is excluded by `.dockerignore`
 # and refetched by the steps that follow.
 
-# Six build inputs the repo does not carry — all gitignored (media addresses in
+# Seven build inputs the repo does not carry — all gitignored (media addresses in
 # assets/modules/*/README.md, module recipes in the Cargo.toml / module headers):
 #
 #  * the glTF models the examples point at (`/assets/3dbrowser/*.glb`), taken
@@ -48,10 +48,13 @@ COPY assets ./assets
 #  * the editor module's deployed copy plus Monaco's AMD subset (npm tarball,
 #    version + sha1 pinned);
 #  * the truck splat scene, served from this repo's own `assets` release — the
-#    scene's upstream home is a 590 MB zip, so the 29 MB file is mirrored there.
+#    scene's upstream home is a 590 MB zip, so the 29 MB file is mirrored there;
+#  * mermaid, for the diagram module (unpkg tarball, version + sha256 pinned). It
+#    used to be a tracked 2.6 MB blob: the bytes were already upstream's, and a
+#    hash pins them as well as git did, without 2.6 MB in every clone.
 #
 # `trunk build` then copies crates/ui_leptos/assets/** into the served dist
-# (index.html: `<link data-trunk rel="copy-dir" href="/assets">`), so all five
+# (index.html: `<link data-trunk rel="copy-dir" href="/assets">`), so all of them
 # must land before that step. The second splat scene (bonsai) is NOT fetched: a
 # container serves the mesh, chart, editor and truck demos and leaves
 # /assets/splatviewer/bonsai.ksplat absent.
@@ -91,13 +94,20 @@ RUN mkdir -p crates/ui_leptos/assets/g2chart \
          -o crates/ui_leptos/assets/g2chart/g2.min.js \
     && echo "7e7d346cab68c002a889dc6145bfc1f9ae1391be82ce8d514fb106ef3a6e6412  crates/ui_leptos/assets/g2chart/g2.min.js" | sha256sum -c -
 
-# The diagram module's runtime (ADR 0025): plain ES module source, no bundling and
-# no pinned download — the mermaid it loads on demand is the tracked
-# assets/mermaid.min.js that the rest of the page already uses.
+# The diagram module's runtime (ADR 0025): the wrapper is tracked source
+# (assets/modules/diagram/) and mermaid is fetched here — 11.6.0 still ships a UMD
+# dist build, which the wrapper injects as a <script> and reads off `window`.
+# Pinned by version AND sha256 (the file's own, recovered from the copy the repo
+# used to carry): a moved upstream file fails the build instead of shipping
+# silently, the same contract as the glTFs and G2 above.
+ENV MERMAID_VERSION=11.6.0
 RUN mkdir -p crates/ui_leptos/assets/diagram \
     && cp assets/modules/diagram/index.js \
           assets/modules/diagram/cbor.js \
-          crates/ui_leptos/assets/diagram/
+          crates/ui_leptos/assets/diagram/ \
+    && curl -fsSL "https://unpkg.com/mermaid@${MERMAID_VERSION}/dist/mermaid.min.js" \
+         -o crates/ui_leptos/assets/mermaid.min.js \
+    && echo "3a93016a73dc82ba890d919f9bbb176f3da9d98341650c0b517f2595cc68fef8  crates/ui_leptos/assets/mermaid.min.js" | sha256sum -c -
 
 # The editor module's runtime (ADR 0016): the wrapper is tracked source
 # (assets/modules/editor/) — only its deployed copy is gitignored —

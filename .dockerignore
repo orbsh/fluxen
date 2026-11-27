@@ -23,4 +23,7 @@ crates/ui_leptos/assets/g2chart/
 crates/ui_leptos/assets/editor/
 crates/ui_leptos/assets/monaco/
 crates/ui_leptos/assets/forcegraph/
+# mermaid is fetched by the Dockerfile (version + sha256 pinned), so a developer's
+# copy in the serving dir is not build context.
+crates/ui_leptos/assets/mermaid.min.js
 dist-release/
