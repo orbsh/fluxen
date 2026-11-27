@@ -56,7 +56,7 @@ prism 侧最早写的草案要求 fluxen 加一层"prism 帧适配"（`{ev,args}
 |:--|:--|:--|
 | `crates/` | `accrete`、`accrete_macro`、`content`、`transport`（trait） | 词汇、线上模型、接缝 |
 | `crates/` | 渲染核心（`ui_leptos` 拆出的 `ui-core`）、`ui_leptos_macro` | 宿主复用的就是它 |
-| `crates/` | `forcegraph`、`ui-assets` | 组件与资源登记，核心依赖 |
+| `crates/` | `forcegraph` | 三维图核心，核心依赖 |
 | `crates/` | `fluxen`（门面） | 消费者按这一个名字依赖 |
 | `crates/` | `stage` | **例外**：调试工具（mirror/console/静态服务），是给人用的工具，不是示例 |
 | `crates/transport-ws` | `transport-ws` | 92 行，唯一的消费者是 boot；WS 只是一个宿主的倾向，不是协议 |

@@ -1,10 +1,11 @@
-@layer tokens, reset, components, utilities, custom;
+@layer options, tokens, reset, components, utilities, custom;
 
 /* Layer order must be declared before the imports: order is decided by **first appearance**, so an
    import written first makes `custom` the first (weakest) layer, and every declaration in custom.css
    sharing a property with components/utilities is overridden (the root cause of `.hide` losing to `.flex`, see docs/PLAN.md §19). Five layers, weakest to strongest:
 
-     tokens     declares variables only
+     options    the knobs a host may set — the only layer worth writing over
+     tokens     everything computed from them: endpoints, absolutes, derivations
      reset      normalises elements (html/body/forms/typography)
      components structural nouns (.flex/.grid/.box/.text/.tiles…)
      utilities  sizing (gap- / pad- / text-), tone (.accent/.tone-clear…), state (.is-)
@@ -72,31 +73,71 @@
     initial-value: 1px;
 }
 
-@layer tokens {
+@property --focus-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 2px; /* the token is `max(2px, 0.15em)`; em is not computationally independent */
+}
+
+@layer options {
     :root {
-        /* ---- The palette: six colours, and no rule picks a seventh --------
-           Three say what a thing IS (`accent` / `primary` / `secondary`), three say what it MEANS
-           (`disabled` / `warn` / `error`). Everything else on the page is derived from these six and the two
-           mode endpoints below — `crates/ui-assets/tests/tokens.rs` fails the build when a rule outside this
-           layer writes a colour literal. */
+        /* ================= OPTIONS — the only layer worth writing over =========
+           Each entry is a leaf: a literal or a keyword that a page can replace whole. A host appends to THIS
+           layer from a later stylesheet —
+
+               @layer options { :root { --accent: oklch(0.62 0.14 200); --round: 14px; } }
+
+           — and wins, because it is the same layer and it comes later: no specificity fight, no `!important`,
+           and the skin in `custom` is untouched. Registered properties (`--round`, `--input-round`,
+           `--border-width`, `--focus-width`) reject a bad value at computed-value time and fall back to their
+           initial value instead of inheriting garbage.
+
+           Thirteen names: what a thing IS, what it MEANS, and the form it takes. `tests/tokens.rs` holds the
+           section to that — an option may not compute (`var()`, `color-mix()`, `light-dark()`), because a value
+           a host can swap has to stand on its own. */
+
+        /* What a thing IS. */
         --accent: oklch(0.7 0.12 182.49);
         --primary: oklch(0.98 0.06 107.14);
         --secondary: oklch(0.93 0 0);
 
+        /* What it MEANS. */
         --disabled: oklch(0.6 0 0);
         --warn: oklch(0.84 0.12 92.82);
         --error: oklch(0.63 0.19 23.03);
 
-        /* ---- The mode endpoints: paper and ink -----------------------------
-           Not a colour choice — the pair IS light and dark, and `light-dark()` is what switches them. */
+        /* Form rather than colour: how round, how wide, how drawn — and how loud the ring is when the keyboard
+           arrives, which is the one line on this page that has to survive a high-contrast setting. */
+        --round: 10px;
+        --input-round: 0.35em;
+        --border-width: 1px;
+        --border-style: solid;
+        --focus-width: max(2px, 0.15em);
+
+        /* Type. `--font-size` is the whole interface's scale: every size in the utilities is in rem, so this one
+           number moves all of it. `--font-family` is a stack, so it is not registered — no syntax describes a
+           list, and a bad stack shows up as a page that looks wrong, immediately. */
+        --font-size: 1.25rem;
+        --font-family:
+            "Helvetica Neue", Tahoma, Arial, PingFangSC-Regular,
+            "Hiragino Sans GB", "Microsoft Yahei", sans-serif;
+    }
+}
+
+@layer tokens {
+    :root {
+        /* ============ ENDPOINTS AND DERIVATIVES — computed, never set ========
+           The endpoints are pairs, one per scheme, and a setting slot holds one value — so paper and ink are
+           not options. Everything after them is derived from the options above: the step that lifts a card off
+           the page, the line, the pointer's washes, the two absolutes, the composed border. `tests/tokens.rs`
+           fails the build when a rule outside this layer writes a colour of its own. */
+
         --fg: light-dark(oklch(0.18 0 0), oklch(0.98 0 0));
         --bg: light-dark(oklch(1 0 0), oklch(0.15 0 0));
 
-        /* ---- Derived: computed here, only read in the rules -----------------
-           The layer above the page: the same paper, one step toward the ink. A card that is exactly the page
-           colour has to lean on its edge to be seen at all; a step is the difference between "flat" and
-           "above". Written as a mix rather than two lightnesses, so a host that moves the paper or the ink
-           takes the cards with it — in both schemes, and in the same direction, away from the page. */
+        /* The layer above the page: the same paper, one step toward the ink. A card that is exactly the page
+           colour has to lean on its edge to be seen at all. Written as a mix rather than two lightnesses, so a
+           host that moves paper or ink takes the cards with it — both schemes, same direction, away from page. */
         --surface: light-dark(
             color-mix(in oklab, var(--bg) 96%, var(--fg)),
             color-mix(in oklab, var(--bg) 93%, var(--fg))
@@ -115,14 +156,6 @@
         --shadow-color: var(--ink);
         --shadow-ink: oklch(from var(--shadow-color) l c h / 0.1);
 
-        --round: 10px;
-        --input-round: 0.35em;
-
-        /* `--border-style` looks dead in this sheet because its CONSUMER is the host: the reference page's
-           settings switch it (solid → dashed) and `--border` follows. A token with one reader and zero writers
-           here is still a promise to whoever writes it. */
-        --border-width: 1px;
-        --border-style: solid;
         --border: var(--border-width) var(--border-style) var(--border-color);
     }
 }
@@ -131,7 +164,7 @@
     html {
         color-scheme: light dark; /* turn on the browser's light-dark support */
         height: 100%;
-        font-size: 1.25rem;
+        font-size: var(--font-size);
     }
 
     body {
@@ -167,9 +200,7 @@
         margin: 0;
         background: var(--bg);
         color: var(--fg);
-        font-family:
-            "Helvetica Neue", Tahoma, Arial, PingFangSC-Regular,
-            "Hiragino Sans GB", "Microsoft Yahei", sans-serif;
+        font-family: var(--font-family);
 
         & > header,
         & > main,
@@ -834,7 +865,7 @@
        value's own word: `jc-between`, `ac-stretch`, `as-baseline`. One compression is allowed and it is the only
        one: `space-between` / `space-around` / `space-evenly` keep the word that tells them apart — nothing else
        ends in `between` — so `jc-s-between` is a shorthand of a shorthand and says nothing a reader can use.
-       `crates/ui-assets/tests/utilities.rs` holds the names to the values: a typo or a compression fails. */
+       `crates/ui_core/tests/utilities.rs` holds the names to the values: a typo or a compression fails. */
 
     /* ---- Sizing: one prefix per dimension ----------------------------
        `gap-*` is only gap, `pad-*` is only padding, `text-*` is only font-size. One `.md` used to
@@ -1337,8 +1368,8 @@
 
     input[type="checkbox"]:focus {
         border: 0.15em solid var(--accent);
-        outline: max(2px, 0.15em) solid var(--border-color);
-        outline-offset: max(2px, 0.15em);
+        outline: var(--focus-width) solid var(--border-color);
+        outline-offset: var(--focus-width);
     }
 
     input[type="checkbox"]:disabled {

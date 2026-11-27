@@ -18,7 +18,7 @@ Reuse — the core, no I/O, no browser assumptions:
 | `content` (+ `codec`) | `Outflow` / the action structs; JSON + CBOR codecs |
 | `ui-core` (today `ui_leptos` minus boot) | `Ctx` (layout/data/list/vals/drag signals), `render::dispatch`, components, widgets |
 | `forcegraph` | the 3-D graph core (camera, layout, picking) — no framework, no DSL, no protocol |
-| `ui-assets` | the CSS registry (`manganis` requires assets to live in a crate) |
+| — (repo `assets/`) | the sheets and the modules: static sources, not a crate. `ui-assets` only ever wrapped them for `manganis`, and that registry lost its reader when the dioxus backend went |
 
 Deliberately NOT in that list: `transport-ws` and the boot (`ui_leptos`). They are crates like everything
 else, but they are OUR host — supporting code the reference build ships, not a surface a consumer depends
@@ -217,7 +217,7 @@ a feature. The three consumption styles get names instead of folklore:
 
 | style | who | reuses | supplies |
 |:--|:--|:--|:--|
-| core + own boot | nobody today (the road is there for a host that wraps the core in-process) | `ui-core`, `accrete`, `content`, `forcegraph`, `ui-assets` | its own transport, its own page entry |
+| core + own boot | nobody today (the road is there for a host that wraps the core in-process) | `ui-core`, `accrete`, `content`, `forcegraph` | its own transport, its own page entry |
 | boot + own frames | prism (Rust, serves the artifact), reflux (Python, pinned loom) | the loom built from the example boot (`mount(el, opts)`, WS, `window.fluxen.send`) | the frames, over its own socket; prism also the static root and `/app.css` |
 | our boot + your transport | a host that needs a JS transport (ADR 0040) | the loom built from the example boot (`mount(el, opts)`, `Ctx`, `mount_to`, `window.fluxen.send`) | only the transport: `window.fluxenTransport`'s `emit`/`subscribe`/`close?`, bytes in and out; the codec stays in Rust |
 

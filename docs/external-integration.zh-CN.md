@@ -17,7 +17,7 @@ reflux（Python，钉住发布产物）。
 | `content`（+ `codec`） | `Outflow` / 动作结构体；JSON 与 CBOR 编解码 |
 | `ui-core`（今天的 `ui_leptos` 去掉 boot） | `Ctx`（layout/data/list/vals/drag 信号）、`render::dispatch`、组件、widgets |
 | `forcegraph` | 三维图核心（相机、布局、拾取）——不认框架、不认 DSL、不认协议 |
-| `ui-assets` | CSS 登记处（`manganis` 要求资源定义在 crate 内） |
+| ——（仓库根 `assets/`） | 样式表与模块：静态源，不是 crate。`ui-assets` 只为 `manganis` 包过一层，而那张登记表在 dioxus 后端退场时就失去了唯一读者 |
 
 刻意不在表里的：`transport-ws` 与 boot（`ui_leptos`）。它们也是 crate，但它们是**我们自己的宿主**——参考构建要发的支持性代码，不是消费者
 依赖的面。判据一句话：`crates/` 只放外部按名字依赖的东西；我们自己的宿主实现住 `examples/`；`stage` 留在
@@ -187,7 +187,7 @@ data: { type: text, source: {default: "hello"} }
 
 | 方式 | 谁 | 复用 | 自备 |
 |:--|:--|:--|:--|
-| 核心 + 自己的 boot | 今天没有消费者（这条路留给要进程内包装核心的宿主） | `ui-core`、`accrete`、`content`、`forcegraph`、`ui-assets` | 自己的 transport、自己的页面入口 |
+| 核心 + 自己的 boot | 今天没有消费者（这条路留给要进程内包装核心的宿主） | `ui-core`、`accrete`、`content`、`forcegraph` | 自己的 transport、自己的页面入口 |
 | boot + 自己的帧 | prism（Rust，挂产物）、reflux（Python，钉住产物） | 由示例里的 boot 构建出的 loom（`mount(el, opts)`、WS、`window.fluxen.send`） | 帧本身，走自己的 socket；prism 另备静态根与 `/app.css` |
 | 我们的 boot + 你的 transport | 需要 JS 传输的宿主（ADR 0040） | 示例里的 boot 构建出的 loom（`mount(el, opts)`、`Ctx`、`mount_to`、`window.fluxen.send`） | 只有 transport：`window.fluxenTransport` 的 `emit`/`subscribe`/`close?`，字节进出；codec 仍归 Rust |
 

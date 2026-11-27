@@ -27,11 +27,20 @@
 3. **两个绝对量不派生**：`--ink`（黑）与 `--gloss`（白）。影子是没有光、玻璃的高光是有光，与主题无关；把它们
    从调色板派生，就是暗色模式下每张卡都发白光的原因。
 4. **规则里只读 token，不写字面量**：`rgb()` / `rgba()` / `hsl()` / 十六进制 / 不带 `from` 或 `var()` 的 `oklch()`
-   都算字面量。`crates/ui-assets/tests/tokens.rs` 把这条变成测试：切掉 `@layer tokens` 之后逐字扫描两份样式表，
+   都算字面量。`crates/ui_core/tests/tokens.rs` 把这条变成测试：切掉 `@layer tokens` 之后逐字扫描两份样式表，
    命中即红。
-5. **模块不是例外**：图表模块从 JS 写样式，但它的颜色也读 `var(--ring)` / `var(--wash)` / `--surface`——一张自己
+5. **层里再分两段，界线画在层上**：`tokens` 不是一张平表，它有主人。`@layer options` 排在层序**最前**
+   （`@layer options, tokens, reset, components, utilities, custom;`），里面是十三个宿主可以整体替换的叶子：六个
+   调色板名字，形式四个（`--round`、`--input-round`、`--border-width`、`--border-style`），字三个（`--font-size`、
+   `--font-family`、`--focus-width`）。宿主往这一层追加就赢 —— `@layer options { :root { --accent: …; --round: 14px } }`
+   —— 同一层、后出现，不打架、不用 `!important`、不碰皮肤，这比"未分层样式天然压过分层样式"可靠得多。
+   下面是端点与派生：`--fg`/`--bg` 两两成对，一个设置槽只装得下一个值，所以它们不是选项；再往下全部由那十三个算出来。
+   **选项必须是叶子**（不许 `var()` / `color-mix()` / `light-dark()`）：能整体换掉的值得自己站得住，否则换掉它时
+   底下那些派生就断了。测试守三条（`an_option_is_a_leaf_a_host_can_swap`）：选项恰好十三个、每条是叶子、同一个名字
+   不许在两段里各写一遍（那等于宿主设了又被表覆盖）。
+6. **模块不是例外**：图表模块从 JS 写样式，但它的颜色也读 `var(--ring)` / `var(--wash)` / `--surface`——一张自己
    注入的 `<style>`，内容是四个类规则。测试同时守它。
-6. **内容色是唯一许可的例外，且写在测试里**：`--bar` 的三条渐变（L 黑到白、C 的彩度、H 的整圈色轮）画的是色彩
+7. **内容色是唯一许可的例外，且写在测试里**：`--bar` 的三条渐变（L 黑到白、C 的彩度、H 的整圈色轮）画的是色彩
    空间本身，不是界面色。测试按声明名（`--bar`）放行，不按人记。
 
 ## 后果

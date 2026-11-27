@@ -29,7 +29,7 @@ RUN curl -fsSL \
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
-COPY assets/modules ./assets/modules
+COPY assets ./assets
 
 # `crates/` carries the workspace members, the boot (`ui_leptos`) and the transport (`transport-ws`)
 # among them; cargo refuses to load the workspace if a member's directory is absent, and the boot's

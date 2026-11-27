@@ -9,8 +9,10 @@
 //! The module that draws its own chrome (the chart's legend and panels) writes styles from JS and is covered
 //! too: it may read `var(--ring)` / `var(--wash)` / `var(--surface)` and may not spell a colour out.
 
-const CORE: &str = include_str!("../assets/core.css");
-const CUSTOM: &str = include_str!("../assets/custom.css");
+// The sheets live in the repo's own `assets/`, which is where everything the renderer serves is sourced from;
+// the tests stay in the crate that emits the class names they check.
+const CORE: &str = include_str!("../../../assets/core.css");
+const CUSTOM: &str = include_str!("../../../assets/custom.css");
 
 fn without_comments(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -121,6 +123,83 @@ fn literals_in(text: &str) -> Vec<String> {
         i += rest.chars().next().map_or(1, char::len_utf8);
     }
     found
+}
+
+/// One layer's source, braces included. The split of the token face into "what a host may set" and "what the
+/// sheet computes" is a real boundary in the cascade — `@layer options` is declared first, so a host appends to
+/// it and wins — and this test reads the layers rather than a comment heading, so the boundary cannot drift out
+/// from under it.
+fn layer_block(text: &str, name: &str) -> String {
+    let needle = format!("@layer {name} {{");
+    let start = text
+        .find(&needle)
+        .unwrap_or_else(|| panic!("`{needle}` is gone — the split is what this test reads"));
+    let mut depth = 0usize;
+    for (i, ch) in text[start..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return text[start..start + i + 1].to_string();
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("`@layer {name}` never closes");
+}
+
+fn options_and_derivatives() -> (String, String) {
+    (layer_block(CORE, "options"), layer_block(CORE, "tokens"))
+}
+
+/// `--name: value;` declarations, with a value that may wrap (the font stack does).
+fn declarations(section: &str) -> Vec<(String, String)> {
+    let flat = without_comments(section)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    flat.split(';')
+        .filter_map(|part| {
+            // The first part still carries `@layer options { :root {` in front of the first declaration.
+            let part = part.rsplit_once('{').map_or(part, |(_, rest)| rest);
+            let (name, value) = part.split_once(':')?;
+            let name = name.trim();
+            name.starts_with("--")
+                .then(|| (name.to_string(), value.trim().to_string()))
+        })
+        .collect()
+}
+
+#[test]
+fn an_option_is_a_leaf_a_host_can_swap() {
+    let (options, derived) = options_and_derivatives();
+    let options = declarations(&options);
+    assert_eq!(
+        options.len(),
+        13,
+        "the OPTIONS layer is stated as thirteen names (six colours, four form knobs, three type knobs); it \
+         has {}: {:?}",
+        options.len(),
+        options.iter().map(|(n, _)| n).collect::<Vec<_>>()
+    );
+    for (name, value) in &options {
+        for computation in ["var(", "color-mix(", "light-dark(", "from "] {
+            assert!(
+                !value.contains(computation),
+                "`{name}` is in OPTIONS but computes (`{value}`): a value a host can replace whole has to \
+                 stand on its own, or replacing it drops whatever it was derived from"
+            );
+        }
+    }
+    let derived_names: Vec<String> = declarations(&derived).into_iter().map(|(n, _)| n).collect();
+    for (name, _) in &options {
+        assert!(
+            !derived_names.contains(name),
+            "`{name}` is declared in both sections — a host's value would be overwritten by the sheet"
+        );
+    }
 }
 
 #[test]

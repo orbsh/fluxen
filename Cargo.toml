@@ -3,7 +3,6 @@ resolver = "3"
 members = [
   "crates/accrete",
   "crates/stage",
-  "crates/ui-assets",
   "crates/accrete_macro",
   "crates/content",
   "crates/forcegraph",
@@ -22,7 +21,6 @@ content = { path = "crates/content", version = "^0.1.0" }
 ui-core = { path = "crates/ui_core", version = "^0.1.0" }
 forcegraph = { path = "crates/forcegraph", version = "^0.1.0" }
 transport = { path = "crates/transport", version = "^0.1.0" }
-ui-assets = { path = "crates/ui-assets", version = "^0.1.0" }
 transport-ws = { path = "crates/transport-ws", version = "^0.1.0" }
 ciborium = "0.2"
 chrono = { version = "0.4.44", features = ["serde"] }

@@ -150,7 +150,7 @@ PATCH_CODE = """pub fn render(nodes: &[Node]) -> Frame {
 """
 
 # The closing graph: the renderer's own pieces, i.e. what the reader has been
-# watching work. 33 nodes / 42 links in five clusters; the standalone carrier is
+# watching work. 32 nodes / 41 links in five clusters; the standalone carrier is
 # examples/yaml/20.forcegraph.yaml (smaller, same vocabulary) — this table keeps
 # the demo free of a YAML parser. `weight` drives node size, `strength` drives
 # edge width — both are typed `style` fields.
@@ -162,11 +162,11 @@ PATCH_CODE = """pub fn render(nodes: &[Node]) -> Frame {
 # These are node IDS (payload data: `{id, name, kind, weight}`), not wire
 # vocabulary: `stage` here is the crate, not the retired tile count.
 # component names still say `rack`/`pages`/`form`/`layer` because the diagram is
-# the diagram the narrative describes (33 points, 42 lines) — the demo's own
+# the diagram the narrative describes (32 points, 41 lines) — the demo's own
 # frames below use the current types (`tiles`, `bundle`, `panel`).
 _CRATES = [
     ("accrete", 9), ("ui_leptos", 8), ("stage", 6), ("content", 7),
-    ("transport", 5), ("transport_ws", 4), ("forcegraph", 7), ("ui_assets", 4),
+    ("transport", 5), ("transport_ws", 4), ("forcegraph", 7),
     ("accrete_macro", 3), ("ui_leptos_macro", 3), ("fluxen", 6),
 ]
 _NODES = [
@@ -189,7 +189,6 @@ GRAPH_LINKS = [
     {"source": "ui_leptos", "target": "accrete", "kind": "renders", "strength": 5},
     {"source": "ui_leptos", "target": "ui_leptos_macro", "kind": "generates", "strength": 3},
     {"source": "accrete", "target": "accrete_macro", "kind": "generates", "strength": 3},
-    {"source": "ui_leptos", "target": "ui_assets", "kind": "loads", "strength": 3},
     {"source": "ui_leptos", "target": "forcegraph", "kind": "mounts", "strength": 4},
     {"source": "forcegraph", "target": "accrete", "kind": "node", "strength": 4},
     {"source": "stage", "target": "content", "kind": "encodes", "strength": 5},
@@ -242,7 +241,7 @@ GRAPH_LINKS = [
 # re-frames the camera.
 GRAPH_SEED = {
     "accrete", "ui_leptos", "stage", "content", "transport", "transport_ws",
-    "forcegraph", "ui_assets", "accrete_macro", "ui_leptos_macro", "fluxen",
+    "forcegraph", "accrete_macro", "ui_leptos_macro", "fluxen",
     "frame", "canvas", "rack", "pages", "form", "layer",
     "leptos", "wasm_bindgen", "web_sys", "serde",
 }

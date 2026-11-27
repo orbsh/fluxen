@@ -10,7 +10,7 @@
 //! This test exists because those six classes shipped misspelled (`evently`) and compressed (`-s-`) and nothing
 //! noticed: no page used them, so no page broke.
 
-const CORE: &str = include_str!("../assets/core.css");
+const CORE: &str = include_str!("../../../assets/core.css");
 
 /// The property each prefix stands for. A class whose prefix is not here is not a layout utility.
 fn property_of(prefix: &str) -> Option<&'static str> {
